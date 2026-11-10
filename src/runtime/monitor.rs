@@ -48,7 +48,7 @@ pub fn start(proxy: EventLoopProxy<Ev>) -> Monitor {
                 }
                 last = Instant::now();
                 let snapshot = sampler.sample(&r.topics);
-                if proxy.send_event(Ev::Sample(snapshot)).is_err() {
+                if !crate::runtime::app::post(&proxy, Ev::Sample(snapshot)) {
                     return;
                 }
             }
@@ -70,7 +70,7 @@ pub fn start(proxy: EventLoopProxy<Ev>) -> Monitor {
                 let state = crate::platform::audio::state();
                 if state != last_value {
                     last_value = state.clone();
-                    if proxy.send_event(Ev::Audio(state)).is_err() {
+                    if !crate::runtime::app::post(&proxy, Ev::Audio(state)) {
                         return;
                     }
                 }
@@ -97,7 +97,7 @@ pub fn start(proxy: EventLoopProxy<Ev>) -> Monitor {
                 }
                 if comparable != last_value {
                     last_value = comparable;
-                    let _ = proxy.send_event(Ev::Media(state));
+                    let _ = crate::runtime::app::post(&proxy, Ev::Media(state));
                 }
             }
         });

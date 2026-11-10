@@ -280,10 +280,13 @@ where
             Ok(v) => json!({ "id": id, "r": v }),
             Err(e) => json!({ "id": id, "e": e }),
         };
-        let _ = proxy.send_event(crate::runtime::app::Ev::Reply {
-            win: CONTROL_WIN.to_string(),
-            body: body.to_string(),
-        });
+        crate::runtime::app::post(
+            &proxy,
+            crate::runtime::app::Ev::Reply {
+                win: CONTROL_WIN.to_string(),
+                body: body.to_string(),
+            },
+        );
     });
     Reply::Later
 }
@@ -789,10 +792,10 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
                     Ok(path) => json!({ "ok": true, "id": target, "path": path.to_string_lossy() }),
                     Err(e) => json!({ "ok": false, "id": target, "message": e }),
                 };
-                let _ = proxy.send_event(crate::runtime::app::Ev::Command(format!(
-                    "market.downloaded:{}",
-                    payload
-                )));
+                crate::runtime::app::post(
+                    &proxy,
+                    crate::runtime::app::Ev::Command(format!("market.downloaded:{}", payload)),
+                );
             });
             Ok(json!({ "status": "downloading" }))
         }

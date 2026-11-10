@@ -235,10 +235,13 @@ fn call(app: &mut App, instance: &str, method: &str, p: &Value, id: i64) -> Brid
             let target = instance.to_string();
             std::thread::spawn(move || {
                 let result = crate::platform::sysinfo::ping(&host, timeout);
-                let _ = proxy.send_event(crate::runtime::app::Ev::Reply {
-                    win: target,
-                    body: json!({ "id": id, "r": result }).to_string(),
-                });
+                crate::runtime::app::post(
+                    &proxy,
+                    crate::runtime::app::Ev::Reply {
+                        win: target,
+                        body: json!({ "id": id, "r": result }).to_string(),
+                    },
+                );
             });
             Ok(Reply::Later)
         }
@@ -281,10 +284,13 @@ fn call(app: &mut App, instance: &str, method: &str, p: &Value, id: i64) -> Brid
             let target = instance.to_string();
             std::thread::spawn(move || {
                 let result = crate::platform::media::lyrics();
-                let _ = proxy.send_event(crate::runtime::app::Ev::Reply {
-                    win: target,
-                    body: json!({ "id": id, "r": result }).to_string(),
-                });
+                crate::runtime::app::post(
+                    &proxy,
+                    crate::runtime::app::Ev::Reply {
+                        win: target,
+                        body: json!({ "id": id, "r": result }).to_string(),
+                    },
+                );
             });
             Ok(Reply::Later)
         }
@@ -352,10 +358,13 @@ fn call(app: &mut App, instance: &str, method: &str, p: &Value, id: i64) -> Brid
                     Ok(_) => json!({ "id": id, "r": true }),
                     Err(e) => json!({ "id": id, "e": e }),
                 };
-                let _ = proxy.send_event(crate::runtime::app::Ev::Reply {
-                    win: target,
-                    body: result.to_string(),
-                });
+                crate::runtime::app::post(
+                    &proxy,
+                    crate::runtime::app::Ev::Reply {
+                        win: target,
+                        body: result.to_string(),
+                    },
+                );
             });
             Ok(Reply::Later)
         }
@@ -397,10 +406,13 @@ fn call(app: &mut App, instance: &str, method: &str, p: &Value, id: i64) -> Brid
                     Ok(v) => json!({ "id": id, "r": v }),
                     Err(e) => json!({ "id": id, "e": e }),
                 };
-                let _ = proxy.send_event(crate::runtime::app::Ev::Reply {
-                    win: target,
-                    body: body.to_string(),
-                });
+                crate::runtime::app::post(
+                    &proxy,
+                    crate::runtime::app::Ev::Reply {
+                        win: target,
+                        body: body.to_string(),
+                    },
+                );
             });
             Ok(Reply::Later)
         }

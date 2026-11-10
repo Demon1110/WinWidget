@@ -14,6 +14,45 @@ pub const CONTROL_WIN: &str = "$control";
 pub const CONTROL_TITLE: &str = "WinWidget";
 pub const CONTROL_URL: &str = "/__ui/control-center/index.html";
 
+/// True while a window (and its WebView) is being built on the loop thread.
+static BUILDING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// Events our own threads wanted to post during a build.
+static HELD: std::sync::Mutex<Vec<Ev>> = std::sync::Mutex::new(Vec::new());
+
+/// Posts an event to the loop, holding it back while a window is being built.
+///
+/// Creating a WebView pumps the thread's Windows messages (`webview2-com`'s
+/// `wait_with_pump`), and tao has no guard for that: a message reaching its
+/// thread target during the pump re-enters `EventLoopRunner::poll` while the
+/// event handler is taken, which panics and takes the whole process with it.
+/// So while we build, our threads park their events here and hand them over
+/// once the build is done.
+pub fn post(proxy: &EventLoopProxy<Ev>, event: Ev) -> bool {
+    use std::sync::atomic::Ordering;
+    if BUILDING.load(Ordering::SeqCst) {
+        if let Ok(mut held) = HELD.lock() {
+            held.push(event);
+        }
+        return true;
+    }
+    proxy.send_event(event).is_ok()
+}
+
+fn begin_build() {
+    BUILDING.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+fn end_build(proxy: &EventLoopProxy<Ev>) {
+    BUILDING.store(false, std::sync::atomic::Ordering::SeqCst);
+    let held = match HELD.lock() {
+        Ok(mut held) => std::mem::take(&mut *held),
+        Err(_) => Vec::new(),
+    };
+    for event in held {
+        let _ = proxy.send_event(event);
+    }
+}
+
 /// What the toolbar / card state needs to know about one mounted card.
 #[derive(Clone)]
 pub struct Boot {
@@ -510,6 +549,8 @@ impl App {
     // ── window lifecycle ──────────────────────────────────────────────────
 
     pub fn flush_windows(&mut self, target: &tao::event_loop::EventLoopWindowTarget<Ev>) {
+        let proxy = self.proxy.clone();
+        begin_build();
         if self.control_pending {
             self.control_pending = false;
             if self.control.is_none() {
@@ -559,6 +600,7 @@ impl App {
                 Err(e) => crate::core::logging::error(&format!("Card {id}: {e}")),
             }
         }
+        end_build(&proxy);
     }
 
     fn build_control(
@@ -583,17 +625,22 @@ impl App {
                 if let wry::DragDropEvent::Drop { paths, .. } = event {
                     for path in paths {
                         let payload = json!({ "path": path.to_string_lossy() });
-                        let _ =
-                            drop_proxy.send_event(Ev::Command(format!("package.drop:{payload}")));
+                        crate::runtime::app::post(
+                            &drop_proxy,
+                            Ev::Command(format!("package.drop:{payload}")),
+                        );
                     }
                 }
                 true
             })
             .with_ipc_handler(move |request| {
-                let _ = proxy.send_event(Ev::Ipc {
-                    win: CONTROL_WIN.to_string(),
-                    msg: request.body().clone(),
-                });
+                post(
+                    &proxy,
+                    Ev::Ipc {
+                        win: CONTROL_WIN.to_string(),
+                        msg: request.body().clone(),
+                    },
+                );
             })
             .build(&window)
             .map_err(|e| e.to_string())?;
@@ -795,7 +842,7 @@ impl App {
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
         let tray = crate::platform::tray::spawn(menu, actions, hotkeys, move |action| {
-            let _ = proxy.send_event(Ev::Command(action));
+            post(&proxy, Ev::Command(action));
         });
         self.tray = Some(tray);
     }

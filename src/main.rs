@@ -7,7 +7,7 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tao::event::{Event, StartCause, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoopBuilder};
 use winwidget::core::{config, logging, paths, text};
@@ -21,6 +21,15 @@ use winwidget::APP_VERSION;
 fn main() {
     paths::init();
     logging::init(paths::get().log_file());
+    // A GUI-subsystem build owns no console, so a panic would otherwise leave nothing behind but a
+    // vanished process. Route it to the log file first.
+    std::panic::set_hook(Box::new(|info| {
+        logging::error(&format!("panic: {info}"));
+        logging::error(&format!(
+            "backtrace:\n{}",
+            std::backtrace::Backtrace::force_capture()
+        ));
+    }));
     logging::info(&format!("WinWidget {APP_VERSION} starting"));
 
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -56,6 +65,18 @@ fn main() {
     // The safety net behind page-driven dragging: works even when the web view missed the press.
     window::watch_presses(app.proxy.clone());
     app.refresh_tray_menu();
+    {
+        // Heartbeat of our own instead of tao's WaitUntil timer: tao's timer wakes the loop by
+        // posting to its own event target, and such a message arriving inside a WebView build
+        // re-enters tao's dispatcher and panics. Our posts are held back during a build instead.
+        let proxy = app.proxy.clone();
+        std::thread::spawn(move || loop {
+            std::thread::sleep(Duration::from_millis(250));
+            if !app::post(&proxy, Ev::Tick) {
+                return;
+            }
+        });
+    }
     if app.cfg().instances.is_empty() {
         // First run: nothing on the desktop yet, so open the control center to explain itself.
         app.show_control(None);
@@ -70,12 +91,12 @@ fn main() {
 
         match event {
             Event::NewEvents(StartCause::Init) => {
-                *control = ControlFlow::WaitUntil(Instant::now() + Duration::from_millis(250));
+                *control = ControlFlow::Wait;
             }
             Event::NewEvents(StartCause::ResumeTimeReached { .. }) => {
                 app.tick();
                 app.watch_fullscreen();
-                *control = ControlFlow::WaitUntil(Instant::now() + Duration::from_millis(250));
+                *control = ControlFlow::Wait;
             }
             Event::UserEvent(Ev::Ipc { win, msg }) => {
                 if win == app::CONTROL_WIN {
@@ -83,38 +104,41 @@ fn main() {
                 } else {
                     bridge::handle(&mut app, &win, &msg);
                 }
-                *control = ControlFlow::WaitUntil(Instant::now() + Duration::from_millis(250));
+                *control = ControlFlow::Wait;
             }
             Event::UserEvent(Ev::Reply { win, body }) => {
                 app.send_to(&win, &body);
-                *control = ControlFlow::WaitUntil(Instant::now() + Duration::from_millis(250));
+                *control = ControlFlow::Wait;
             }
             Event::UserEvent(Ev::Sample(value)) => {
                 app.dispatch_sample(&value);
-                *control = ControlFlow::WaitUntil(Instant::now() + Duration::from_millis(250));
+                *control = ControlFlow::Wait;
             }
             Event::UserEvent(Ev::Audio(value)) => {
                 let ids: Vec<String> = app.audio_subs.iter().cloned().collect();
                 for id in ids {
                     app.event_to(&id, "audio", value.clone());
                 }
-                *control = ControlFlow::WaitUntil(Instant::now() + Duration::from_millis(250));
+                *control = ControlFlow::Wait;
             }
             Event::UserEvent(Ev::Media(value)) => {
                 let ids: Vec<String> = app.media_subs.iter().cloned().collect();
                 for id in ids {
                     app.event_to(&id, "media", value.clone());
                 }
-                *control = ControlFlow::WaitUntil(Instant::now() + Duration::from_millis(250));
+                *control = ControlFlow::Wait;
             }
             Event::UserEvent(Ev::Command(action)) => {
                 menus::run(&mut app, &action);
                 app.after_command();
-                *control = ControlFlow::WaitUntil(Instant::now() + Duration::from_millis(250));
+                *control = ControlFlow::Wait;
             }
             Event::UserEvent(Ev::Tick) => {
+                // The heartbeat thread drives the clock: tao's own WaitUntil timer wakes the loop
+                // by posting to its event target, which panics when it lands inside a build.
                 app.tick();
-                *control = ControlFlow::WaitUntil(Instant::now() + Duration::from_millis(250));
+                app.watch_fullscreen();
+                *control = ControlFlow::Wait;
             }
             Event::WindowEvent {
                 window_id,
@@ -126,7 +150,7 @@ fn main() {
                         control_win.window.set_visible(false);
                     }
                 }
-                *control = ControlFlow::WaitUntil(Instant::now() + Duration::from_millis(250));
+                *control = ControlFlow::Wait;
             }
             Event::WindowEvent {
                 window_id,
@@ -134,7 +158,7 @@ fn main() {
                 ..
             } => {
                 app.forget_window(window_id);
-                *control = ControlFlow::WaitUntil(Instant::now() + Duration::from_millis(250));
+                *control = ControlFlow::Wait;
             }
             Event::LoopDestroyed => {
                 app.quit();

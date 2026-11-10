@@ -347,10 +347,13 @@ pub fn build(
         .with_initialization_script(crate::runtime::shim::SCRIPT)
         .with_ipc_handler(move |request| {
             let body = request.body().clone();
-            let _ = proxy.send_event(Ev::Ipc {
-                win: ipc_id.clone(),
-                msg: body,
-            });
+            crate::runtime::app::post(
+                &proxy,
+                Ev::Ipc {
+                    win: ipc_id.clone(),
+                    msg: body,
+                },
+            );
         })
         .with_bounds(Rect {
             position: wry::dpi::PhysicalPosition::new(0, 0).into(),
@@ -521,7 +524,10 @@ pub fn watch_presses(proxy: tao::event_loop::EventLoopProxy<Ev>) {
                 continue;
             }
             claimed = true;
-            let _ = proxy.send_event(Ev::Command(format!("autodrag:{instance}:{dx}:{dy}")));
+            let _ = crate::runtime::app::post(
+                &proxy,
+                Ev::Command(format!("autodrag:{instance}:{dx}:{dy}")),
+            );
         }
     });
 }
@@ -558,9 +564,10 @@ unsafe extern "system" fn card_proc(hwnd: w::HWND, msg: u32, wp: usize, lp: isiz
         w::WM_EXITSIZEMOVE => {
             crate::platform::guides::hide();
             if let Some(ctx) = take_context(hwnd) {
-                let _ = ctx
-                    .proxy
-                    .send_event(Ev::Command(format!("geometry:{}", ctx.instance)));
+                let _ = crate::runtime::app::post(
+                    &ctx.proxy,
+                    Ev::Command(format!("geometry:{}", ctx.instance)),
+                );
             }
         }
         // Anything that changes the size (a resize, a DPI change, the user's own window command)
@@ -571,7 +578,8 @@ unsafe extern "system" fn card_proc(hwnd: w::HWND, msg: u32, wp: usize, lp: isiz
                     .map(|meta| (meta.instance.clone(), meta.proxy.clone()))
             });
             if let Some((instance, proxy)) = todo {
-                let _ = proxy.send_event(Ev::Command(format!("bounds:{instance}")));
+                let _ =
+                    crate::runtime::app::post(&proxy, Ev::Command(format!("bounds:{instance}")));
             }
         }
         // DWM decides to draw its caption whenever the window is (re)shown or activated for the
@@ -780,13 +788,14 @@ pub fn begin_resize(
                 w::resize_window(hwnd, outer.left, outer.top, outer.width(), outer.height());
                 if last_report.elapsed() > std::time::Duration::from_millis(30) {
                     last_report = std::time::Instant::now();
-                    let _ = done.send_event(Ev::Command(format!("bounds:{instance}")));
+                    let _ =
+                        crate::runtime::app::post(&done, Ev::Command(format!("bounds:{instance}")));
                 }
             }
         }
         crate::platform::guides::hide();
-        let _ = done.send_event(Ev::Command(format!("bounds:{instance}")));
-        let _ = done.send_event(Ev::Command(format!("geometry:{instance}")));
+        let _ = crate::runtime::app::post(&done, Ev::Command(format!("bounds:{instance}")));
+        let _ = crate::runtime::app::post(&done, Ev::Command(format!("geometry:{instance}")));
     });
 }
 
