@@ -98,11 +98,11 @@ pub struct OptionSpec {
 
 impl Manifest {
     pub fn display_name(&self) -> String {
-        crate::text::pick(self.name.as_ref(), &self.id)
+        crate::core::text::pick(self.name.as_ref(), &self.id)
     }
 
     pub fn description(&self) -> String {
-        crate::text::pick(self.description.as_ref(), "")
+        crate::core::text::pick(self.description.as_ref(), "")
     }
 
     /// Each widget type gets its own origin, so their storage is isolated; all share the site
@@ -112,13 +112,21 @@ impl Manifest {
             .id
             .to_lowercase()
             .chars()
-            .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' })
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '-' {
+                    c
+                } else {
+                    '-'
+                }
+            })
             .collect();
         format!("{clean}.widgets.localhost")
     }
 
     pub fn declares(&self, permission: &str) -> bool {
-        self.permissions.iter().any(|p| p.eq_ignore_ascii_case(permission))
+        self.permissions
+            .iter()
+            .any(|p| p.eq_ignore_ascii_case(permission))
     }
 
     /// Loose check the catalog runs before a widget appears in the library.
@@ -164,7 +172,7 @@ impl Manifest {
 
     pub fn load(dir: &Path, builtin: bool) -> Result<Manifest, String> {
         let file = dir.join("widget.json");
-        let text = crate::util::read_text(&file)
+        let text = crate::core::util::read_text(&file)
             .map_err(|e| format!("widget.json could not be read: {e}"))?;
         let mut m: Manifest = serde_json::from_str(&text).map_err(|e| {
             let line = e.line();

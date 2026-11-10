@@ -32,7 +32,7 @@ pub fn fetch(allowed: &[String], req: FetchRequest) -> Result<Value, String> {
         if scheme != "http" && scheme != "https" {
             return Err("only http and https addresses can be fetched".into());
         }
-        if !crate::permissions::allows_host(allowed, &host) {
+        if !crate::model::permissions::allows_host(allowed, &host) {
             return Err(format!(
                 "\"{host}\" is not allowed: add \"network:{host}\" to permissions in widget.json and allow it in the control center"
             ));
@@ -71,11 +71,7 @@ pub fn fetch(allowed: &[String], req: FetchRequest) -> Result<Value, String> {
         let status_text = response.status_text().to_string();
         let mut headers = Map::new();
         for name in response.headers_names() {
-            let combined: Vec<String> = response
-                .all(&name)
-                .iter()
-                .map(|v| v.to_string())
-                .collect();
+            let combined: Vec<String> = response.all(&name).iter().map(|v| v.to_string()).collect();
             headers.insert(name.to_lowercase(), Value::String(combined.join(", ")));
         }
         let mut bytes = Vec::new();

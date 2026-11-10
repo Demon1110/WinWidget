@@ -18,10 +18,10 @@ pub struct ThemeInfo {
 
 impl ThemeInfo {
     pub fn display_name(&self) -> String {
-        crate::text::pick(self.name.as_ref(), &self.id)
+        crate::core::text::pick(self.name.as_ref(), &self.id)
     }
     pub fn description(&self) -> String {
-        crate::text::pick(self.description.as_ref(), "")
+        crate::core::text::pick(self.description.as_ref(), "")
     }
     pub fn css_href(&self) -> String {
         format!("/__fw/themes/{}/theme.css", self.id)
@@ -37,20 +37,22 @@ pub struct Themes {
 impl Themes {
     pub fn load() -> Themes {
         let mut all = Vec::new();
-        let dir = crate::paths::get().themes_dir();
+        let dir = crate::core::paths::get().themes_dir();
         if let Ok(entries) = std::fs::read_dir(&dir) {
             for entry in entries.flatten() {
                 let file = entry.path().join("theme.json");
                 if !file.is_file() {
                     continue;
                 }
-                match crate::util::read_text(&file)
+                match crate::core::util::read_text(&file)
                     .ok()
                     .and_then(|t| serde_json::from_str::<ThemeInfo>(&t).ok())
                 {
                     Some(t) if !t.id.is_empty() => all.push(t),
                     Some(_) => {}
-                    None => crate::logging::warn(&format!("Theme {} skipped", file.display())),
+                    None => {
+                        crate::core::logging::warn(&format!("Theme {} skipped", file.display()))
+                    }
                 }
             }
         }
@@ -60,14 +62,14 @@ impl Themes {
             ka.cmp(&kb).then_with(|| a.id.cmp(&b.id))
         });
         let system_accent = system_accent_color();
-        crate::logging::info(&format!(
+        crate::core::logging::info(&format!(
             "Themes: {}; system accent {system_accent}",
-            all.iter().map(|t| t.id.as_str()).collect::<Vec<_>>().join(", ")
+            all.iter()
+                .map(|t| t.id.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
         ));
-        Themes {
-            all,
-            system_accent,
-        }
+        Themes { all, system_accent }
     }
 
     pub fn get(&self, id: Option<&str>) -> ThemeInfo {
@@ -99,7 +101,8 @@ fn system_accent_color() -> String {
     use winreg::enums::HKEY_CURRENT_USER;
     use winreg::RegKey;
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    if let Ok(key) = hkcu.open_subkey(r"Software\Microsoft\Windows\CurrentVersion\Explorer\Accent") {
+    if let Ok(key) = hkcu.open_subkey(r"Software\Microsoft\Windows\CurrentVersion\Explorer\Accent")
+    {
         if let Ok(palette) = key.get_raw_value("AccentPalette") {
             let bytes = palette.bytes;
             if bytes.len() >= 8 {
@@ -122,6 +125,6 @@ fn system_accent_color() -> String {
 }
 
 pub fn theme_file_exists(id: &str) -> bool {
-    let dir = crate::paths::get().themes_dir();
+    let dir = crate::core::paths::get().themes_dir();
     Path::new(&dir).join(id).join("theme.css").is_file()
 }

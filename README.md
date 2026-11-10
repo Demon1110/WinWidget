@@ -54,17 +54,15 @@ WinWidget/
 │  ├─ templates/              # "新建组件"用的模板
 │  └─ docs/                   # 组件开发指南、市场说明、里程碑说明
 ├─ src/
-│  ├─ main.rs                 # 入口：单实例、事件循环、CLI
-│  ├─ app.rs                  # App 状态机：窗口池、托盘、采样、全屏监听
-│  ├─ window.rs               # 卡片窗口（无边框 + 透明 + 拖拽/缩放/吸附）
-│  ├─ server.rs               # 本地 HTTP：/__fw /__ui /__docs /__preview /__files
-│  ├─ bridge.rs               # 组件页 ↔ 宿主 的 API 分发
-│  ├─ control.rs              # 控制中心 ↔ 宿主 的 API 分发（46 个方法 + 完整 state）
-│  ├─ catalog.rs manifest.rs  # 扫描、解析 widget.json
-│  ├─ themes.rs appearance.rs # 主题与外观参数 → CSS 变量
-│  ├─ config.rs storage.rs    # config.json 与每卡存储
-│  ├─ permissions.rs packages.rs market.rs updater.rs icons.rs
-│  └─ platform/               # win32 / tray / shell / sysinfo / audio / media / files / power
+│  ├─ main.rs                 # 纯入口：单实例、事件循环、CLI；逻辑都在 lib.rs 里
+│  ├─ lib.rs                  # 库入口，把下面几层按依赖顺序曝光
+│  ├─ core/                   # 地基：paths / config / storage / logging / text / net / img / util
+│  ├─ model/                  # 磁盘上的描述与校验：manifest / catalog / categories / themes /
+│  │                          #   appearance / permissions / icons
+│  ├─ market/                 # 分发：packages(.fwz) / client(市场) / updater
+│  ├─ runtime/                # 唯一持有窗口与事件循环的一层：app / window / bridge / snap / shim / monitor
+│  ├─ ui/                     # 用户动作的入口面：control(控制中心 API) / menus / server(本地 HTTP)
+│  └─ platform/               # 与 Windows 打交道：win32 / tray / shell / sysinfo / audio / media / files / power
 └─ docs/screenshots/          # 本文用到的实机截图
 ```
 
@@ -146,7 +144,7 @@ WebView2 的 `chrome.webview.postMessage` 在 wry 下**只能传字符串**（�
 
 - 页面 → 宿主：`host.postMessage(JSON.stringify({ id, m, p }))`
 - 宿主 → 页面：`host.evaluate_script` 调 `window.__WV_DELIVER(obj)` 派发 `MessageEvent`
-- 这套 shim 由宿主在 `with_initialization_script` 里注入（`src/shim.rs`），同时也顺手屏蔽了页面右键菜单与图片拖拽，避免在卡片上弹出浏览器菜单。
+- 这套 shim 由宿主在 `with_initialization_script` 里注入（`src/runtime/shim.rs`），同时也顺手屏蔽了页面右键菜单与图片拖拽，避免在卡片上弹出浏览器菜单。
 
 ## 数据目录
 

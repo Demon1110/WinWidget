@@ -1,10 +1,10 @@
 //! The host itself: owns the config, the windows, the tray and the data the pages see.
 
-use crate::config::{AppConfig, ConfigStore, InstanceConfig};
-use crate::manifest::Manifest;
-use crate::platform::tray::{MenuItem, TrayHandle};
-use crate::server::{self, Host, Instance, ServeState};
-use crate::window::WidgetWin;
+use crate::core::config::{AppConfig, ConfigStore, InstanceConfig};
+use crate::model::manifest::Manifest;
+use crate::platform::tray::TrayHandle;
+use crate::runtime::window::WidgetWin;
+use crate::ui::server::{self, Host, Instance, ServeState};
 use serde_json::{json, Map, Value};
 use std::collections::{HashMap, HashSet};
 use tao::event_loop::EventLoopProxy;
@@ -58,9 +58,9 @@ pub enum Ev {
 
 pub struct App {
     pub store: ConfigStore,
-    pub catalog: crate::catalog::Catalog,
-    pub themes: crate::themes::Themes,
-    pub storage: crate::storage::StorageStore,
+    pub catalog: crate::model::catalog::Catalog,
+    pub themes: crate::model::themes::Themes,
+    pub storage: crate::core::storage::StorageStore,
     pub serve: ServeState,
     pub port: u16,
     pub windows: HashMap<String, WidgetWin>,
@@ -71,11 +71,11 @@ pub struct App {
     pub sampling: HashMap<String, (Vec<String>, u64)>,
     pub audio_subs: HashSet<String>,
     pub media_subs: HashSet<String>,
-    pub monitor: crate::monitor::Monitor,
+    pub monitor: crate::runtime::monitor::Monitor,
     pub tray: Option<TrayHandle>,
     pub proxy: EventLoopProxy<Ev>,
     pub notes: Vec<PendingNote>,
-    pub staged: HashMap<String, crate::packages::Staged>,
+    pub staged: HashMap<String, crate::market::packages::Staged>,
     pub update: Value,
     pub pending_windows: Vec<String>,
     pub want_devtools: Option<String>,
@@ -86,7 +86,10 @@ pub struct App {
     caption_check: i64,
 }
 
-fn same_area(a: &Option<crate::platform::win32::RECT>, b: &Option<crate::platform::win32::RECT>) -> bool {
+fn same_area(
+    a: &Option<crate::platform::win32::RECT>,
+    b: &Option<crate::platform::win32::RECT>,
+) -> bool {
     match (a, b) {
         (Some(x), Some(y)) => {
             x.left == y.left && x.top == y.top && x.right == y.right && x.bottom == y.bottom
@@ -97,23 +100,22 @@ fn same_area(a: &Option<crate::platform::win32::RECT>, b: &Option<crate::platfor
 }
 
 /// Same monitor rect on both sides, including "neither has one".
-
 impl App {
     pub fn new(proxy: EventLoopProxy<Ev>) -> App {
         let store = ConfigStore::load();
-        let mut catalog = crate::catalog::Catalog::default();
+        let mut catalog = crate::model::catalog::Catalog::default();
         catalog.scan();
-        let themes = crate::themes::Themes::load();
+        let themes = crate::model::themes::Themes::load();
         let serve = ServeState::default();
         let port = match server::start(serve.clone()) {
             Ok(p) => p,
             Err(e) => {
-                crate::logging::error(&e);
+                crate::core::logging::error(&e);
                 0
             }
         };
-        let monitor = crate::monitor::start(proxy.clone());
-        crate::logging::info(&format!("Serving pages on 127.0.0.1:{port}"));
+        let monitor = crate::runtime::monitor::start(proxy.clone());
+        crate::core::logging::info(&format!("Serving pages on 127.0.0.1:{port}"));
         // The alignment lines are created here, on the thread that owns the cards, so the drag
         // code only ever pushes pixels into windows that already exist.
         crate::platform::guides::init();
@@ -121,7 +123,7 @@ impl App {
             store,
             catalog,
             themes,
-            storage: crate::storage::StorageStore::default(),
+            storage: crate::core::storage::StorageStore::default(),
             serve,
             port,
             windows: HashMap::new(),
@@ -149,7 +151,14 @@ impl App {
         app.boot_defaults();
         app.start_tray();
         app.sync_serve();
-        for id in app.store.data.instances.iter().map(|i| i.id.clone()).collect::<Vec<_>>() {
+        for id in app
+            .store
+            .data
+            .instances
+            .iter()
+            .map(|i| i.id.clone())
+            .collect::<Vec<_>>()
+        {
             app.pending_windows.push(id);
         }
         app
@@ -184,7 +193,7 @@ impl App {
 
     /// The look actually in effect for an instance (theme + global + its own tweaks).
     pub fn look(&self, inst: &InstanceConfig) -> Map<String, Value> {
-        crate::appearance::effective(&self.themes, &self.store.data, Some(inst))
+        crate::model::appearance::effective(&self.themes, &self.store.data, Some(inst))
     }
 
     /// First run: put a clock and the system monitor on the screen so the desktop isn't empty.
@@ -246,7 +255,7 @@ impl App {
             height: inst.height,
             grow: manifest.size.grow,
             developer: self.store.data.developer_mode,
-            permissions: crate::permissions::allowed(&self.store.data, manifest),
+            permissions: crate::model::permissions::allowed(&self.store.data, manifest),
         }
     }
 
@@ -255,7 +264,7 @@ impl App {
         let mut out = Map::new();
         for spec in &manifest.settings {
             if let Some(default) = spec.default.clone() {
-                out.insert(spec.key.clone(), crate::text::pick_value(&default));
+                out.insert(spec.key.clone(), crate::core::text::pick_value(&default));
             }
         }
         for (k, v) in &inst.settings {
@@ -265,15 +274,16 @@ impl App {
     }
 
     pub fn appearance_payload(&self, inst: &InstanceConfig) -> Value {
-        let theme = crate::appearance::theme_of(&self.themes, &self.store.data, Some(inst));
+        let theme = crate::model::appearance::theme_of(&self.themes, &self.store.data, Some(inst));
         let all = self.look(inst);
-        let (theme_css, user_css) = crate::appearance::page_css(&self.themes, &self.store.data, inst);
+        let (theme_css, user_css) =
+            crate::model::appearance::page_css(&self.themes, &self.store.data, inst);
         json!({
             "theme": theme.id,
             "themeHref": theme.css_href(),
-            "style": crate::appearance::style(&all),
-            "shadow": crate::appearance::shadow(&all),
-            "margin": crate::appearance::margin_dip(&all),
+            "style": crate::model::appearance::style(&all),
+            "shadow": crate::model::appearance::shadow(&all),
+            "margin": crate::model::appearance::margin_dip(&all),
             "themeCss": theme_css,
             "userCss": user_css,
             "values": all,
@@ -296,14 +306,14 @@ impl App {
         let mut hosts = HashMap::new();
         let mut instances = HashMap::new();
         for m in self.catalog.all() {
-            let allowed = crate::permissions::allowed(&self.store.data, m);
+            let allowed = crate::model::permissions::allowed(&self.store.data, m);
             hosts.insert(
                 m.host_name(),
                 Host {
                     widget_id: m.id.clone(),
                     dir: m.dir.clone(),
                     entry: m.entry.clone(),
-                    csp: crate::permissions::content_security_policy(&allowed),
+                    csp: crate::model::permissions::content_security_policy(&allowed),
                     theme_href: String::new(),
                 },
             );
@@ -327,8 +337,10 @@ impl App {
                     }
                 }
             }
-            let (theme_css, user_css) = crate::appearance::page_css(&self.themes, &self.store.data, inst);
-            let theme = crate::appearance::theme_of(&self.themes, &self.store.data, Some(inst));
+            let (theme_css, user_css) =
+                crate::model::appearance::page_css(&self.themes, &self.store.data, inst);
+            let theme =
+                crate::model::appearance::theme_of(&self.themes, &self.store.data, Some(inst));
             instances.insert(
                 inst.id.clone(),
                 Instance {
@@ -357,7 +369,12 @@ impl App {
     }
 
     pub fn control_url(&self) -> String {
-        format!("http://{}:{}{}", server::CONTROL_HOST, self.port, CONTROL_URL)
+        format!(
+            "http://{}:{}{}",
+            server::CONTROL_HOST,
+            self.port,
+            CONTROL_URL
+        )
     }
 
     // ── messages to pages ──────────────────────────────────────────────────
@@ -375,8 +392,12 @@ impl App {
     }
 
     pub fn push_settings(&mut self, instance_id: &str) {
-        let Some(inst) = self.instance(instance_id).cloned() else { return };
-        let Some(manifest) = self.manifest_for(instance_id) else { return };
+        let Some(inst) = self.instance(instance_id).cloned() else {
+            return;
+        };
+        let Some(manifest) = self.manifest_for(instance_id) else {
+            return;
+        };
         let settings = self.settings_for(&inst, &manifest);
         self.send_to(
             instance_id,
@@ -385,7 +406,9 @@ impl App {
     }
 
     pub fn push_appearance(&mut self, instance_id: &str) {
-        let Some(inst) = self.instance(instance_id).cloned() else { return };
+        let Some(inst) = self.instance(instance_id).cloned() else {
+            return;
+        };
         let payload = self.appearance_payload(&inst);
         let margin = payload.get("margin").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
         if let Some(w) = self.windows.get_mut(instance_id) {
@@ -403,10 +426,17 @@ impl App {
     }
 
     pub fn push_state(&mut self, instance_id: &str) {
-        let Some(inst) = self.instance(instance_id).cloned() else { return };
-        let Some(manifest) = self.manifest_for(instance_id) else { return };
+        let Some(inst) = self.instance(instance_id).cloned() else {
+            return;
+        };
+        let Some(manifest) = self.manifest_for(instance_id) else {
+            return;
+        };
         let state = self.state_payload(&inst, &manifest);
-        self.send_to(instance_id, &format!("{{\"ev\":\"state\",\"d\":{}}}", state));
+        self.send_to(
+            instance_id,
+            &format!("{{\"ev\":\"state\",\"d\":{}}}", state),
+        );
     }
 
     pub fn push_all_states(&mut self) {
@@ -417,7 +447,11 @@ impl App {
     }
 
     pub fn event_to(&self, instance_id: &str, ev: &str, data: Value) {
-        let body = format!("{{\"ev\":{},\"d\":{}}}", serde_json::to_string(ev).unwrap(), data);
+        let body = format!(
+            "{{\"ev\":{},\"d\":{}}}",
+            serde_json::to_string(ev).unwrap(),
+            data
+        );
         self.send_to(instance_id, &body);
     }
 
@@ -425,7 +459,9 @@ impl App {
 
     /// Reads the window the OS actually has and writes the card rectangle back to the config.
     pub fn geometry_from_window(&mut self, instance_id: &str) {
-        let Some(w) = self.windows.get(instance_id) else { return };
+        let Some(w) = self.windows.get(instance_id) else {
+            return;
+        };
         let hwnd = w.hwnd();
         let margin = w.margin;
         let scale = w.scale;
@@ -454,9 +490,13 @@ impl App {
     }
 
     pub fn place_window(&mut self, instance_id: &str) {
-        let Some(inst) = self.instance(instance_id).cloned() else { return };
-        let Some(w) = self.windows.get_mut(instance_id) else { return };
-        let card = crate::window::card_rect(&inst, w.scale);
+        let Some(inst) = self.instance(instance_id).cloned() else {
+            return;
+        };
+        let Some(w) = self.windows.get_mut(instance_id) else {
+            return;
+        };
+        let card = crate::runtime::window::card_rect(&inst, w.scale);
         w.place(card, None);
     }
 
@@ -475,7 +515,7 @@ impl App {
             if self.control.is_none() {
                 match self.build_control(target) {
                     Ok(c) => self.control = Some(c),
-                    Err(e) => crate::logging::error(&format!("Control center: {e}")),
+                    Err(e) => crate::core::logging::error(&format!("Control center: {e}")),
                 }
             }
         }
@@ -484,16 +524,21 @@ impl App {
             if self.windows.contains_key(&id) {
                 continue;
             }
-            let Some(inst) = self.instance(&id).cloned() else { continue };
+            let Some(inst) = self.instance(&id).cloned() else {
+                continue;
+            };
             let Some(manifest) = self.catalog.find(&inst.widget).cloned() else {
-                crate::logging::warn(&format!("Instance {id}: widget {} is missing", inst.widget));
+                crate::core::logging::warn(&format!(
+                    "Instance {id}: widget {} is missing",
+                    inst.widget
+                ));
                 continue;
             };
             let url = self.page_url(&manifest, &id);
             let scale = self.scale_factor();
             let look = self.look(&inst);
-            let margin = crate::appearance::margin_dip(&look);
-            match crate::window::build(
+            let margin = crate::model::appearance::margin_dip(&look);
+            match crate::runtime::window::build(
                 target,
                 &inst,
                 &manifest,
@@ -511,12 +556,15 @@ impl App {
                     }
                     self.windows.insert(id.clone(), win);
                 }
-                Err(e) => crate::logging::error(&format!("Card {id}: {e}")),
+                Err(e) => crate::core::logging::error(&format!("Card {id}: {e}")),
             }
         }
     }
 
-    fn build_control(&mut self, target: &tao::event_loop::EventLoopWindowTarget<Ev>) -> Result<ControlWin, String> {
+    fn build_control(
+        &mut self,
+        target: &tao::event_loop::EventLoopWindowTarget<Ev>,
+    ) -> Result<ControlWin, String> {
         use tao::dpi::LogicalSize;
         use tao::window::WindowBuilder;
         let window = WindowBuilder::new()
@@ -529,14 +577,14 @@ impl App {
         let drop_proxy = proxy.clone();
         let webview = wry::WebViewBuilder::new()
             .with_url(self.control_url())
-            .with_initialization_script(crate::shim::SCRIPT)
+            .with_initialization_script(crate::runtime::shim::SCRIPT)
             .with_devtools(self.store.data.developer_mode)
             .with_drag_drop_handler(move |event| {
                 if let wry::DragDropEvent::Drop { paths, .. } = event {
                     for path in paths {
                         let payload = json!({ "path": path.to_string_lossy() });
-                        let _ = drop_proxy
-                            .send_event(Ev::Command(format!("package.drop:{payload}")));
+                        let _ =
+                            drop_proxy.send_event(Ev::Command(format!("package.drop:{payload}")));
                     }
                 }
                 true
@@ -571,12 +619,15 @@ impl App {
 
     pub fn push_state_to_control(&mut self, page: Option<&str>) {
         self.sync_serve();
-        let state = crate::control::state_json(self);
+        let state = crate::ui::control::state_json(self);
         self.send_to(CONTROL_WIN, &format!("{{\"ev\":\"state\",\"d\":{state}}}"));
         if let Some(page) = page {
             self.send_to(
                 CONTROL_WIN,
-                &format!("{{\"ev\":\"page\",\"d\":{}}}", serde_json::to_string(page).unwrap()),
+                &format!(
+                    "{{\"ev\":\"page\",\"d\":{}}}",
+                    serde_json::to_string(page).unwrap()
+                ),
             );
         }
     }
@@ -587,17 +638,27 @@ impl App {
 
     // ── widgets on the desktop ────────────────────────────────────────────
 
-    pub fn add_widget(&mut self, widget_id: &str, at: Option<(i32, i32)>) -> Result<String, String> {
+    pub fn add_widget(
+        &mut self,
+        widget_id: &str,
+        at: Option<(i32, i32)>,
+    ) -> Result<String, String> {
         let manifest = self
             .catalog
             .find(widget_id)
             .cloned()
             .ok_or_else(|| format!("no widget called {widget_id}"))?;
-        let mut inst = InstanceConfig::default();
-        inst.widget = manifest.id.clone();
-        inst.width = manifest.size.width;
-        inst.height = manifest.size.height;
-        if let Some(layer) = manifest.layer.clone().filter(|l| ["top", "normal", "desktop"].contains(&l.as_str())) {
+        let mut inst = InstanceConfig {
+            widget: manifest.id.clone(),
+            width: manifest.size.width,
+            height: manifest.size.height,
+            ..InstanceConfig::default()
+        };
+        if let Some(layer) = manifest
+            .layer
+            .clone()
+            .filter(|l| ["top", "normal", "desktop"].contains(&l.as_str()))
+        {
             inst.layer = layer;
         }
         let (slot_x, slot_y) = at.unwrap_or_else(|| self.free_slot());
@@ -635,7 +696,7 @@ impl App {
         if let Some(mut w) = self.windows.remove(id) {
             w.hide();
             w.webview.focus().ok();
-            let _ = w.window.set_visible(false);
+            w.window.set_visible(false);
         }
         self.store.data.instances.retain(|i| i.id != id);
         self.storage.delete_instance(id);
@@ -650,7 +711,7 @@ impl App {
     pub fn duplicate_instance(&mut self, id: &str) -> Option<String> {
         let source = self.instance(id)?.clone();
         let mut copy = source.clone();
-        copy.id = crate::config::new_id();
+        copy.id = crate::core::config::new_id();
         let (x, y) = self.free_slot();
         copy.x = x;
         copy.y = y;
@@ -668,7 +729,8 @@ impl App {
         if topics.is_empty() {
             self.sampling.remove(instance_id);
         } else {
-            self.sampling.insert(instance_id.to_string(), (topics, interval.max(200)));
+            self.sampling
+                .insert(instance_id.to_string(), (topics, interval.max(200)));
         }
         self.rebuild_sampling();
     }
@@ -681,7 +743,7 @@ impl App {
     pub fn rebuild_sampling(&self) {
         let mut topics: Vec<String> = Vec::new();
         let mut interval = u64::MAX;
-        for (_, (list, ms)) in &self.sampling {
+        for (list, ms) in self.sampling.values() {
             for t in list {
                 if !topics.iter().any(|x| x.eq_ignore_ascii_case(t)) {
                     topics.push(t.clone());
@@ -689,7 +751,7 @@ impl App {
             }
             interval = interval.min(*ms);
         }
-        self.monitor.configure(crate::monitor::Request {
+        self.monitor.configure(crate::runtime::monitor::Request {
             topics,
             interval_ms: if interval == u64::MAX { 1000 } else { interval },
             audio: !self.audio_subs.is_empty(),
@@ -720,8 +782,8 @@ impl App {
 
     fn start_tray(&mut self) {
         let proxy = self.proxy.clone();
-        let menu = crate::menus::tray_menu(self);
-        let actions = crate::menus::tray_actions(self);
+        let menu = crate::ui::menus::tray_menu(self);
+        let actions = crate::ui::menus::tray_actions(self);
         let hotkeys: Vec<(String, String)> = self
             .store
             .data
@@ -736,9 +798,11 @@ impl App {
     }
 
     pub fn refresh_tray_menu(&mut self) {
-        let Some(tray) = self.tray.clone() else { return };
-        let menu = crate::menus::tray_menu(self);
-        let actions = crate::menus::tray_actions(self);
+        let Some(tray) = self.tray.clone() else {
+            return;
+        };
+        let menu = crate::ui::menus::tray_menu(self);
+        let actions = crate::ui::menus::tray_actions(self);
         tray.set_menu(menu, actions);
         let count = self.store.data.instances.len();
         tray.tip(&format!("WinWidget · {count}"));
@@ -746,9 +810,16 @@ impl App {
 
     // ── notifications ─────────────────────────────────────────────────────
 
-    pub fn schedule_note(&mut self, instance: &str, title: String, body: String, at: Option<i64>, tag: Option<String>) {
+    pub fn schedule_note(
+        &mut self,
+        instance: &str,
+        title: String,
+        body: String,
+        at: Option<i64>,
+        tag: Option<String>,
+    ) {
         let tag = tag.unwrap_or_default();
-        if let Some(at_ms) = at.filter(|t| *t > crate::util::now_ms() + 500) {
+        if let Some(at_ms) = at.filter(|t| *t > crate::core::util::now_ms() + 500) {
             self.notes.push(PendingNote {
                 at: at_ms,
                 tag,
@@ -780,7 +851,7 @@ impl App {
     }
 
     pub fn tick(&mut self) {
-        let now = crate::util::now_ms();
+        let now = crate::core::util::now_ms();
         let mut fired = Vec::new();
         let mut keep = Vec::new();
         for note in std::mem::take(&mut self.notes) {
@@ -817,9 +888,9 @@ impl App {
     }
 
     pub fn rescan(&mut self) {
-        self.catalog = crate::catalog::Catalog::default();
+        self.catalog = crate::model::catalog::Catalog::default();
         self.catalog.scan();
-        self.themes = crate::themes::Themes::load();
+        self.themes = crate::model::themes::Themes::load();
         self.sync_serve();
         self.pending_windows
             .extend(self.store.data.instances.iter().map(|i| i.id.clone()));
@@ -839,7 +910,7 @@ impl App {
     pub fn reload_instance(&mut self, instance_id: &str) {
         if let Some(win) = self.windows.get(instance_id) {
             if let Err(e) = win.webview.reload() {
-                crate::logging::warn(&format!("{instance_id}: reload failed: {e}"));
+                crate::core::logging::warn(&format!("{instance_id}: reload failed: {e}"));
             }
         } else {
             self.pending_windows.push(instance_id.to_string());
@@ -920,11 +991,11 @@ impl App {
                 .and_then(|v| v.as_str())
                 .unwrap_or_default(),
         );
-        match crate::packages::stage(self, &path) {
+        match crate::market::packages::stage(self, &path) {
             Ok(staged) => {
                 let token = staged.token.clone();
                 self.staged.insert(token.clone(), staged);
-                match crate::packages::install(self, &token) {
+                match crate::market::packages::install(self, &token) {
                     Ok(result) => {
                         let name = result
                             .get("name")
@@ -932,12 +1003,11 @@ impl App {
                             .unwrap_or(&id)
                             .to_string();
                         self.show_note(
-                            &crate::text::pick_value(&json!({
+                            crate::core::text::pick_value(&json!({
                                 "zh-TW": "已安裝組件", "zh-CN": "已安装组件", "en": "Widget installed"
                             }))
                             .as_str()
-                            .unwrap_or("Widget installed")
-                            .to_string(),
+                            .unwrap_or("Widget installed"),
                             &name,
                         );
                         self.push_state_to_control(None);
@@ -989,7 +1059,7 @@ impl App {
                     None => self.show_control(None),
                 }
             }
-            other => crate::logging::info(&format!("Hotkey {other} has no handler")),
+            other => crate::core::logging::info(&format!("Hotkey {other} has no handler")),
         }
     }
 
@@ -1002,7 +1072,7 @@ impl App {
         if let Some(tray) = &self.tray {
             tray.quit();
         }
-        crate::logging::info("WinWidget exiting");
+        crate::core::logging::info("WinWidget exiting");
     }
 
     /// A window was destroyed by the system (display change, WebView2 crash): drop the handle.
@@ -1015,7 +1085,9 @@ impl App {
             .collect();
         for id in hit {
             self.windows.remove(&id);
-            crate::logging::warn(&format!("Window for {id} was destroyed; it will be rebuilt"));
+            crate::core::logging::warn(&format!(
+                "Window for {id} was destroyed; it will be rebuilt"
+            ));
             self.pending_windows.push(id);
         }
     }
@@ -1042,7 +1114,7 @@ impl App {
             return;
         }
         self.fullscreen_ticks = self.fullscreen_ticks.wrapping_add(1);
-        if self.fullscreen_ticks % 4 != 0 {
+        if !self.fullscreen_ticks.is_multiple_of(4) {
             return; // roughly a second apart
         }
         let active = self.fullscreen_foreground();
@@ -1057,10 +1129,10 @@ impl App {
             None => "Full-screen app gone: cards shown".to_string(),
         };
         self.fullscreen_area = active;
-        crate::logging::info(&message);
+        crate::core::logging::info(&message);
         let hide_all = self.cfg().hide_all;
-        let area = active.clone();
-        for (_, win) in self.windows.iter_mut() {
+        let area = active;
+        for win in self.windows.values_mut() {
             // Only the cards on that monitor step aside, as FullWidget did.
             let covered = area.as_ref().map(|r| {
                 let card = win.card;

@@ -2,10 +2,10 @@
 //! `SHADOW_MARGIN` bigger than the card on every side so the page can draw its own shadow;
 //! everything the user sees is the card.
 
-use crate::config::InstanceConfig;
-use crate::manifest::Manifest;
+use crate::core::config::InstanceConfig;
+use crate::model::manifest::Manifest;
 use crate::platform::win32 as w;
-use crate::Ev;
+use crate::runtime::app::Ev;
 use serde_json::Value;
 use tao::dpi::{PhysicalPosition, PhysicalSize};
 use tao::platform::windows::{WindowBuilderExtWindows, WindowExtWindows};
@@ -40,7 +40,7 @@ impl WidgetWin {
             body = body
         );
         if let Err(e) = self.webview.evaluate_script(&script) {
-            crate::logging::warn(&format!("Script to {} failed: {e}", self.id));
+            crate::core::logging::warn(&format!("Script to {} failed: {e}", self.id));
         }
     }
 
@@ -60,8 +60,8 @@ impl WidgetWin {
         let y = outer.top;
         let width = outer.width().max(1);
         let height = outer.height().max(1);
-        let _ = self.window.set_outer_position(PhysicalPosition::new(x, y));
-        let _ = self.window.set_inner_size(PhysicalSize::new(width, height));
+        self.window.set_outer_position(PhysicalPosition::new(x, y));
+        self.window.set_inner_size(PhysicalSize::new(width, height));
         self.webview
             .set_bounds(Rect {
                 position: wry::dpi::PhysicalPosition::new(0, 0).into(),
@@ -143,7 +143,10 @@ impl WidgetWin {
                 0,
                 0,
                 0,
-                w::SWP_NOMOVE | w::SWP_NOSIZE | w::SWP_NOZORDER | w::SWP_NOACTIVATE
+                w::SWP_NOMOVE
+                    | w::SWP_NOSIZE
+                    | w::SWP_NOZORDER
+                    | w::SWP_NOACTIVATE
                     | w::SWP_FRAMECHANGED,
             );
         }
@@ -209,11 +212,11 @@ impl WidgetWin {
                 }
                 "top" => {
                     w::detach_from_desktop(hwnd);
-                    let _ = self.window.set_always_on_top(true);
+                    self.window.set_always_on_top(true);
                 }
                 _ => {
                     w::detach_from_desktop(hwnd);
-                    let _ = self.window.set_always_on_top(false);
+                    self.window.set_always_on_top(false);
                 }
             }
         }
@@ -230,7 +233,7 @@ pub fn frosted_tint(appearance: &Value) -> u32 {
         .and_then(|v| v.as_f64())
         .unwrap_or(0.62)
         .clamp(0.0, 1.0);
-    let (r, g, b) = crate::util::parse_color(bg).unwrap_or((22, 24, 34));
+    let (r, g, b) = crate::core::util::parse_color(bg).unwrap_or((22, 24, 34));
     let alpha = (0x10 as f64 + op * 0x60 as f64).round() as u32;
     (alpha << 24) | ((b as u32) << 16) | ((g as u32) << 8) | r as u32
 }
@@ -250,6 +253,7 @@ pub fn card_rect(inst: &InstanceConfig, scale: f64) -> w::RECT {
 }
 
 /// Builds the window and its webview on the app's own event loop.
+#[allow(clippy::too_many_arguments)] // one call site, and each argument is a distinct piece of setup
 pub fn build(
     event_loop: &tao::event_loop::EventLoopWindowTarget<Ev>,
     inst: &InstanceConfig,
@@ -272,7 +276,10 @@ pub fn build(
         .with_resizable(false)
         .with_skip_taskbar(true)
         .with_visible(false)
-        .with_inner_size(PhysicalSize::new(outer.width().max(1), outer.height().max(1)))
+        .with_inner_size(PhysicalSize::new(
+            outer.width().max(1),
+            outer.height().max(1),
+        ))
         .with_position(PhysicalPosition::new(outer.left, outer.top));
     if inst.layer == "desktop" && prog != 0 {
         builder = builder.with_owner_window(prog);
@@ -297,7 +304,10 @@ pub fn build(
             0,
             0,
             0,
-            w::SWP_NOMOVE | w::SWP_NOSIZE | w::SWP_NOZORDER | w::SWP_NOACTIVATE
+            w::SWP_NOMOVE
+                | w::SWP_NOSIZE
+                | w::SWP_NOZORDER
+                | w::SWP_NOACTIVATE
                 | w::SWP_FRAMECHANGED,
         );
     }
@@ -334,7 +344,7 @@ pub fn build(
         .with_url(&url)
         .with_transparent(true)
         .with_devtools(developer)
-        .with_initialization_script(crate::shim::SCRIPT)
+        .with_initialization_script(crate::runtime::shim::SCRIPT)
         .with_ipc_handler(move |request| {
             let body = request.body().clone();
             let _ = proxy.send_event(Ev::Ipc {
@@ -380,7 +390,7 @@ struct DragCtx {
     ink: u32,
     /// Guide line: thickness, dash and gap, already scaled for the screen.
     line: (i32, i32, i32),
-    resizing: crate::snap::Edges,
+    resizing: crate::runtime::snap::Edges,
     min: (i32, i32),
     max: (i32, i32),
     /// The card and the pointer when the drag began: every later position is measured from here,
@@ -439,9 +449,10 @@ fn card_at(pt: w::POINT) -> Option<(w::HWND, String)> {
     unsafe {
         let mut hwnd = w::WindowFromPoint(pt);
         while hwnd != 0 {
-            let found = meta().lock().ok().and_then(|m| {
-                m.get(&(hwnd as usize)).map(|meta| meta.instance.clone())
-            });
+            let found = meta()
+                .lock()
+                .ok()
+                .and_then(|m| m.get(&(hwnd as usize)).map(|meta| meta.instance.clone()));
             if let Some(instance) = found {
                 return Some((hwnd, instance));
             }
@@ -472,7 +483,11 @@ pub fn watch_presses(proxy: tao::event_loop::EventLoopProxy<Ev>) {
         let mut armed: Option<(w::HWND, String, w::POINT, std::time::Instant)> = None;
         let mut claimed = false;
         loop {
-            std::thread::sleep(std::time::Duration::from_millis(if button { 6 } else { 16 }));
+            std::thread::sleep(std::time::Duration::from_millis(if button {
+                6
+            } else {
+                16
+            }));
             let down = w::left_button_down();
             if !down {
                 button = false;
@@ -484,9 +499,8 @@ pub fn watch_presses(proxy: tao::event_loop::EventLoopProxy<Ev>) {
                 // The press itself: remember which card it landed on, if any.
                 button = true;
                 let press = w::cursor_pos();
-                armed = card_at(press).map(|(hwnd, instance)| {
-                    (hwnd, instance, press, std::time::Instant::now())
-                });
+                armed = card_at(press)
+                    .map(|(hwnd, instance)| (hwnd, instance, press, std::time::Instant::now()));
                 continue;
             }
             let Some((hwnd, instance, press, since)) = armed.clone() else {
@@ -515,7 +529,7 @@ pub fn watch_presses(proxy: tao::event_loop::EventLoopProxy<Ev>) {
 /// Chains onto tao's window procedure so the card can take part in the native move and size loops.
 fn install_proc(hwnd: w::HWND) {
     unsafe {
-        let previous = w::SetWindowLongPtrW(hwnd, w::GWLP_WNDPROC, card_proc as isize);
+        let previous = w::SetWindowLongPtrW(hwnd, w::GWLP_WNDPROC, card_proc as *const () as isize);
         if previous != 0 {
             let _ = old_procs()
                 .lock()
@@ -544,7 +558,9 @@ unsafe extern "system" fn card_proc(hwnd: w::HWND, msg: u32, wp: usize, lp: isiz
         w::WM_EXITSIZEMOVE => {
             crate::platform::guides::hide();
             if let Some(ctx) = take_context(hwnd) {
-                let _ = ctx.proxy.send_event(Ev::Command(format!("geometry:{}", ctx.instance)));
+                let _ = ctx
+                    .proxy
+                    .send_event(Ev::Command(format!("geometry:{}", ctx.instance)));
             }
         }
         // Anything that changes the size (a resize, a DPI change, the user's own window command)
@@ -611,14 +627,20 @@ fn drag_rect(hwnd: w::HWND, lp: isize, resizing: bool) -> Option<w::RECT> {
         }
     };
 
-    let edges = if resizing { ctx.resizing } else { crate::snap::Edges::NONE };
+    let edges = if resizing {
+        ctx.resizing
+    } else {
+        crate::runtime::snap::Edges::NONE
+    };
 
     // Ctrl places the card freely, and no guides are drawn.
     let (card, guides) = if w::ctrl_down() {
         crate::platform::guides::hide();
         (card, Vec::new())
     } else {
-        crate::snap::snap(card, work, &ctx.peers, ctx.gap, ctx.reach, edges, ctx.min, ctx.max)
+        crate::runtime::snap::snap(
+            card, work, &ctx.peers, ctx.gap, ctx.reach, edges, ctx.min, ctx.max,
+        )
     };
     if guides.is_empty() {
         crate::platform::guides::hide();
@@ -658,7 +680,7 @@ pub fn begin_move(hwnd: w::HWND, start: DragStart) {
         reach: start.reach,
         ink: start.ink,
         line: start.line,
-        resizing: crate::snap::Edges::NONE,
+        resizing: crate::runtime::snap::Edges::NONE,
         min: start.min,
         max: start.max,
         anchor_card: start.card,
@@ -726,7 +748,8 @@ pub fn begin_resize(
             let dx = p.x - cursor.x;
             let dy = p.y - cursor.y;
             let mut card = anchor;
-            card.right = (anchor.right + dx).clamp(anchor.left + min.0, anchor.left + max.0.max(min.0));
+            card.right =
+                (anchor.right + dx).clamp(anchor.left + min.0, anchor.left + max.0.max(min.0));
             card.bottom =
                 (anchor.bottom + dy).clamp(anchor.top + min.1, anchor.top + max.1.max(min.1));
             let (work, _) = w::monitor_work_area(&card);
@@ -734,13 +757,13 @@ pub fn begin_resize(
                 crate::platform::guides::hide();
                 (card, Vec::new())
             } else {
-                crate::snap::snap(
+                crate::runtime::snap::snap(
                     card,
                     work,
                     &peers,
                     gap,
                     reach,
-                    crate::snap::Edges::RIGHT,
+                    crate::runtime::snap::Edges::RIGHT,
                     min,
                     max,
                 )

@@ -110,7 +110,8 @@ pub fn init() -> &'static Paths {
         let (data_dir, local_dir) = if portable {
             (exe.join("data"), exe.join("data").join("local"))
         } else {
-            let roaming = std::env::var("APPDATA").unwrap_or_else(|_| exe.to_string_lossy().to_string());
+            let roaming =
+                std::env::var("APPDATA").unwrap_or_else(|_| exe.to_string_lossy().to_string());
             let local = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| roaming.clone());
             (
                 PathBuf::from(roaming).join("WinWidget"),
@@ -155,10 +156,10 @@ pub fn sdk_dir() -> PathBuf {
 /// Absolute path if `rel` stays inside `root`; used for every path a page asks for.
 pub fn resolve_inside(root: &Path, rel: &str) -> Option<PathBuf> {
     let clean = rel.trim_start_matches(['\\', '/']).replace('\\', "/");
-    let joined = root.join(clean.replace('/', &std::path::MAIN_SEPARATOR.to_string()));
+    let joined = root.join(clean.replace('/', std::path::MAIN_SEPARATOR_STR));
     let full = joined.canonicalize().ok()?;
     let root_full = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
-    if crate::util::inside(&root_full, &full) {
+    if crate::core::util::inside(&root_full, &full) {
         Some(full)
     } else {
         None

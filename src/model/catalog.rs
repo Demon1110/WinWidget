@@ -1,7 +1,7 @@
 //! All widget types found on disk: the built-in ones next to the exe, plus the user's own in
 //! `%APPDATA%\WinWidget\widgets`. A folder that can't be loaded is reported, not fatal.
 
-use crate::manifest::Manifest;
+use crate::model::manifest::Manifest;
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -24,10 +24,20 @@ impl Catalog {
     pub fn scan(&mut self) {
         self.by_id.clear();
         self.problems.clear();
-        let paths = crate::paths::get();
-        scan_dir(&mut self.by_id, &mut self.problems, &paths.builtin_widgets_dir(), true);
-        scan_dir(&mut self.by_id, &mut self.problems, &paths.user_widgets_dir(), false);
-        crate::logging::info(&format!(
+        let paths = crate::core::paths::get();
+        scan_dir(
+            &mut self.by_id,
+            &mut self.problems,
+            &paths.builtin_widgets_dir(),
+            true,
+        );
+        scan_dir(
+            &mut self.by_id,
+            &mut self.problems,
+            &paths.user_widgets_dir(),
+            false,
+        );
+        crate::core::logging::info(&format!(
             "Catalog: {} widget(s){}",
             self.by_id.len(),
             if self.problems.is_empty() {
@@ -57,12 +67,12 @@ impl Catalog {
         let mut list: Vec<&Manifest> = self.by_id.values().collect();
         list.sort_by(|a, b| {
             let ka = (
-                crate::categories::order(&crate::categories::of(a)),
+                crate::model::categories::order(&crate::model::categories::of(a)),
                 !a.builtin,
                 builtin_order(&a.id),
             );
             let kb = (
-                crate::categories::order(&crate::categories::of(b)),
+                crate::model::categories::order(&crate::model::categories::of(b)),
                 !b.builtin,
                 builtin_order(&b.id),
             );
@@ -78,14 +88,44 @@ impl Catalog {
 
 fn builtin_order(id: &str) -> usize {
     const ORDER: &[&str] = &[
-        "winwidget.clock", "winwidget.analogclock", "winwidget.flipclock", "winwidget.worldclock",
-        "winwidget.calendar", "winwidget.countdown", "winwidget.pomodoro", "winwidget.timer", "winwidget.progress",
-        "winwidget.weather", "winwidget.forecast", "winwidget.airquality", "winwidget.sunmoon",
-        "winwidget.sysinfo", "winwidget.usage", "winwidget.netspeed", "winwidget.disks", "winwidget.battery",
-        "winwidget.network", "winwidget.pcinfo", "winwidget.recyclebin", "winwidget.volume", "winwidget.power",
-        "winwidget.notes", "winwidget.todo", "winwidget.launcher", "winwidget.habits", "winwidget.calculator", "winwidget.search",
-        "winwidget.infocard", "winwidget.rss", "winwidget.currency", "winwidget.dailyimage", "winwidget.onthisday",
-        "winwidget.media", "winwidget.photoframe", "winwidget.whitenoise", "winwidget.label",
+        "winwidget.clock",
+        "winwidget.analogclock",
+        "winwidget.flipclock",
+        "winwidget.worldclock",
+        "winwidget.calendar",
+        "winwidget.countdown",
+        "winwidget.pomodoro",
+        "winwidget.timer",
+        "winwidget.progress",
+        "winwidget.weather",
+        "winwidget.forecast",
+        "winwidget.airquality",
+        "winwidget.sunmoon",
+        "winwidget.sysinfo",
+        "winwidget.usage",
+        "winwidget.netspeed",
+        "winwidget.disks",
+        "winwidget.battery",
+        "winwidget.network",
+        "winwidget.pcinfo",
+        "winwidget.recyclebin",
+        "winwidget.volume",
+        "winwidget.power",
+        "winwidget.notes",
+        "winwidget.todo",
+        "winwidget.launcher",
+        "winwidget.habits",
+        "winwidget.calculator",
+        "winwidget.search",
+        "winwidget.infocard",
+        "winwidget.rss",
+        "winwidget.currency",
+        "winwidget.dailyimage",
+        "winwidget.onthisday",
+        "winwidget.media",
+        "winwidget.photoframe",
+        "winwidget.whitenoise",
+        "winwidget.label",
     ];
     ORDER
         .iter()
@@ -151,7 +191,10 @@ fn scan_dir(
                 by_id.insert(m.id.clone(), m);
             }
             Err(message) => {
-                crate::logging::warn(&format!("Catalog: skipped {}: {message}", path.display()));
+                crate::core::logging::warn(&format!(
+                    "Catalog: skipped {}: {message}",
+                    path.display()
+                ));
                 problems.push(Problem {
                     folder: name,
                     dir: path.to_string_lossy().to_string(),

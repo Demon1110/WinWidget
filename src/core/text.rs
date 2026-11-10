@@ -23,7 +23,8 @@ pub fn candidates(locale: &str) -> Vec<String> {
     let lower = locale.to_lowercase();
     let mut list = vec![locale.to_string()];
     if lower.starts_with("zh") {
-        let hans = matches!(lower.as_str(), "zh-cn" | "zh-sg" | "zh-hans") || lower.starts_with("zh-hans");
+        let hans =
+            matches!(lower.as_str(), "zh-cn" | "zh-sg" | "zh-hans") || lower.starts_with("zh-hans");
         if hans {
             list.extend(["zh-CN", "zh-Hans", "zh", "zh-TW"].map(String::from));
         } else {

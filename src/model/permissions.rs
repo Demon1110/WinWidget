@@ -2,17 +2,28 @@
 //! them only after the user allows them. Built-in widgets, and widgets the user made here, are
 //! trusted with whatever they declare.
 
-use crate::config::AppConfig;
-use crate::manifest::Manifest;
+use crate::core::config::AppConfig;
+use crate::model::manifest::Manifest;
 
-pub const KNOWN: [&str; 6] = ["system", "notify", "audio", "media", "shell.open", "shell.launch"];
+pub const KNOWN: [&str; 6] = [
+    "system",
+    "notify",
+    "audio",
+    "media",
+    "shell.open",
+    "shell.launch",
+];
 
 pub fn is_known(p: &str) -> bool {
     KNOWN.contains(&p) || (p.starts_with("network:") && p.len() > "network:".len())
 }
 
 pub fn trusted(cfg: &AppConfig, m: &Manifest) -> bool {
-    m.builtin || cfg.own_widgets.iter().any(|id| id.eq_ignore_ascii_case(&m.id))
+    m.builtin
+        || cfg
+            .own_widgets
+            .iter()
+            .any(|id| id.eq_ignore_ascii_case(&m.id))
 }
 
 /// The declared permissions the widget may use right now.
@@ -145,6 +156,8 @@ fn valid_host_pattern(s: &str) -> bool {
     let host_ok = host
         .chars()
         .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '.' || c == '*');
-    let port_ok = port.map(|p| p.chars().all(|c| c.is_ascii_digit())).unwrap_or(true);
+    let port_ok = port
+        .map(|p| p.chars().all(|c| c.is_ascii_digit()))
+        .unwrap_or(true);
     host_ok && port_ok
 }

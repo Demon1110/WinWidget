@@ -29,7 +29,16 @@ fn shell_execute(target: &str) -> Result<(), String> {
     use crate::platform::win32 as w;
     let op = w::wide("open");
     let file = w::wide(target);
-    let result = unsafe { w::ShellExecuteW(0, op.as_ptr(), file.as_ptr(), std::ptr::null(), std::ptr::null(), 1) };
+    let result = unsafe {
+        w::ShellExecuteW(
+            0,
+            op.as_ptr(),
+            file.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            1,
+        )
+    };
     if result as usize > 32 {
         Ok(())
     } else {
@@ -52,7 +61,14 @@ pub fn reveal(path: &str) -> Result<(), String> {
     let file = w::wide("explorer.exe");
     let params = w::wide(&format!("/select,\"{path}\""));
     let result = unsafe {
-        w::ShellExecuteW(0, verb.as_ptr(), file.as_ptr(), params.as_ptr(), std::ptr::null(), 1)
+        w::ShellExecuteW(
+            0,
+            verb.as_ptr(),
+            file.as_ptr(),
+            params.as_ptr(),
+            std::ptr::null(),
+            1,
+        )
     };
     if result as usize > 32 {
         Ok(())
@@ -83,7 +99,9 @@ pub fn pick(kind: &str, filter: &str, title: &str) -> Option<String> {
         "images" => {
             dialog = dialog.add_filter(
                 "Images",
-                &["png", "jpg", "jpeg", "gif", "webp", "bmp", "avif", "tif", "tiff"],
+                &[
+                    "png", "jpg", "jpeg", "gif", "webp", "bmp", "avif", "tif", "tiff",
+                ],
             );
         }
         _ => {}
@@ -133,7 +151,7 @@ pub fn info(path: &str, icon_size: i32) -> Value {
 
 /// The user's shell folders, for the launcher widget's defaults.
 pub fn paths() -> Value {
-        let mut vars = serde_json::Map::new();
+    let mut vars = serde_json::Map::new();
     for (key, var) in [
         ("home", "USERPROFILE"),
         ("desktop", "USERPROFILE"),
@@ -151,7 +169,11 @@ pub fn paths() -> Value {
         let resolved = match key {
             "documents" => {
                 let f = format!("{base}\\Documents");
-                if Path::new(&f).is_dir() { f } else { format!("{base}\\OneDrive\\Documents") }
+                if Path::new(&f).is_dir() {
+                    f
+                } else {
+                    format!("{base}\\OneDrive\\Documents")
+                }
             }
             "downloads" => format!("{base}\\Downloads"),
             "music" => format!("{base}\\Music"),

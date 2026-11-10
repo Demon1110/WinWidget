@@ -8,7 +8,6 @@ use windows::Win32::Media::Audio::{
 use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_APARTMENTTHREADED,
 };
-use windows::core::Interface;
 
 static INIT: Mutex<bool> = Mutex::new(false);
 
@@ -28,7 +27,9 @@ fn endpoint() -> Option<IAudioEndpointVolume> {
     unsafe {
         let enumerator: IMMDeviceEnumerator =
             CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
-        let device = enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia).ok()?;
+        let device = enumerator
+            .GetDefaultAudioEndpoint(eRender, eMultimedia)
+            .ok()?;
         let volume: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None).ok()?;
         Some(volume)
     }

@@ -55,7 +55,8 @@ pub struct Server_ {
 
 /// Binds a loopback-only port and serves pages on a background thread.
 pub fn start(state: ServeState) -> Result<u16, String> {
-    let server = Server::http("127.0.0.1:0").map_err(|e| format!("the local server could not start: {e}"))?;
+    let server = Server::http("127.0.0.1:0")
+        .map_err(|e| format!("the local server could not start: {e}"))?;
     let port = server
         .server_addr()
         .to_ip()
@@ -100,7 +101,7 @@ fn handle(state: &ServeState, request: Request, port: u16) {
         return;
     }
 
-    let paths = crate::paths::get();
+    let paths = crate::core::paths::get();
     let reply = if let Some(rest) = path.strip_prefix("/__fw/") {
         serve_file(&paths.sdk_dir(), rest, None, None)
     } else if let Some(rest) = path.strip_prefix("/__ui/") {
@@ -142,12 +143,17 @@ fn handle(state: &ServeState, request: Request, port: u16) {
     }
 }
 
-fn serve_file(root: &std::path::Path, rel: &str, csp: Option<&str>, inject: Option<&Instance>) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
-    let file = crate::paths::resolve_inside(root, rel)?;
+fn serve_file(
+    root: &std::path::Path,
+    rel: &str,
+    csp: Option<&str>,
+    inject: Option<&Instance>,
+) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
+    let file = crate::core::paths::resolve_inside(root, rel)?;
     if !file.is_file() {
         return None;
     }
-    let mime = crate::util::mime_for(rel);
+    let mime = crate::core::util::mime_for(rel);
     let bytes = if mime.starts_with("text/html") && inject.is_some() {
         let text = std::fs::read_to_string(&file).ok()?;
         let page = inject_page(&text, inject?);
@@ -168,7 +174,11 @@ fn serve_file(root: &std::path::Path, rel: &str, csp: Option<&str>, inject: Opti
 }
 
 /// `/__files/<instance>/<setting-key>/<path>` — only images, only inside the chosen folder.
-fn serve_files_request(state: &ServeState, rest: &str, query: &str) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
+fn serve_files_request(
+    state: &ServeState,
+    rest: &str,
+    query: &str,
+) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
     let parts: Vec<&str> = rest.splitn(3, '/').collect();
     if parts.len() < 3 {
         return None;
@@ -180,7 +190,7 @@ fn serve_files_request(state: &ServeState, rest: &str, query: &str) -> Option<Re
         let st = state.lock();
         st.instances.get(instance_id)?.folders.get(key)?.clone()
     };
-    let file = crate::paths::resolve_inside(&folder, &rel)?;
+    let file = crate::core::paths::resolve_inside(&folder, &rel)?;
     if !crate::platform::files::is_image(&file) {
         return None;
     }
@@ -197,8 +207,14 @@ fn serve_files_request(state: &ServeState, rest: &str, query: &str) -> Option<Re
     Some(resp)
 }
 
-fn serve_page(state: &ServeState, host: &str, path: &str, query: &str, _port: u16) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
-    let paths = crate::paths::get();
+fn serve_page(
+    state: &ServeState,
+    host: &str,
+    path: &str,
+    query: &str,
+    _port: u16,
+) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
+    let paths = crate::core::paths::get();
     if host == CONTROL_HOST || host.trim_start_matches("www.") == CONTROL_HOST {
         let rel = if path == "/" || path.is_empty() {
             "control-center/index.html"
@@ -235,12 +251,17 @@ fn serve_page(state: &ServeState, host: &str, path: &str, query: &str, _port: u1
 }
 
 pub fn text_response(status: u16, body: &str) -> Response<std::io::Cursor<Vec<u8>>> {
-    response(status, "text/plain; charset=utf-8", body.as_bytes().to_vec())
+    response(
+        status,
+        "text/plain; charset=utf-8",
+        body.as_bytes().to_vec(),
+    )
 }
 
 pub fn response(status: u16, mime: &str, body: Vec<u8>) -> Response<std::io::Cursor<Vec<u8>>> {
-    let header = Header::from_bytes(&b"Content-Type"[..], mime.as_bytes())
-        .unwrap_or_else(|_| Header::from_bytes(&b"Content-Type"[..], &b"application/octet-stream"[..]).unwrap());
+    let header = Header::from_bytes(&b"Content-Type"[..], mime.as_bytes()).unwrap_or_else(|_| {
+        Header::from_bytes(&b"Content-Type"[..], &b"application/octet-stream"[..]).unwrap()
+    });
     Response::from_data(body)
         .with_status_code(StatusCode(status))
         .with_header(header)
@@ -301,7 +322,7 @@ fn percent_decode(s: &str) -> String {
 
 /// The boot object handed to a page: everything the SDK reads plus a copy of the current look.
 pub fn boot_json(
-    boot: &crate::app::Boot,
+    boot: &crate::runtime::app::Boot,
     settings: &serde_json::Map<String, Value>,
     appearance: &Value,
     state: &Value,
@@ -311,7 +332,7 @@ pub fn boot_json(
         "instanceId": boot.instance_id,
         "widgetId": boot.widget_id,
         "widgetVersion": boot.widget_version,
-        "locale": crate::text::locale(),
+        "locale": crate::core::text::locale(),
         "settings": settings,
         "appearance": appearance,
         "state": state,

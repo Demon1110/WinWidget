@@ -5,6 +5,10 @@
 //! Every card keeps half the gap around it, so two cards dropped side by side end up one gap
 //! apart and sit one gap from the screen edge, while edges and centres still line up exactly.
 
+// The geometry is passed as separate scalars on purpose: they are all physical pixels read from
+// the same rectangle, and bundling them into a struct here would only move the noise.
+#![allow(clippy::too_many_arguments)]
+
 use crate::platform::win32::RECT;
 
 /// A dashed line, in physical pixels: a vertical line sits at x = `at` and runs from `from` to `to`.
@@ -47,16 +51,19 @@ struct Span {
 
 impl Span {
     fn of_x(r: RECT) -> Span {
-        Span { lo: r.left, hi: r.right }
+        Span {
+            lo: r.left,
+            hi: r.right,
+        }
     }
     fn of_y(r: RECT) -> Span {
-        Span { lo: r.top, hi: r.bottom }
+        Span {
+            lo: r.top,
+            hi: r.bottom,
+        }
     }
     fn mid(self) -> i32 {
         (self.lo + self.hi) / 2
-    }
-    fn size(self) -> i32 {
-        self.hi - self.lo
     }
 }
 
@@ -150,7 +157,14 @@ pub fn snap(
     };
 
     if let Some(hit) = x {
-        let (from, to) = extent(hit, Span::of_y(result), Span::of_y(work), peers, false, half);
+        let (from, to) = extent(
+            hit,
+            Span::of_y(result),
+            Span::of_y(work),
+            peers,
+            false,
+            half,
+        );
         guides.push(Guide {
             vertical: true,
             at: hit.line,
@@ -171,7 +185,14 @@ pub fn snap(
 }
 
 /// Each guide runs across the card and everything it lined up with.
-fn extent(hit: Hit, card: Span, work: Span, peers: &[RECT], across_x: bool, half: i32) -> (i32, i32) {
+fn extent(
+    hit: Hit,
+    card: Span,
+    work: Span,
+    peers: &[RECT],
+    across_x: bool,
+    half: i32,
+) -> (i32, i32) {
     if hit.screen {
         return (work.lo, work.hi);
     }
@@ -238,7 +259,7 @@ fn nearest(
     }
 
     for (part, at) in sources {
-        let mut consider = |line: i32, screen: bool, best: &mut Option<Hit>| {
+        let consider = |line: i32, screen: bool, best: &mut Option<Hit>| {
             let shift = line - at;
             if shift.abs() > reach {
                 return;
@@ -297,7 +318,16 @@ mod tests {
     #[test]
     fn a_card_near_the_screen_edge_snaps_one_gap_in() {
         let work = rect(0, 0, 1920, 1040);
-        let (card, guides) = snap(rect(5, 400, 300, 150), work, &[], 12, 8, Edges::NONE, (0, 0), (0, 0));
+        let (card, guides) = snap(
+            rect(5, 400, 300, 150),
+            work,
+            &[],
+            12,
+            8,
+            Edges::NONE,
+            (0, 0),
+            (0, 0),
+        );
         assert_eq!(card.left, 12, "one whole gap from the edge");
         assert!(guides.iter().any(|g| g.vertical && g.at == 6));
         // the guide spans the whole screen when it snapped to the screen
@@ -308,7 +338,16 @@ mod tests {
     #[test]
     fn a_centre_lines_up_with_the_screen_centre() {
         let work = rect(0, 0, 1920, 1040);
-        let (card, _) = snap(rect(810, 400, 300, 150), work, &[], 12, 8, Edges::NONE, (0, 0), (0, 0));
+        let (card, _) = snap(
+            rect(810, 400, 300, 150),
+            work,
+            &[],
+            12,
+            8,
+            Edges::NONE,
+            (0, 0),
+            (0, 0),
+        );
         assert_eq!(card.left + card.width() / 2, 960);
     }
 
@@ -334,7 +373,16 @@ mod tests {
     #[test]
     fn ctrl_free_placement_is_not_snapped_far_away() {
         let work = rect(0, 0, 1920, 1040);
-        let (card, guides) = snap(rect(700, 400, 300, 150), work, &[], 12, 8, Edges::NONE, (0, 0), (0, 0));
+        let (card, guides) = snap(
+            rect(700, 400, 300, 150),
+            work,
+            &[],
+            12,
+            8,
+            Edges::NONE,
+            (0, 0),
+            (0, 0),
+        );
         assert_eq!((card.left, card.top), (700, 400));
         assert!(guides.is_empty());
     }

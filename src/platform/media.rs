@@ -5,8 +5,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Mutex;
 use windows::Media::Control::{
-    GlobalSystemMediaTransportControlsSession,
-    GlobalSystemMediaTransportControlsSessionManager,
+    GlobalSystemMediaTransportControlsSession, GlobalSystemMediaTransportControlsSessionManager,
 };
 use windows::Storage::Streams::{DataReader, IRandomAccessStreamReference};
 
@@ -30,7 +29,9 @@ fn session() -> Option<GlobalSystemMediaTransportControlsSession> {
     manager()?.GetCurrentSession().ok()
 }
 
-fn status_name(s: windows::Media::Control::GlobalSystemMediaTransportControlsSessionPlaybackStatus) -> &'static str {
+fn status_name(
+    s: windows::Media::Control::GlobalSystemMediaTransportControlsSessionPlaybackStatus,
+) -> &'static str {
     use windows::Media::Control::GlobalSystemMediaTransportControlsSessionPlaybackStatus as S;
     match s {
         S::Closed => "closed",
@@ -63,30 +64,37 @@ pub fn state() -> Value {
         "subtitle": "",
         "duration": 0,
         "position": 0,
-        "updated": crate::util::now_ms(),
+        "updated": crate::core::util::now_ms(),
         "cover": Value::Null,
         "app": { "name": "", "icon": Value::Null },
         "can": { "play": false, "pause": false, "toggle": false, "next": false, "previous": false, "seek": false },
     });
-    let Some(session) = session() else { return empty };
+    let Some(session) = session() else {
+        return empty;
+    };
     let info = match session.GetPlaybackInfo() {
         Ok(i) => i,
         Err(_) => return empty,
     };
-    let status = info
-        .PlaybackStatus()
-        .unwrap_or(windows::Media::Control::GlobalSystemMediaTransportControlsSessionPlaybackStatus::Closed);
+    let status = info.PlaybackStatus().unwrap_or(
+        windows::Media::Control::GlobalSystemMediaTransportControlsSessionPlaybackStatus::Closed,
+    );
     let name = status_name(status);
     if name == "closed" {
         return empty;
     }
     let controls = info.Controls().ok();
-    let can = |f: fn(&windows::Media::Control::GlobalSystemMediaTransportControlsSessionPlaybackControls) -> windows::core::Result<bool>| {
+    let can = |f: fn(
+        &windows::Media::Control::GlobalSystemMediaTransportControlsSessionPlaybackControls,
+    ) -> windows::core::Result<bool>| {
         controls.as_ref().and_then(|c| f(c).ok()).unwrap_or(false)
     };
     let playing = name == "playing";
 
-    let props = session.TryGetMediaPropertiesAsync().ok().and_then(|op| op.get().ok());
+    let props = session
+        .TryGetMediaPropertiesAsync()
+        .ok()
+        .and_then(|op| op.get().ok());
     let (title, artist, album, album_artist, subtitle) = match props.as_ref() {
         Some(p) => (
             p.Title().map(|s| s.to_string()).unwrap_or_default(),
@@ -95,7 +103,13 @@ pub fn state() -> Value {
             p.AlbumArtist().map(|s| s.to_string()).unwrap_or_default(),
             p.Subtitle().map(|s| s.to_string()).unwrap_or_default(),
         ),
-        None => (String::new(), String::new(), String::new(), String::new(), String::new()),
+        None => (
+            String::new(),
+            String::new(),
+            String::new(),
+            String::new(),
+            String::new(),
+        ),
     };
 
     let (position, duration) = match session.GetTimelineProperties() {
@@ -128,7 +142,7 @@ pub fn state() -> Value {
         "subtitle": subtitle,
         "duration": duration.max(0),
         "position": position.max(0),
-        "updated": crate::util::now_ms(),
+        "updated": crate::core::util::now_ms(),
         "cover": cover,
         "app": { "name": app_name, "icon": Value::Null },
         "can": {
@@ -160,7 +174,7 @@ fn friendly_app_name(aumid: &str) -> String {
             return name.to_string();
         }
     }
-    let base = aumid.split('!').last().unwrap_or(aumid);
+    let base = aumid.split('!').next_back().unwrap_or(aumid);
     let base = base.split('_').next().unwrap_or(base);
     base.rsplit('.').next().unwrap_or(base).to_string()
 }
@@ -182,7 +196,7 @@ fn cover_url(thumb: &IRandomAccessStreamReference, title: &str, artist: &str) ->
     reader.LoadAsync(size as u32).ok()?.get().ok()?;
     let mut bytes = vec![0u8; size];
     reader.ReadBytes(&mut bytes).ok()?;
-    let dir = crate::paths::get().local_dir.join("media");
+    let dir = crate::core::paths::get().local_dir.join("media");
     let _ = std::fs::create_dir_all(&dir);
     let file = dir.join(format!("{key}.png"));
     // Already a PNG in most cases; re-encode only when the session hands us something else.
@@ -206,7 +220,10 @@ pub fn cover_path(key: &str) -> Option<std::path::PathBuf> {
     if !key.chars().all(|c| c.is_ascii_hexdigit()) {
         return None;
     }
-    let file = crate::paths::get().local_dir.join("media").join(format!("{key}.png"));
+    let file = crate::core::paths::get()
+        .local_dir
+        .join("media")
+        .join(format!("{key}.png"));
     file.is_file().then_some(file)
 }
 
@@ -235,8 +252,16 @@ pub fn control(action: &str, position_ms: i64) -> Value {
 /// lyric lines. Anything that fails just reports "not found" — the widget keeps the title.
 pub fn lyrics() -> Value {
     let st = state();
-    let title = st.get("title").and_then(|v| v.as_str()).unwrap_or("").to_string();
-    let artist = st.get("artist").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let title = st
+        .get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let artist = st
+        .get("artist")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
     let duration = st.get("duration").and_then(|v| v.as_i64()).unwrap_or(0);
     let mut out = json!({
         "title": title,
@@ -252,7 +277,9 @@ pub fn lyrics() -> Value {
         "https://music.163.com/api/search/get/web?s={}&type=1&offset=0&total=true&limit=5",
         urlencode(&query)
     );
-    let Some(search) = http_json(&search_url) else { return out };
+    let Some(search) = http_json(&search_url) else {
+        return out;
+    };
     let id = search
         .get("result")
         .and_then(|r| r.get("songs"))
@@ -262,7 +289,9 @@ pub fn lyrics() -> Value {
         .and_then(|i| i.as_i64());
     let Some(id) = id else { return out };
     let lyric_url = format!("https://music.163.com/api/song/lyric?id={id}&lv=-1&kv=-1&tv=-1");
-    let Some(body) = http_json(&lyric_url) else { return out };
+    let Some(body) = http_json(&lyric_url) else {
+        return out;
+    };
     let lrc = body
         .get("lrc")
         .and_then(|l| l.get("lyric"))
@@ -276,10 +305,8 @@ pub fn lyrics() -> Value {
         .and_then(|l| l.get("lyric"))
         .and_then(|l| l.as_str())
         .unwrap_or("");
-    let tr_map: std::collections::HashMap<i64, String> = parse_lrc(translation)
-        .into_iter()
-        .map(|(t, s)| (t, s))
-        .collect();
+    let tr_map: std::collections::HashMap<i64, String> =
+        parse_lrc(translation).into_iter().collect();
     let lines: Vec<Value> = parse_lrc(lrc)
         .into_iter()
         .map(|(t, text)| {
@@ -323,7 +350,9 @@ fn urlencode(s: &str) -> String {
     let mut out = String::with_capacity(s.len() * 3);
     for byte in s.as_bytes() {
         match *byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(*byte as char),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(*byte as char)
+            }
             b' ' => out.push_str("%20"),
             other => out.push_str(&format!("%{other:02X}")),
         }
@@ -337,7 +366,10 @@ fn http_json(url: &str) -> Option<Value> {
         .build();
     let response = agent
         .get(url)
-        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) WinWidget")
+        .set(
+            "User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) WinWidget",
+        )
         .set("Referer", "https://music.163.com/")
         .call()
         .ok()?;

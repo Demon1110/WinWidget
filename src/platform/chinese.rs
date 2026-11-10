@@ -8,11 +8,12 @@ const LCMAP_SIMPLIFIED_CHINESE: u32 = 0x0200_0000;
 
 /// `to` is "traditional" (default) or "simplified".
 pub fn convert(text: &str, to: &str) -> String {
-    let (locale, flag) = if to.eq_ignore_ascii_case("simplified") || to.eq_ignore_ascii_case("zh-cn") {
-        ("zh-CN", LCMAP_SIMPLIFIED_CHINESE)
-    } else {
-        ("zh-TW", LCMAP_TRADITIONAL_CHINESE)
-    };
+    let (locale, flag) =
+        if to.eq_ignore_ascii_case("simplified") || to.eq_ignore_ascii_case("zh-cn") {
+            ("zh-CN", LCMAP_SIMPLIFIED_CHINESE)
+        } else {
+            ("zh-TW", LCMAP_TRADITIONAL_CHINESE)
+        };
     let source: Vec<u16> = text.encode_utf16().collect();
     let mut dest = vec![0u16; source.len() + 16];
     let locale_w = w::wide(locale);

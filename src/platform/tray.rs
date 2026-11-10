@@ -2,7 +2,7 @@
 //! widget context menu use.
 
 use crate::platform::win32 as w;
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{channel, Sender};
 
 pub const WM_APP: u32 = 0x8000;
 pub const TRAY_MESSAGE: u32 = WM_APP + 1;
@@ -151,7 +151,12 @@ impl TrayHandle {
 
 /// Starts the tray thread. Menu ids map to the action names in `actions`, which are sent back
 /// through `on_action`.
-pub fn spawn<F>(menu: Vec<MenuItem>, actions: Vec<String>, hotkeys: Vec<(String, String)>, on_action: F) -> TrayHandle
+pub fn spawn<F>(
+    menu: Vec<MenuItem>,
+    actions: Vec<String>,
+    hotkeys: Vec<(String, String)>,
+    on_action: F,
+) -> TrayHandle
 where
     F: Fn(String) + Send + 'static,
 {
@@ -204,7 +209,7 @@ where
             )
         };
         if hwnd == 0 {
-            crate::logging::error("Tray: the window could not be created");
+            crate::core::logging::error("Tray: the window could not be created");
             return;
         }
         let exe = std::env::current_exe().unwrap_or_default();
@@ -231,13 +236,14 @@ where
                 if ok {
                     hotkey_map.lock().unwrap().push((id, action.clone()));
                 } else {
-                    crate::logging::warn(&format!("Hotkey {keys} for '{action}' could not be registered"));
+                    crate::core::logging::warn(&format!(
+                        "Hotkey {keys} for '{action}' could not be registered"
+                    ));
                 }
             }
         }
 
         let ctx = TrayCtx {
-            hwnd,
             menu: menu.clone(),
             map: map.clone(),
             hotkeys: hotkey_map.clone(),
@@ -310,7 +316,7 @@ where
                                 if ok {
                                     hotkey_map.lock().unwrap().push((id, action.clone()));
                                 } else {
-                                    crate::logging::warn(&format!(
+                                    crate::core::logging::warn(&format!(
                                         "Hotkey {keys} for '{action}' could not be registered"
                                     ));
                                 }
@@ -336,7 +342,6 @@ where
 }
 
 struct TrayCtx {
-    hwnd: w::HWND,
     menu: Vec<MenuItem>,
     map: std::sync::Arc<std::sync::Mutex<Vec<(u32, String)>>>,
     hotkeys: std::sync::Arc<std::sync::Mutex<Vec<(i32, String)>>>,
@@ -344,18 +349,23 @@ struct TrayCtx {
 }
 
 thread_local! {
-    static TRAY_CTX: std::cell::RefCell<Option<TrayCtx>> = std::cell::RefCell::new(None);
+    static TRAY_CTX: std::cell::RefCell<Option<TrayCtx>> = const { std::cell::RefCell::new(None) };
 }
 
-unsafe extern "system" fn proc_tray(hwnd: w::HWND, msg: u32, wparam: usize, lparam: isize) -> isize {
+unsafe extern "system" fn proc_tray(
+    hwnd: w::HWND,
+    msg: u32,
+    wparam: usize,
+    lparam: isize,
+) -> isize {
     match msg {
         ASK_CONTROL => {
-            crate::logging::info("Tray: asked to show the control center");
+            crate::core::logging::info("Tray: asked to show the control center");
             TRAY_CTX.with(|cell| {
                 if let Some(ctx) = cell.borrow().as_ref() {
                     (ctx.on_action)("control.open".to_string());
                 } else {
-                    crate::logging::warn("Tray: no context, the request is dropped");
+                    crate::core::logging::warn("Tray: no context, the request is dropped");
                 }
             });
             0
@@ -395,16 +405,14 @@ unsafe extern "system" fn proc_tray(hwnd: w::HWND, msg: u32, wparam: usize, lpar
         WM_HOTKEY_MSG => {
             let id = wparam as i32;
             let action = TRAY_CTX.with(|cell| {
-                cell.borrow()
-                    .as_ref()
-                    .and_then(|ctx| {
-                        ctx.hotkeys
-                            .lock()
-                            .unwrap()
-                            .iter()
-                            .find(|(hid, _)| *hid == id)
-                            .map(|(_, a)| a.clone())
-                    })
+                cell.borrow().as_ref().and_then(|ctx| {
+                    ctx.hotkeys
+                        .lock()
+                        .unwrap()
+                        .iter()
+                        .find(|(hid, _)| *hid == id)
+                        .map(|(_, a)| a.clone())
+                })
             });
             if let Some(action) = action {
                 TRAY_CTX.with(|cell| {
@@ -444,7 +452,10 @@ fn zero_icon_data() -> w::NOTIFYICONDATAW {
 }
 
 fn put_wide(target: &mut [u16], text: &str) {
-    let wide: Vec<u16> = text.encode_utf16().take(target.len().saturating_sub(1)).collect();
+    let wide: Vec<u16> = text
+        .encode_utf16()
+        .take(target.len().saturating_sub(1))
+        .collect();
     target[..wide.len()].copy_from_slice(&wide);
     let end = wide.len();
     target[end] = 0;
@@ -498,7 +509,13 @@ pub fn parse_hotkey(keys: &str) -> Option<(u32, u32)> {
                 return None;
             }
         }
-        k if k.starts_with('f') && k[1..].parse::<u32>().ok().map(|n| (1..=24).contains(&n)).unwrap_or(false) => {
+        k if k.starts_with('f')
+            && k[1..]
+                .parse::<u32>()
+                .ok()
+                .map(|n| (1..=24).contains(&n))
+                .unwrap_or(false) =>
+        {
             0x70 + k[1..].parse::<u32>().ok()? - 1
         }
         _ => return None,

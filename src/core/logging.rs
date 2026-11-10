@@ -16,7 +16,11 @@ pub fn init(path: PathBuf) {
     if let Some(dir) = path.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
-    let handle = OpenOptions::new().create(true).append(true).open(&path).ok();
+    let handle = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .ok();
     *file().lock().unwrap() = handle;
     info(&format!("WinWidget {} starting", crate::APP_VERSION));
     info(&format!("log file: {}", path.display()));

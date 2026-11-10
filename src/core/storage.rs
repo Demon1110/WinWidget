@@ -13,13 +13,15 @@ pub struct StorageStore {
 
 impl StorageStore {
     fn file_for(instance: &str) -> std::path::PathBuf {
-        crate::paths::get().storage_dir().join(format!("{instance}.json"))
+        crate::core::paths::get()
+            .storage_dir()
+            .join(format!("{instance}.json"))
     }
 
     fn open(&mut self, instance: &str) -> &mut Map<String, Value> {
         let file = Self::file_for(instance);
         self.cache.entry(instance.to_string()).or_insert_with(|| {
-            crate::util::read_text(&file)
+            crate::core::util::read_text(&file)
                 .ok()
                 .and_then(|t| serde_json::from_str::<Map<String, Value>>(&t).ok())
                 .unwrap_or_default()
@@ -27,10 +29,7 @@ impl StorageStore {
     }
 
     pub fn get(&mut self, instance: &str, key: &str) -> Value {
-        self.open(instance)
-            .get(key)
-            .cloned()
-            .unwrap_or(Value::Null)
+        self.open(instance).get(key).cloned().unwrap_or(Value::Null)
     }
 
     pub fn keys(&mut self, instance: &str) -> Vec<String> {
@@ -63,17 +62,21 @@ impl StorageStore {
     }
 
     fn flush(&mut self, instance: &str) {
-        let Some(map) = self.cache.get(instance) else { return };
+        let Some(map) = self.cache.get(instance) else {
+            return;
+        };
         let text = match serde_json::to_string_pretty(map) {
             Ok(t) => t,
             Err(e) => {
-                crate::logging::error(&format!("Storage {instance} could not be written: {e}"));
+                crate::core::logging::error(&format!(
+                    "Storage {instance} could not be written: {e}"
+                ));
                 return;
             }
         };
         let file = Self::file_for(instance);
         if let Err(e) = std::fs::write(&file, text) {
-            crate::logging::error(&format!("Storage save failed for {instance}: {e}"));
+            crate::core::logging::error(&format!("Storage save failed for {instance}: {e}"));
         } else {
             self.dirty.remove(instance);
         }

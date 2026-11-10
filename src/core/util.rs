@@ -60,7 +60,10 @@ pub fn prop(p: &Value, key: &str) -> Value {
 }
 
 pub fn arr<'a>(p: &'a Value, key: &str) -> &'a [Value] {
-    p.get(key).and_then(|v| v.as_array()).map(|a| a.as_slice()).unwrap_or(&[])
+    p.get(key)
+        .and_then(|v| v.as_array())
+        .map(|a| a.as_slice())
+        .unwrap_or(&[])
 }
 
 // ── numbers ─────────────────────────────────────────────────────────────────
@@ -149,7 +152,7 @@ pub fn now_ms() -> i64 {
 }
 
 pub fn logs_dir_hint() -> String {
-    crate::paths::log_file().to_string_lossy().to_string()
+    crate::core::paths::log_file().to_string_lossy().to_string()
 }
 
 pub fn to_utf8_lossy(bytes: &[u8]) -> String {

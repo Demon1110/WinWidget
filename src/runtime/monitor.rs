@@ -1,8 +1,8 @@
 //! Background readers: system counters, the volume control and now-playing. Each runs on its own
 //! thread so a slow provider never blocks the UI, and only while some card is listening.
 
-use crate::app::Ev;
 use crate::platform::sysinfo::Sampler;
+use crate::runtime::app::Ev;
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -24,9 +24,6 @@ pub struct Monitor {
 impl Monitor {
     pub fn configure(&self, next: Request) {
         *self.req.lock().unwrap() = next;
-    }
-    fn current(&self) -> Request {
-        self.req.lock().unwrap().clone()
     }
 }
 

@@ -1,7 +1,7 @@
 //! The online widget list. There is no server baked in: a market address comes from
 //! `market_url` in config.json, and without one the page says so plainly instead of pretending.
 
-use crate::app::App;
+use crate::runtime::app::App;
 use serde_json::{json, Value};
 use std::time::Duration;
 
@@ -25,7 +25,7 @@ fn list_url(app: &App) -> String {
 }
 
 fn cache_file() -> std::path::PathBuf {
-    crate::paths::get().local_dir.join("market.json")
+    crate::core::paths::get().local_dir.join("market.json")
 }
 
 pub fn site_of(app: &App) -> String {
@@ -42,7 +42,7 @@ pub fn cache_path() -> std::path::PathBuf {
 
 /// Runs off the main thread: it only touches the network and a cache file.
 pub fn fetch_list(url: &str, site_name: &str, cache: &std::path::Path, refresh: bool) -> Value {
-    let cached = crate::util::read_text(cache).ok();
+    let cached = crate::core::util::read_text(cache).ok();
     if let Some(text) = &cached {
         if !refresh {
             if let Ok(mut value) = serde_json::from_str::<Value>(text) {
@@ -81,9 +81,13 @@ pub fn fetch_list(url: &str, site_name: &str, cache: &std::path::Path, refresh: 
                     }
                     value
                 }
-                Err(_) => json!({ "widgets": [], "site": site_name, "offline": false, "error": format!("{e}") }),
+                Err(_) => {
+                    json!({ "widgets": [], "site": site_name, "offline": false, "error": format!("{e}") })
+                }
             },
-            None => json!({ "widgets": [], "site": site_name, "offline": false, "error": format!("{e}") }),
+            None => {
+                json!({ "widgets": [], "site": site_name, "offline": false, "error": format!("{e}") })
+            }
         },
     }
 }
@@ -114,7 +118,7 @@ pub fn download_url(list: &Value, id: &str) -> Result<String, String> {
 
 /// Downloads a package. Runs off the main thread and returns where the file landed.
 pub fn download(url: &str, id: &str) -> Result<std::path::PathBuf, String> {
-    let folder = crate::paths::get().staging_dir().join("download");
+    let folder = crate::core::paths::get().staging_dir().join("download");
     std::fs::create_dir_all(&folder).map_err(|e| format!("{}: {e}", folder.display()))?;
     let target = folder.join(format!("{}.fwz", sanitise(id)));
     let agent = ureq::AgentBuilder::new()
@@ -130,14 +134,20 @@ pub fn download(url: &str, id: &str) -> Result<std::path::PathBuf, String> {
 
 fn sanitise(id: &str) -> String {
     id.chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect()
 }
 
 /// The list as it sits on disk, for `market.install` when the page has already loaded it.
 pub fn cached_list(site_name: &str) -> Value {
     let path = cache_file();
-    let text = crate::util::read_text(&path).unwrap_or_else(|_| "{}".into());
+    let text = crate::core::util::read_text(&path).unwrap_or_else(|_| "{}".into());
     let mut value: Value = serde_json::from_str(&text).unwrap_or_else(|_| json!({}));
     decorate(&mut value, site_name);
     value
@@ -148,7 +158,8 @@ fn decorate(value: &mut Value, site: &str) {
         if obj.get("widgets").map(|w| !w.is_array()).unwrap_or(true) {
             obj.insert("widgets".into(), Value::Array(Vec::new()));
         }
-        obj.entry("site").or_insert_with(|| Value::String(site.to_string()));
+        obj.entry("site")
+            .or_insert_with(|| Value::String(site.to_string()));
         obj.entry("offline").or_insert(Value::Bool(false));
     }
 }

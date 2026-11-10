@@ -1,6 +1,6 @@
 //! Groups in the widget library ("category" in widget.json); unknown ones fall under "other".
 
-use crate::manifest::Manifest;
+use crate::model::manifest::Manifest;
 
 pub const KNOWN: [&str; 6] = ["time", "weather", "system", "productivity", "info", "media"];
 

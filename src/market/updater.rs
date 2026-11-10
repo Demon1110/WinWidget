@@ -1,7 +1,7 @@
 //! Checking for and applying a new version. Nothing happens automatically unless the user asked
 //! for it, and a copy that isn't an installed release refuses to update itself.
 
-use crate::app::App;
+use crate::runtime::app::App;
 use serde_json::{json, Value};
 use std::time::Duration;
 
@@ -25,7 +25,12 @@ pub fn current(app: &mut App) -> Value {
 
 /// Reads the release note at `update_url` and compares versions.
 pub fn check(app: &mut App) -> Value {
-    let Some(url) = app.cfg().update_url.clone().filter(|u| !u.trim().is_empty()) else {
+    let Some(url) = app
+        .cfg()
+        .update_url
+        .clone()
+        .filter(|u| !u.trim().is_empty())
+    else {
         return set(
             app,
             json!({
@@ -57,7 +62,10 @@ pub fn check(app: &mut App) -> Value {
                         .to_string();
                     let size = info.get("size").and_then(|v| v.as_f64()).unwrap_or(0.0);
                     let notes = info.get("notes").and_then(|v| v.as_str()).unwrap_or("");
-                    let page = info.get("page").and_then(|v| v.as_str()).map(|s| s.to_string());
+                    let page = info
+                        .get("page")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
                     let download = info
                         .get("url")
                         .and_then(|v| v.as_str())
@@ -71,7 +79,7 @@ pub fn check(app: &mut App) -> Value {
                         "notes": notes,
                         "page": page,
                         "url": download,
-                        "checkedAt": crate::util::now_ms(),
+                        "checkedAt": crate::core::util::now_ms(),
                         "auto": app.cfg().auto_update_check,
                     })
                 }
@@ -146,7 +154,7 @@ pub fn install(app: &mut App) -> Value {
                 "current": crate::APP_VERSION }),
     );
 
-    let folder = crate::paths::get().local_dir.join("update");
+    let folder = crate::core::paths::get().local_dir.join("update");
     let _ = std::fs::create_dir_all(&folder);
     let target = folder.join("WinWidget-new.exe");
     let agent = ureq::AgentBuilder::new()
@@ -155,8 +163,7 @@ pub fn install(app: &mut App) -> Value {
         .build();
     let result = (|| -> Result<(), String> {
         let response = agent.get(&url).call().map_err(|e| format!("{e}"))?;
-        let mut file =
-            std::fs::File::create(&target).map_err(|e| format!("{e}"))?;
+        let mut file = std::fs::File::create(&target).map_err(|e| format!("{e}"))?;
         std::io::copy(&mut response.into_reader(), &mut file).map_err(|e| format!("{e}"))?;
         Ok(())
     })();
@@ -184,7 +191,10 @@ pub fn install(app: &mut App) -> Value {
 }
 
 pub fn cancel(app: &mut App) -> Value {
-    set(app, json!({ "status": "idle", "current": crate::APP_VERSION }))
+    set(
+        app,
+        json!({ "status": "idle", "current": crate::APP_VERSION }),
+    )
 }
 
 pub fn page(app: &App) -> Result<(), String> {
@@ -194,6 +204,6 @@ pub fn page(app: &App) -> Result<(), String> {
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
         .or_else(|| app.cfg().update_url.clone())
-        .unwrap_or_else(|| crate::market::DEFAULT_SITE.to_string());
+        .unwrap_or_else(|| crate::market::client::DEFAULT_SITE.to_string());
     crate::platform::shell::open(&url)
 }

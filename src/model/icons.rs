@@ -1,14 +1,17 @@
 //! Widget icons and preview pictures, turned into data URLs / local URLs the control center can
 //! show. Both are cached by path + modification time.
 
-use crate::manifest::Manifest;
+use crate::model::manifest::Manifest;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
 
 static CACHE: Mutex<Option<HashMap<String, (u64, String)>>> = Mutex::new(None);
 /// `preview_variants` walks the folder once per theme/language pair, so its result is cached too.
-static PREVIEWS: Mutex<Option<HashMap<String, (u64, Vec<String>)>>> = Mutex::new(None);
+static PREVIEWS: Mutex<Option<PreviewCache>> = Mutex::new(None);
+
+/// mtime + the variant URLs already built for one widget folder.
+type PreviewCache = HashMap<String, (u64, Vec<String>)>;
 
 fn mtime(path: &std::path::Path) -> u64 {
     std::fs::metadata(path)
@@ -25,7 +28,7 @@ pub fn icon_data_url(manifest: &Manifest, size: u32) -> Option<String> {
     if rel.is_empty() {
         return None;
     }
-    let path = crate::paths::resolve_inside(&manifest.dir, rel)?;
+    let path = crate::core::paths::resolve_inside(&manifest.dir, rel)?;
     if !path.is_file() {
         return None;
     }
@@ -47,14 +50,14 @@ pub fn icon_data_url(manifest: &Manifest, size: u32) -> Option<String> {
         .unwrap_or("")
         .to_lowercase();
     let value = if ext == "svg" {
-        let text = crate::util::read_text(&path).ok()?;
+        let text = crate::core::util::read_text(&path).ok()?;
         format!(
             "data:image/svg+xml;base64,{}",
             crate::platform::win32::base64(text.as_bytes())
         )
     } else {
         let bytes = std::fs::read(&path).ok()?;
-        let png = crate::img::thumbnail_bytes(&bytes, size).ok()?;
+        let png = crate::core::img::thumbnail_bytes(&bytes, size).ok()?;
         format!(
             "data:image/png;base64,{}",
             crate::platform::win32::base64(&png)
@@ -78,7 +81,7 @@ pub fn preview_url(manifest: &Manifest, theme: &str, lang: &str) -> Option<Strin
         .replace("{theme}", theme)
         .replace("{lang}", lang)
         .replace('\\', "/");
-    let path = crate::paths::resolve_inside(&manifest.dir, &rel)?;
+    let path = crate::core::paths::resolve_inside(&manifest.dir, &rel)?;
     if !path.is_file() {
         return None;
     }
@@ -132,7 +135,7 @@ fn collect_previews(manifest: &Manifest, template: &str, themes: &[String]) -> V
     };
     let langs = ["zh-TW", "zh-CN", "en"];
     let mut push = |rel: String| {
-        let path = crate::paths::resolve_inside(&manifest.dir, &rel);
+        let path = crate::core::paths::resolve_inside(&manifest.dir, &rel);
         if let Some(path) = path {
             if path.is_file() {
                 let kind = if manifest.builtin { "builtin" } else { "user" };
@@ -151,7 +154,7 @@ fn collect_previews(manifest: &Manifest, template: &str, themes: &[String]) -> V
         for lang in langs {
             push(
                 template
-                    .replace("{theme}", &theme)
+                    .replace("{theme}", theme)
                     .replace("{lang}", lang)
                     .replace('\\', "/"),
             );

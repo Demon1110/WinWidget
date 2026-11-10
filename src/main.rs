@@ -2,49 +2,26 @@
 //!
 //! A card is a borderless transparent window holding a WebView2 page served by a loopback HTTP
 //! server; each page talks to the host over WebView2's message channel.
+//!
+//! The binary only wires things up: every module lives in the library crate (`src/lib.rs`).
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod app;
-mod appearance;
-mod bridge;
-mod catalog;
-mod categories;
-mod config;
-mod control;
-mod icons;
-mod img;
-mod logging;
-mod manifest;
-mod market;
-mod menus;
-mod monitor;
-mod net;
-mod packages;
-mod paths;
-mod permissions;
-mod platform;
-mod server;
-mod shim;
-mod snap;
-mod storage;
-mod text;
-mod themes;
-mod updater;
-mod util;
-mod window;
-
-pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
-
-use app::{App, Ev};
 use std::time::{Duration, Instant};
 use tao::event::{Event, StartCause, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoopBuilder};
+use winwidget::core::{config, logging, paths, text};
+use winwidget::model::catalog;
+use winwidget::platform;
+use winwidget::runtime::app::{self, App, Ev};
+use winwidget::runtime::{bridge, window};
+use winwidget::ui::{control, menus};
+use winwidget::APP_VERSION;
 
 fn main() {
     paths::init();
-    logging::init(crate::paths::get().log_file());
-    crate::logging::info(&format!("WinWidget {APP_VERSION} starting"));
+    logging::init(paths::get().log_file());
+    logging::info(&format!("WinWidget {APP_VERSION} starting"));
 
     let args: Vec<String> = std::env::args().skip(1).collect();
     if !args.is_empty() {
@@ -58,7 +35,7 @@ fn main() {
         }
     }
     if platform::single_instance().is_err() {
-        crate::logging::info("Another copy is already running; showing it");
+        logging::info("Another copy is already running; showing it");
         platform::open_control_center();
         return;
     }
@@ -77,7 +54,7 @@ fn main() {
     let proxy = event_loop.create_proxy();
     let mut app = App::new(proxy);
     // The safety net behind page-driven dragging: works even when the web view missed the press.
-    crate::window::watch_presses(app.proxy.clone());
+    window::watch_presses(app.proxy.clone());
     app.refresh_tray_menu();
     if app.cfg().instances.is_empty() {
         // First run: nothing on the desktop yet, so open the control center to explain itself.
@@ -173,7 +150,7 @@ fn main() {
 }
 
 fn config_low_resource() -> bool {
-    crate::config::ConfigStore::load().data.low_resource_mode
+    config::ConfigStore::load().data.low_resource_mode
 }
 
 /// Gives a GUI-subsystem build a console to write to: the caller's if there is one, else a new one.
@@ -241,10 +218,12 @@ fn run_cli(args: &[String]) -> bool {
                 return true;
             }
             let mut store = config::ConfigStore::load();
-            let mut inst = config::InstanceConfig::default();
-            inst.widget = manifest.id.clone();
-            inst.width = manifest.size.width;
-            inst.height = manifest.size.height;
+            let inst = config::InstanceConfig {
+                widget: manifest.id.clone(),
+                width: manifest.size.width,
+                height: manifest.size.height,
+                ..config::InstanceConfig::default()
+            };
             store.data.instances.push(inst.clone());
             store.save();
             println!("{}", inst.id);

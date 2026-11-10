@@ -18,7 +18,6 @@ pub struct Sampler {
     last_tx: u64,
     last_at: Instant,
     history: VecDeque<[f64; 5]>,
-    boot_time: i64,
 }
 
 impl Sampler {
@@ -31,7 +30,6 @@ impl Sampler {
         let disks = Disks::new_with_refreshed_list().ok();
         let nets = Networks::new_with_refreshed_list().ok();
         let (rx, tx) = nets.as_ref().map(totals).unwrap_or((0, 0));
-        let boot = System::boot_time().map(|b| b as i64 * 1000).unwrap_or(0);
         Sampler {
             sys,
             disks,
@@ -40,7 +38,6 @@ impl Sampler {
             last_tx: tx,
             last_at: Instant::now(),
             history: VecDeque::new(),
-            boot_time: boot,
         }
     }
 
@@ -63,7 +60,11 @@ impl Sampler {
                 sys.refresh_memory();
                 let total = sys.total_memory() as f64;
                 let used = sys.used_memory() as f64;
-                let usage = if total > 0.0 { (used / total) * 100.0 } else { 0.0 };
+                let usage = if total > 0.0 {
+                    (used / total) * 100.0
+                } else {
+                    0.0
+                };
                 point[1] = usage;
                 out.insert(
                     "memory".into(),
@@ -131,7 +132,7 @@ impl Sampler {
 
         point[0] = point[0].max(0.0);
         self.history.push_back(point);
-        let now = crate::util::now_ms() as f64;
+        let now = crate::core::util::now_ms() as f64;
         while let Some(front) = self.history.front() {
             let _ = front;
             if self.history.len() as i64 * 1000 < HISTORY_MINUTES * 60 {
@@ -145,7 +146,7 @@ impl Sampler {
 
     /// `{ now, points: [[time, cpu%, mem%, down, up], ...] }` over the last 15 minutes.
     pub fn history(&self, interval_ms: i64) -> Value {
-        let now = crate::util::now_ms();
+        let now = crate::core::util::now_ms();
         let count = self.history.len() as i64;
         let points: Vec<Value> = self
             .history
@@ -157,6 +158,12 @@ impl Sampler {
             })
             .collect();
         json!({ "now": now, "points": points })
+    }
+}
+
+impl Default for Sampler {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -203,7 +210,7 @@ fn round1(v: f64) -> f64 {
 fn totals(nets: &Networks) -> (u64, u64) {
     let mut rx = 0u64;
     let mut tx = 0u64;
-    for (_name, data) in nets.iter() {
+    for data in nets.values() {
         rx += data.total_received();
         tx += data.total_transmitted();
     }
@@ -282,7 +289,9 @@ fn gpus() -> Vec<String> {
     use winreg::RegKey;
     let mut out = Vec::new();
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    if let Ok(class) = hklm.open_subkey(r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}") {
+    if let Ok(class) = hklm.open_subkey(
+        r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}",
+    ) {
         for item in class.enum_keys().flatten() {
             if !item.chars().all(|c| c.is_ascii_digit()) {
                 continue;

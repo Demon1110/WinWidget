@@ -42,7 +42,7 @@ pub fn utc_offset_seconds() -> i64 {
         bias + info.StandardBias as i64
     }
     .wrapping_neg()
-    * 60
+        * 60
 }
 
 /// Windows' UI language mapped onto the three the widgets speak.
@@ -58,7 +58,11 @@ pub fn locale() -> String {
     if lower.starts_with("zh") {
         if lower.contains("hans") || lower.ends_with("-cn") || lower.ends_with("-sg") {
             "zh-CN".to_string()
-        } else if lower.contains("hant") || lower.ends_with("-tw") || lower.ends_with("-hk") || lower.ends_with("-mo") {
+        } else if lower.contains("hant")
+            || lower.ends_with("-tw")
+            || lower.ends_with("-hk")
+            || lower.ends_with("-mo")
+        {
             "zh-TW".to_string()
         } else {
             "zh-CN".to_string()
@@ -117,8 +121,14 @@ pub fn fonts() -> Vec<String> {
 
     let mut names: BTreeSet<String> = BTreeSet::new();
     let sources = [
-        (RegKey::predef(HKEY_LOCAL_MACHINE), r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts"),
-        (RegKey::predef(HKEY_CURRENT_USER), r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts"),
+        (
+            RegKey::predef(HKEY_LOCAL_MACHINE),
+            r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts",
+        ),
+        (
+            RegKey::predef(HKEY_CURRENT_USER),
+            r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts",
+        ),
     ];
     for (root, path) in sources {
         if let Ok(key) = root.open_subkey(path) {
@@ -149,8 +159,14 @@ pub fn fonts() -> Vec<String> {
             for entry in entries.flatten() {
                 let p = entry.path();
                 if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
-                    if stem.len() > 3 && stem.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false) {
-                        let pretty = stem.replace('-', " ").replace('_', " ");
+                    if stem.len() > 3
+                        && stem
+                            .chars()
+                            .next()
+                            .map(|c| c.is_ascii_alphabetic())
+                            .unwrap_or(false)
+                    {
+                        let pretty = stem.replace(['-', '_'], " ");
                         if pretty.chars().any(|c| c.is_ascii_uppercase()) {
                             names.insert(pretty);
                         }
@@ -163,6 +179,10 @@ pub fn fonts() -> Vec<String> {
 }
 
 /// Blocks a second copy of WinWidget from starting; the handle lives for the whole process.
+///
+/// `Err(())` is the only failure and it means "another copy is already running", so there is
+/// nothing to carry in an error value.
+#[allow(clippy::result_unit_err)]
 pub fn single_instance() -> Result<(), ()> {
     let name = win32::wide("WinWidget.SingleInstance");
     let handle = unsafe { win32::CreateMutexW(std::ptr::null(), 1, name.as_ptr()) };

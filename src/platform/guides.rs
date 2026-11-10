@@ -3,7 +3,7 @@
 //! `UpdateLayeredWindow`, so it never takes the focus and clicks pass straight through it.
 
 use crate::platform::win32 as w;
-use crate::snap::Guide;
+use crate::runtime::snap::Guide;
 use std::ffi::c_void;
 use std::sync::Mutex;
 
@@ -29,8 +29,9 @@ unsafe impl Send for Line {}
 
 impl Line {
     fn new(vertical: bool) -> Option<Line> {
-        let ex = (w::WS_EX_LAYERED | w::WS_EX_TRANSPARENT | w::WS_EX_NOACTIVATE | w::WS_EX_TOOLWINDOW)
-            as u32;
+        let ex =
+            (w::WS_EX_LAYERED | w::WS_EX_TRANSPARENT | w::WS_EX_NOACTIVATE | w::WS_EX_TOOLWINDOW)
+                as u32;
         let hwnd = unsafe {
             w::CreateWindowExW(
                 ex,
@@ -48,7 +49,7 @@ impl Line {
             )
         };
         if hwnd == 0 {
-            crate::logging::warn("Alignment guide: could not create its window");
+            crate::core::logging::warn("Alignment guide: could not create its window");
             return None;
         }
         // A popup with no frame: only the pixels handed to UpdateLayeredWindow ever show.
@@ -77,7 +78,11 @@ impl Line {
         if self.bitmap != 0 && len <= self.len && thick == self.thick {
             return true;
         }
-        let (width, height) = if self.vertical { (thick, len) } else { (len, thick) };
+        let (width, height) = if self.vertical {
+            (thick, len)
+        } else {
+            (len, thick)
+        };
         unsafe {
             if self.bitmap != 0 {
                 w::SelectObject(self.dc, self.previous);
@@ -98,14 +103,7 @@ impl Line {
             info.bmiHeader.biBitCount = 32;
             info.bmiHeader.biCompression = w::BI_RGB;
             let mut bits: *mut c_void = std::ptr::null_mut();
-            let bitmap = w::CreateDIBSection(
-                self.dc,
-                &info,
-                w::DIB_RGB_COLORS,
-                &mut bits,
-                0,
-                0,
-            );
+            let bitmap = w::CreateDIBSection(self.dc, &info, w::DIB_RGB_COLORS, &mut bits, 0, 0);
             if bitmap == 0 || bits.is_null() {
                 return false;
             }
@@ -126,7 +124,11 @@ impl Line {
         if !self.reserve(len, thick) {
             return;
         }
-        let (width, height) = if self.vertical { (thick, len) } else { (len, thick) };
+        let (width, height) = if self.vertical {
+            (thick, len)
+        } else {
+            (len, thick)
+        };
         let period = (dash + space).max(1);
         unsafe {
             let count = (width as usize) * (height as usize);
@@ -236,9 +238,15 @@ pub fn show(guides: &[Guide], ink: u32, thickness: i32, dash: i32, space: i32) {
             &mut state.horizontal
         };
         match (guide, line) {
-            (Some(g), Some(l)) => {
-                l.draw(g.at, g.from, g.to, ink, thickness, dash.max(1), space.max(1))
-            }
+            (Some(g), Some(l)) => l.draw(
+                g.at,
+                g.from,
+                g.to,
+                ink,
+                thickness,
+                dash.max(1),
+                space.max(1),
+            ),
             (None, Some(l)) => l.hide(),
             _ => {}
         }

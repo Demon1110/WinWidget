@@ -4,7 +4,10 @@
 //! Declared by hand rather than through a binding crate: the few functions used here are stable,
 //! and this keeps the calls readable.
 
-#![allow(non_snake_case, dead_code)]
+// Names and parameter order deliberately mirror the Windows SDK: renaming them would make the
+// declarations harder to check against the documentation, and `dead_code` covers the ones that
+// only exist to document the ABI.
+#![allow(non_snake_case, dead_code, clippy::upper_case_acronyms)]
 
 use std::ffi::c_void;
 
@@ -241,7 +244,10 @@ extern "system" {
     ) -> i32;
     pub fn ShowWindow(hwnd: HWND, cmd: i32) -> i32;
     pub fn FindWindowW(class: *const u16, name: *const u16) -> HWND;
-    pub fn EnumWindows(callback: Option<unsafe extern "system" fn(HWND, isize) -> i32>, data: isize) -> i32;
+    pub fn EnumWindows(
+        callback: Option<unsafe extern "system" fn(HWND, isize) -> i32>,
+        data: isize,
+    ) -> i32;
     pub fn GetClassNameW(hwnd: HWND, buffer: *mut u16, len: i32) -> i32;
     pub fn GetWindow(hwnd: HWND, cmd: u32) -> HWND;
     pub fn GetParent(hwnd: HWND) -> HWND;
@@ -332,13 +338,7 @@ extern "system" {
     pub fn SystemParametersInfoW(action: u32, param: u32, value: *mut c_void, win_ini: u32) -> i32;
     pub fn GetSystemPowerStatus(status: *mut SYSTEM_POWER_STATUS) -> i32;
     pub fn LoadIconW(instance: HINSTANCE, name: usize) -> HICON;
-    pub fn CallWindowProcW(
-        previous: isize,
-        hwnd: HWND,
-        msg: u32,
-        w: usize,
-        l: isize,
-    ) -> isize;
+    pub fn CallWindowProcW(previous: isize, hwnd: HWND, msg: u32, w: usize, l: isize) -> isize;
     pub fn SendMessageW(hwnd: HWND, msg: u32, w: usize, l: isize) -> isize;
     pub fn SetCursorPos(x: i32, y: i32) -> i32;
     pub fn ReleaseCapture() -> i32;
@@ -428,10 +428,7 @@ const FOF_NOERRORUI: u16 = 0x0400;
 
 /// Moves a folder or file to the recycle bin. Returns false when the shell refused.
 pub fn recycle_path(path: &std::path::Path) -> bool {
-    let mut from: Vec<u16> = path
-        .to_string_lossy()
-        .encode_utf16()
-        .collect();
+    let mut from: Vec<u16> = path.to_string_lossy().encode_utf16().collect();
     from.push(0);
     from.push(0);
     let mut op = SHFILEOPSTRUCTW {
@@ -530,7 +527,12 @@ pub struct NOTIFYICONDATAW {
 #[link(name = "dwmapi")]
 extern "system" {
     pub fn DwmExtendFrameIntoClientArea(hwnd: HWND, margins: *const MARGINS) -> i32;
-    pub fn DwmSetWindowAttribute(hwnd: HWND, attribute: u32, value: *const c_void, size: u32) -> i32;
+    pub fn DwmSetWindowAttribute(
+        hwnd: HWND,
+        attribute: u32,
+        value: *const c_void,
+        size: u32,
+    ) -> i32;
 }
 
 #[link(name = "kernel32")]
@@ -614,7 +616,6 @@ pub fn progman() -> HWND {
     unsafe { FindWindowW(wide("Progman").as_ptr(), std::ptr::null()) }
 }
 
-
 /// Makes the window per-pixel transparent: the DWM frame covers the whole client area.
 pub fn extend_frame(hwnd: HWND) {
     let margins = MARGINS {
@@ -679,7 +680,10 @@ pub fn place_above_desktop(hwnd: HWND) {
         if style & WS_CHILD != 0 {
             SetWindowLongPtrW(hwnd, GWL_STYLE, (style & !WS_CHILD) | WS_POPUP);
             SetParent(hwnd, 0);
-            let mut origin = POINT { x: rect.left, y: rect.top };
+            let mut origin = POINT {
+                x: rect.left,
+                y: rect.top,
+            };
             ScreenToClient(prog, &mut origin);
             rect.left = origin.x;
             rect.top = origin.y;
@@ -689,7 +693,11 @@ pub fn place_above_desktop(hwnd: HWND) {
         let above = GetWindow(prog, GW_HWNDPREV);
         SetWindowPos(
             hwnd,
-            if above != 0 && above != hwnd { above } else { HWND_TOP },
+            if above != 0 && above != hwnd {
+                above
+            } else {
+                HWND_TOP
+            },
             rect.left,
             rect.top,
             rect.width(),
@@ -729,7 +737,8 @@ pub fn set_click_through(hwnd: HWND, on: bool) {
     }
 }
 
-type SetWindowCompositionAttributeFn = unsafe extern "system" fn(HWND, *mut WINDOWCOMPOSITIONATTRIBDATA) -> i32;
+type SetWindowCompositionAttributeFn =
+    unsafe extern "system" fn(HWND, *mut WINDOWCOMPOSITIONATTRIBDATA) -> i32;
 
 fn composition_fn() -> Option<SetWindowCompositionAttributeFn> {
     use std::sync::OnceLock;
@@ -739,7 +748,10 @@ fn composition_fn() -> Option<SetWindowCompositionAttributeFn> {
         if module == 0 {
             return None;
         }
-        let proc = GetProcAddress(module as isize, wide("SetWindowCompositionAttribute").as_ptr());
+        let proc = GetProcAddress(
+            module as isize,
+            wide("SetWindowCompositionAttribute").as_ptr(),
+        );
         if proc.is_null() {
             None
         } else {
@@ -786,6 +798,9 @@ pub fn set_acrylic(hwnd: HWND, tint_abgr: u32) {
         data: &mut policy as *mut _ as *mut c_void,
         size_of_data: std::mem::size_of::<ACCENT_POLICY>() as u32,
     };
+    // The policy is handed over as a raw pointer inside `data`, so the compiler cannot see the
+    // second call reading the field we just changed.
+    #[allow(unused_assignments)]
     unsafe {
         let ok = f(hwnd, &mut data);
         if ok == 0 {
@@ -909,22 +924,22 @@ fn parent_space(hwnd: HWND, x: i32, y: i32) -> (i32, i32) {
 pub fn move_window(hwnd: HWND, x: i32, y: i32) {
     let (px, py) = parent_space(hwnd, x, y);
     unsafe {
-        SetWindowPos(hwnd, 0, px, py, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(
+            hwnd,
+            0,
+            px,
+            py,
+            0,
+            0,
+            SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+        );
     }
 }
 
 pub fn resize_window(hwnd: HWND, x: i32, y: i32, w: i32, h: i32) {
     let (px, py) = parent_space(hwnd, x, y);
     unsafe {
-        SetWindowPos(
-            hwnd,
-            0,
-            px,
-            py,
-            w,
-            h,
-            SWP_NOZORDER | SWP_NOACTIVATE,
-        );
+        SetWindowPos(hwnd, 0, px, py, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
     }
 }
 
@@ -971,7 +986,7 @@ pub fn fullscreen_app_running() -> bool {
     if hr != 0 {
         return false;
     }
-    matches!(state, 2 | 3 | 4)
+    matches!(state, 2..=4)
 }
 
 /// The monitor covered by another app's full-screen window, if there is one.
@@ -1167,10 +1182,10 @@ fn icon_to_png(icon: HICON, size: i32) -> Result<Vec<u8>, String> {
             return Err("the icon could not be read".into());
         }
         // BGRA → RGBA
-        for px in bits.chunks_exact_mut(4) {
+        for px in bits.as_chunks_mut::<4>().0 {
             px.swap(0, 2);
         }
-        let buf = crate::img::encode_png(size as u32, size as u32, &bits);
+        let buf = crate::core::img::encode_png(size as u32, size as u32, &bits);
         buf.map_err(|e| e.to_string())
     }
 }

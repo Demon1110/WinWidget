@@ -1,10 +1,10 @@
 //! The widget-side API: every `{id, m, p}` request from a card page is answered here.
 
-use crate::app::App;
-use crate::manifest::Manifest;
+use crate::core::util::{jbool, jnum, jstr, req_str, BridgeError, BridgeResult};
+use crate::model::manifest::Manifest;
 use crate::platform::win32 as w;
-use crate::util::{jbool, jnum, jstr, req_str, BridgeError, BridgeResult};
-use serde_json::{json, Map, Value};
+use crate::runtime::app::App;
+use serde_json::{json, Value};
 
 pub enum Reply {
     Now(Value),
@@ -16,7 +16,11 @@ pub fn handle(app: &mut App, instance: &str, msg: &str) {
         Ok(v) => v,
         Err(_) => return,
     };
-    let method = value.get("m").and_then(|m| m.as_str()).unwrap_or("").to_string();
+    let method = value
+        .get("m")
+        .and_then(|m| m.as_str())
+        .unwrap_or("")
+        .to_string();
     let params = value.get("p").cloned().unwrap_or(Value::Null);
     match value.get("id").and_then(|i| i.as_i64()) {
         Some(id) => match call(app, instance, &method, &params, id) {
@@ -26,7 +30,7 @@ pub fn handle(app: &mut App, instance: &str, msg: &str) {
             }
             Ok(Reply::Later) => {}
             Err(e) => {
-                crate::logging::warn(&format!("{instance} → {method}: {}", e.0));
+                crate::core::logging::warn(&format!("{instance} → {method}: {}", e.0));
                 let body = json!({ "id": id, "e": e.0 }).to_string();
                 app.send_to(instance, &body);
             }
@@ -38,9 +42,9 @@ pub fn handle(app: &mut App, instance: &str, msg: &str) {
 fn notify(app: &mut App, instance: &str, method: &str, params: &Value) {
     match method {
         "ready" => {
-            crate::logging::info(&format!("{instance} ready"));
+            crate::core::logging::info(&format!("{instance} ready"));
             if let Some(manifest) = app.manifest_for(instance) {
-                let pending = crate::permissions::pending(app.cfg(), &manifest);
+                let pending = crate::model::permissions::pending(app.cfg(), &manifest);
                 if !pending.is_empty() {
                     app.push_state_to_control(None);
                 }
@@ -50,14 +54,14 @@ fn notify(app: &mut App, instance: &str, method: &str, params: &Value) {
             let level = jstr(params, "level").unwrap_or_else(|| "info".into());
             let text = jstr(params, "msg").unwrap_or_default();
             match level.as_str() {
-                "error" => crate::logging::error(&format!("[{instance}] {text}")),
-                "warn" => crate::logging::warn(&format!("[{instance}] {text}")),
-                _ => crate::logging::info(&format!("[{instance}] {text}")),
+                "error" => crate::core::logging::error(&format!("[{instance}] {text}")),
+                "warn" => crate::core::logging::warn(&format!("[{instance}] {text}")),
+                _ => crate::core::logging::info(&format!("[{instance}] {text}")),
             }
         }
         "window.drag" => start_drag(app, instance, params),
         "window.resize" => start_resize(app, instance),
-        "window.menu" => crate::menus::widget_menu(app, instance),
+        "window.menu" => crate::ui::menus::widget_menu(app, instance),
         "window.devtools" => {
             if app.cfg().developer_mode {
                 if let Some(win) = app.windows.get(instance) {
@@ -65,18 +69,18 @@ fn notify(app: &mut App, instance: &str, method: &str, params: &Value) {
                 }
             }
         }
-        _ => crate::logging::warn(&format!("{instance}: unknown notification '{method}'")),
+        _ => crate::core::logging::warn(&format!("{instance}: unknown notification '{method}'")),
     }
 }
 
 fn require(app: &App, manifest: &Manifest, permission: &str) -> BridgeResult<()> {
-    let allowed = crate::permissions::allowed(&app.store.data, manifest);
+    let allowed = crate::model::permissions::allowed(&app.store.data, manifest);
     if !manifest.declares(permission) {
         return Err(BridgeError::new(format!(
             "permission denied: add \"{permission}\" to permissions in widget.json"
         )));
     }
-    if !crate::permissions::has(&allowed, permission) {
+    if !crate::model::permissions::has(&allowed, permission) {
         return Err(BridgeError::new(format!(
             "permission denied: \"{permission}\" is not allowed yet — open the control center, choose \"{}\" and allow it",
             manifest.display_name()
@@ -85,11 +89,13 @@ fn require(app: &App, manifest: &Manifest, permission: &str) -> BridgeResult<()>
     Ok(())
 }
 
-fn builtin_only(app: &App, manifest: &Manifest) -> BridgeResult<()> {
+fn builtin_only(_app: &App, manifest: &Manifest) -> BridgeResult<()> {
     if manifest.builtin {
         Ok(())
     } else {
-        Err(BridgeError::new("only WinWidget's built-in widgets can do this"))
+        Err(BridgeError::new(
+            "only WinWidget's built-in widgets can do this",
+        ))
     }
 }
 
@@ -97,14 +103,16 @@ fn call(app: &mut App, instance: &str, method: &str, p: &Value, id: i64) -> Brid
     let manifest = app
         .manifest_for(instance)
         .ok_or_else(|| BridgeError::new("this widget is no longer installed"))?;
-    let allowed = crate::permissions::allowed(&app.store.data, &manifest);
+    let allowed = crate::model::permissions::allowed(&app.store.data, &manifest);
 
     match method {
         "window.getSize" => {
             let inst = app
                 .instance(instance)
                 .ok_or_else(|| BridgeError::new("no such instance"))?;
-            Ok(Reply::Now(json!({ "width": inst.width, "height": inst.height })))
+            Ok(Reply::Now(
+                json!({ "width": inst.width, "height": inst.height }),
+            ))
         }
         "window.setSize" => {
             let width = jnum(p, "width").unwrap_or(0.0);
@@ -181,12 +189,16 @@ fn call(app: &mut App, instance: &str, method: &str, p: &Value, id: i64) -> Brid
             let topics: Vec<String> = p
                 .get("topics")
                 .and_then(|t| t.as_array())
-                .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
                 .unwrap_or_default();
             let interval = jnum(p, "interval").unwrap_or(1000.0) as u64;
             if topics.is_empty() {
                 app.clear_subscription(instance);
-                return Ok(Reply::Now(json!({})) );
+                return Ok(Reply::Now(json!({})));
             }
             app.set_subscription(instance, topics.clone(), interval);
             // Answering with a snapshot means the page has something to draw at once.
@@ -199,7 +211,7 @@ fn call(app: &mut App, instance: &str, method: &str, p: &Value, id: i64) -> Brid
         }
         "system.history" => {
             require(app, &manifest, "system")?;
-            let mut sampler = crate::platform::sysinfo::Sampler::new();
+            let sampler = crate::platform::sysinfo::Sampler::new();
             let interval = app
                 .sampling
                 .get(instance)
@@ -223,7 +235,7 @@ fn call(app: &mut App, instance: &str, method: &str, p: &Value, id: i64) -> Brid
             let target = instance.to_string();
             std::thread::spawn(move || {
                 let result = crate::platform::sysinfo::ping(&host, timeout);
-                let _ = proxy.send_event(crate::app::Ev::Reply {
+                let _ = proxy.send_event(crate::runtime::app::Ev::Reply {
                     win: target,
                     body: json!({ "id": id, "r": result }).to_string(),
                 });
@@ -259,7 +271,9 @@ fn call(app: &mut App, instance: &str, method: &str, p: &Value, id: i64) -> Brid
             require(app, &manifest, "media")?;
             let action = req_str(p, "action")?;
             let position = jnum(p, "position").unwrap_or(0.0) as i64;
-            Ok(Reply::Now(crate::platform::media::control(&action, position)))
+            Ok(Reply::Now(crate::platform::media::control(
+                &action, position,
+            )))
         }
         "media.lyrics" => {
             require(app, &manifest, "media")?;
@@ -267,7 +281,7 @@ fn call(app: &mut App, instance: &str, method: &str, p: &Value, id: i64) -> Brid
             let target = instance.to_string();
             std::thread::spawn(move || {
                 let result = crate::platform::media::lyrics();
-                let _ = proxy.send_event(crate::app::Ev::Reply {
+                let _ = proxy.send_event(crate::runtime::app::Ev::Reply {
                     win: target,
                     body: json!({ "id": id, "r": result }).to_string(),
                 });
@@ -296,7 +310,8 @@ fn call(app: &mut App, instance: &str, method: &str, p: &Value, id: i64) -> Brid
             let key = req_str(p, "key")?;
             let path = req_str(p, "path")?;
             let folder = folder_for(app, instance, &key);
-            let file = crate::paths::resolve_inside(&folder, &path).unwrap_or_else(|| std::path::PathBuf::from(&path));
+            let file = crate::core::paths::resolve_inside(&folder, &path)
+                .unwrap_or_else(|| std::path::PathBuf::from(&path));
             Ok(Reply::Now(crate::platform::files::info(&file)))
         }
         "files.pick" => {
@@ -305,7 +320,8 @@ fn call(app: &mut App, instance: &str, method: &str, p: &Value, id: i64) -> Brid
             match picked {
                 Some(folder) => {
                     if let Some(inst) = app.instance_mut(instance) {
-                        inst.settings.insert(key.clone(), Value::String(folder.clone()));
+                        inst.settings
+                            .insert(key.clone(), Value::String(folder.clone()));
                     }
                     app.save();
                     app.push_settings(instance);
@@ -336,7 +352,7 @@ fn call(app: &mut App, instance: &str, method: &str, p: &Value, id: i64) -> Brid
                     Ok(_) => json!({ "id": id, "r": true }),
                     Err(e) => json!({ "id": id, "e": e }),
                 };
-                let _ = proxy.send_event(crate::app::Ev::Reply {
+                let _ = proxy.send_event(crate::runtime::app::Ev::Reply {
                     win: target,
                     body: result.to_string(),
                 });
@@ -367,7 +383,7 @@ fn call(app: &mut App, instance: &str, method: &str, p: &Value, id: i64) -> Brid
             let base64 = jstr(p, "as").map(|a| a == "base64").unwrap_or(false);
             let proxy = app.proxy.clone();
             let target = instance.to_string();
-            let request = crate::net::FetchRequest {
+            let request = crate::core::net::FetchRequest {
                 url,
                 method,
                 headers,
@@ -376,12 +392,12 @@ fn call(app: &mut App, instance: &str, method: &str, p: &Value, id: i64) -> Brid
             };
             let allowed = allowed.clone();
             std::thread::spawn(move || {
-                let result = crate::net::fetch(&allowed, request);
+                let result = crate::core::net::fetch(&allowed, request);
                 let body = match result {
                     Ok(v) => json!({ "id": id, "r": v }),
                     Err(e) => json!({ "id": id, "e": e }),
                 };
-                let _ = proxy.send_event(crate::app::Ev::Reply {
+                let _ = proxy.send_event(crate::runtime::app::Ev::Reply {
                     win: target,
                     body: body.to_string(),
                 });
@@ -430,10 +446,12 @@ fn call(app: &mut App, instance: &str, method: &str, p: &Value, id: i64) -> Brid
             let kind = jstr(p, "type").unwrap_or_else(|| "file".into());
             let filter = jstr(p, "filter").unwrap_or_else(|| "all".into());
             let title = jstr(p, "title").unwrap_or_default();
-            Ok(Reply::Now(match crate::platform::shell::pick(&kind, &filter, &title) {
-                Some(path) => Value::String(path),
-                None => Value::Null,
-            }))
+            Ok(Reply::Now(
+                match crate::platform::shell::pick(&kind, &filter, &title) {
+                    Some(path) => Value::String(path),
+                    None => Value::Null,
+                },
+            ))
         }
         // File paths need WebView2's extra-object messaging, which wry doesn't expose; dropped
         // files are still accepted by the control center.
@@ -442,7 +460,9 @@ fn call(app: &mut App, instance: &str, method: &str, p: &Value, id: i64) -> Brid
         "text.chinese" => {
             let text = jstr(p, "text").unwrap_or_default();
             let to = jstr(p, "to").unwrap_or_else(|| "traditional".into());
-            Ok(Reply::Now(Value::String(crate::platform::chinese::convert(&text, &to))))
+            Ok(Reply::Now(Value::String(
+                crate::platform::chinese::convert(&text, &to),
+            )))
         }
 
         other => Err(BridgeError::new(format!("unknown method '{other}'"))),
@@ -504,12 +524,13 @@ pub(crate) fn other_cards(app: &App, skip: &str) -> Vec<w::RECT> {
 
 /// The dashed lines take the card's own accent colour, the way FullWidget did.
 pub(crate) fn guide_ink(app: &App, instance: &str) -> u32 {
-    let appearance = crate::appearance::effective(&app.themes, app.cfg(), app.instance(instance));
+    let appearance =
+        crate::model::appearance::effective(&app.themes, app.cfg(), app.instance(instance));
     let accent = appearance
         .get("accentColor")
         .and_then(|v| v.as_str())
         .unwrap_or("#4cc9f0");
-    match crate::util::parse_color(accent) {
+    match crate::core::util::parse_color(accent) {
         Some((r, g, b)) => ((r as u32) << 16) | ((g as u32) << 8) | b as u32,
         None => 0x4CC9F0,
     }
@@ -539,7 +560,12 @@ pub(crate) fn start_drag(app: &mut App, instance: &str, p: &Value) {
     let Some((card, margin, scale)) = current_card(app, instance) else {
         return;
     };
-    if app.windows.get(instance).map(|w| w.click_through).unwrap_or(false) {
+    if app
+        .windows
+        .get(instance)
+        .map(|w| w.click_through)
+        .unwrap_or(false)
+    {
         return;
     }
     let moved = w::RECT {
@@ -559,9 +585,9 @@ pub(crate) fn start_drag(app: &mut App, instance: &str, p: &Value) {
     let others = other_cards(app, instance);
     let ink = guide_ink(app, instance);
     let (gap, reach, line) = snap_metrics(scale);
-    crate::window::begin_move(
+    crate::runtime::window::begin_move(
         hwnd,
-        crate::window::DragStart {
+        crate::runtime::window::DragStart {
             instance: instance.to_string(),
             proxy: app.proxy.clone(),
             margin,
@@ -609,7 +635,7 @@ fn start_resize(app: &mut App, instance: &str) {
     let others = other_cards(app, instance);
     let ink = guide_ink(app, instance);
     let (gap, reach, line) = snap_metrics(scale);
-    crate::window::begin_resize(
+    crate::runtime::window::begin_resize(
         hwnd,
         card,
         w::cursor_pos(),

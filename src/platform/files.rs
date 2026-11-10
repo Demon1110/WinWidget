@@ -21,7 +21,10 @@ pub fn folder_from_setting(value: Option<&Value>) -> PathBuf {
     let raw = value
         .and_then(|v| match v {
             Value::String(s) => Some(s.clone()),
-            Value::Object(o) => o.get("path").and_then(|p| p.as_str()).map(|s| s.to_string()),
+            Value::Object(o) => o
+                .get("path")
+                .and_then(|p| p.as_str())
+                .map(|s| s.to_string()),
             _ => None,
         })
         .unwrap_or_default();
@@ -53,7 +56,9 @@ fn collect(dir: &Path, recursive: bool, out: &mut Vec<Value>, more: &mut bool, d
         *more = true;
         return;
     }
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
@@ -104,7 +109,7 @@ pub fn file_entry(path: &Path) -> Value {
 
 /// `{taken, width, height}` for a photo, including the capture time when the file carries one.
 pub fn info(path: &Path) -> Value {
-    let dims = crate::img::dimensions(path);
+    let dims = crate::core::img::dimensions(path);
     let taken = std::fs::metadata(path)
         .and_then(|m| m.modified())
         .ok()
@@ -120,8 +125,8 @@ pub fn info(path: &Path) -> Value {
 /// Reads a thumbnail for the HTTP layer; `width` = 0 keeps the original size.
 pub fn thumbnail(path: &Path, width: u32) -> Option<Vec<u8>> {
     if width == 0 {
-        crate::img::thumbnail(path, u32::MAX).ok()
+        crate::core::img::thumbnail(path, u32::MAX).ok()
     } else {
-        crate::img::thumbnail(path, width).ok()
+        crate::core::img::thumbnail(path, width).ok()
     }
 }

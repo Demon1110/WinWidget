@@ -45,7 +45,7 @@ impl Default for AppConfig {
             developer_mode: false,
             hide_all: false,
             pause_on_fullscreen: true,
-            theme_id: crate::themes::DEFAULT_ID.to_string(),
+            theme_id: crate::model::themes::DEFAULT_ID.to_string(),
             theme: Map::new(),
             grants: HashMap::new(),
             own_widgets: Vec::new(),
@@ -130,20 +130,20 @@ pub struct ConfigStore {
 
 impl ConfigStore {
     pub fn load() -> ConfigStore {
-        let file = crate::paths::get().config_file();
+        let file = crate::core::paths::get().config_file();
         if !file.is_file() {
             return ConfigStore {
                 data: AppConfig::default(),
             };
         }
-        match crate::util::read_text(&file) {
+        match crate::core::util::read_text(&file) {
             Ok(text) => match serde_json::from_str::<AppConfig>(&text) {
                 Ok(data) => ConfigStore { data },
                 Err(e) => {
                     let stamp = crate::platform::now_stamp();
                     let backup = file.with_file_name(format!("config.json.broken-{stamp}"));
                     let _ = std::fs::copy(&file, &backup);
-                    crate::logging::error(&format!(
+                    crate::core::logging::error(&format!(
                         "Config unreadable ({e}), backed up to {}",
                         backup.display()
                     ));
@@ -153,7 +153,7 @@ impl ConfigStore {
                 }
             },
             Err(e) => {
-                crate::logging::error(&format!("Config could not be read: {e}"));
+                crate::core::logging::error(&format!("Config could not be read: {e}"));
                 ConfigStore {
                     data: AppConfig::default(),
                 }
@@ -162,21 +162,21 @@ impl ConfigStore {
     }
 
     pub fn save(&self) {
-        let file = crate::paths::get().config_file();
+        let file = crate::core::paths::get().config_file();
         let text = match serde_json::to_string_pretty(&self.data) {
             Ok(t) => t,
             Err(e) => {
-                crate::logging::error(&format!("Config could not be serialised: {e}"));
+                crate::core::logging::error(&format!("Config could not be serialised: {e}"));
                 return;
             }
         };
         let tmp = file.with_extension("json.tmp");
         if let Err(e) = std::fs::write(&tmp, text) {
-            crate::logging::error(&format!("Config save failed: {e}"));
+            crate::core::logging::error(&format!("Config save failed: {e}"));
             return;
         }
         if let Err(e) = std::fs::rename(&tmp, &file) {
-            crate::logging::error(&format!("Config replace failed: {e}"));
+            crate::core::logging::error(&format!("Config replace failed: {e}"));
         }
     }
 }

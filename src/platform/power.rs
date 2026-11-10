@@ -1,9 +1,9 @@
 //! The recycle bin and the power menu. Both are promised only to the built-in widgets, matching
 //! how FullWidget keeps machine-wide actions out of third-party widgets.
 
+use crate::platform::win32 as w;
 use serde_json::{json, Value};
 use std::path::Path;
-use crate::platform::win32 as w;
 
 pub fn recycle_query() -> Value {
     let mut info = w::SHQUERYRBINFO {

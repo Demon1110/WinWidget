@@ -1,16 +1,16 @@
 //! The control center's side of the bridge. One entry point: `state_json` (everything the page
 //! draws) and `handle` (every method it calls).
 
-use crate::app::{App, CONTROL_WIN};
-use crate::bridge::Reply;
-use crate::util::{jbool, jnum, jstr, req_str, BridgeError, BridgeResult};
+use crate::core::util::{jbool, jnum, jstr, req_str, BridgeError, BridgeResult};
+use crate::runtime::app::{App, CONTROL_WIN};
+use crate::runtime::bridge::Reply;
 use serde_json::{json, Map, Value};
 use std::path::PathBuf;
 
 /// Everything the control center renders in one go.
 pub fn state_json(app: &App) -> Value {
     let cfg = app.cfg();
-    let locale = crate::text::locale();
+    let locale = crate::core::text::locale();
     let mut hotkeys = Map::new();
     for (action, keys) in &cfg.hotkeys {
         let ok = !keys.trim().is_empty() && crate::platform::tray::hotkey_ok(keys);
@@ -36,16 +36,16 @@ pub fn state_json(app: &App) -> Value {
 
     let mut catalog = Vec::new();
     for manifest in app.catalog.sorted() {
-        let icon = crate::icons::icon_data_url(manifest, 96);
-        let preview = crate::icons::preview_url(manifest, &cfg.theme_id, &locale);
-        let previews = crate::icons::preview_variants(manifest, &theme_ids);
+        let icon = crate::model::icons::icon_data_url(manifest, 96);
+        let preview = crate::model::icons::preview_url(manifest, &cfg.theme_id, &locale);
+        let previews = crate::model::icons::preview_variants(manifest, &theme_ids);
         let count = cfg
             .instances
             .iter()
             .filter(|i| i.widget.eq_ignore_ascii_case(&manifest.id))
             .count();
-        let allowed = crate::permissions::allowed(cfg, manifest);
-        let pending = crate::permissions::pending(cfg, manifest);
+        let allowed = crate::model::permissions::allowed(cfg, manifest);
+        let pending = crate::model::permissions::pending(cfg, manifest);
         let folder = manifest
             .dir
             .file_name()
@@ -60,7 +60,7 @@ pub fn state_json(app: &App) -> Value {
             "author": manifest.author.clone().unwrap_or_default(),
             "builtin": manifest.builtin,
             "own": cfg.own_widgets.iter().any(|w| w.eq_ignore_ascii_case(&manifest.id)),
-            "category": crate::categories::of(manifest),
+            "category": crate::model::categories::of(manifest),
             "search": format!("{} {} {}", manifest.id, manifest.display_name(), manifest.description()).to_lowercase(),
             "icon": icon,
             "preview": preview,
@@ -87,8 +87,10 @@ pub fn state_json(app: &App) -> Value {
         let name = manifest
             .map(|m| m.display_name())
             .unwrap_or_else(|| inst.widget.clone());
-        let icon = manifest.and_then(|m| crate::icons::icon_data_url(m, 96));
-        let schema = manifest.map(schema_json).unwrap_or(Value::Array(Vec::new()));
+        let icon = manifest.and_then(|m| crate::model::icons::icon_data_url(m, 96));
+        let schema = manifest
+            .map(schema_json)
+            .unwrap_or(Value::Array(Vec::new()));
         // The page draws its controls from the merged values, so a card whose settings were never
         // touched still shows the values the widget actually runs with.
         let settings = match manifest {
@@ -136,8 +138,8 @@ pub fn state_json(app: &App) -> Value {
             "overrides": inst.appearance,
             "customCss": inst.custom_css,
             "pending": manifest
-                .map(|m| crate::permissions::pending(cfg, m))
-                .unwrap_or_else(|| Vec::new()),
+                .map(|m| crate::model::permissions::pending(cfg, m))
+                .unwrap_or_default(),
         }));
     }
 
@@ -155,12 +157,12 @@ pub fn state_json(app: &App) -> Value {
         "editMode": app.edit_mode,
         "hotkeys": hotkeys,
         "update": app.update,
-        "portable": crate::paths::get().portable,
-        "dataDir": crate::paths::get().data_dir.to_string_lossy(),
-        "widgetsDir": crate::paths::get().user_widgets_dir().to_string_lossy(),
+        "portable": crate::core::paths::get().portable,
+        "dataDir": crate::core::paths::get().data_dir.to_string_lossy(),
+        "widgetsDir": crate::core::paths::get().user_widgets_dir().to_string_lossy(),
         "themeId": cfg.theme_id,
         "themeOverrides": cfg.theme,
-        "globalLook": crate::appearance::effective(&app.themes, cfg, None),
+        "globalLook": crate::model::appearance::effective(&app.themes, cfg, None),
         "themes": themes,
         "catalog": catalog,
         "problems": problems,
@@ -168,7 +170,7 @@ pub fn state_json(app: &App) -> Value {
     })
 }
 
-fn schema_json(manifest: &crate::manifest::Manifest) -> Value {
+fn schema_json(manifest: &crate::model::manifest::Manifest) -> Value {
     let mut out = Vec::new();
     for spec in &manifest.settings {
         let options: Vec<Value> = spec
@@ -179,7 +181,7 @@ fn schema_json(manifest: &crate::manifest::Manifest) -> Value {
                     .map(|o| {
                         json!({
                             "value": o.value,
-                            "label": crate::text::pick(o.label.as_ref(), ""),
+                            "label": crate::core::text::pick(o.label.as_ref(), ""),
                         })
                     })
                     .collect()
@@ -188,13 +190,13 @@ fn schema_json(manifest: &crate::manifest::Manifest) -> Value {
         out.push(json!({
             "key": spec.key,
             "type": spec.r#type,
-            "label": crate::text::pick(spec.label.as_ref(), &spec.key),
-            "description": crate::text::pick(spec.description.as_ref(), ""),
+            "label": crate::core::text::pick(spec.label.as_ref(), &spec.key),
+            "description": crate::core::text::pick(spec.description.as_ref(), ""),
             "default": spec.default,
             "min": spec.min,
             "max": spec.max,
             "step": spec.step,
-            "placeholder": crate::text::pick(spec.placeholder.as_ref(), ""),
+            "placeholder": crate::core::text::pick(spec.placeholder.as_ref(), ""),
             "options": options,
         }));
     }
@@ -218,7 +220,11 @@ pub fn handle(app: &mut App, msg: &str) {
         Ok(v) => v,
         Err(_) => return,
     };
-    let method = value.get("m").and_then(|m| m.as_str()).unwrap_or("").to_string();
+    let method = value
+        .get("m")
+        .and_then(|m| m.as_str())
+        .unwrap_or("")
+        .to_string();
     let params = value.get("p").cloned().unwrap_or(Value::Null);
     if method == "ready" {
         if let Some(control) = &mut app.control {
@@ -239,7 +245,7 @@ pub fn handle(app: &mut App, msg: &str) {
         }
         Ok(Reply::Later) => {}
         Err(e) => {
-            crate::logging::warn(&format!("control → {method}: {}", e.0));
+            crate::core::logging::warn(&format!("control → {method}: {}", e.0));
             let body = json!({ "id": id, "e": e.0 }).to_string();
             app.send_to(CONTROL_WIN, &body);
         }
@@ -257,7 +263,7 @@ fn refresh(app: &mut App, instance: Option<&str>) {
     app.send_to(CONTROL_WIN, &format!("{{\"ev\":\"state\",\"d\":{state}}}"));
 }
 
-fn instance_of(app: &App, p: &Value) -> BridgeResult<crate::config::InstanceConfig> {
+fn instance_of(app: &App, p: &Value) -> BridgeResult<crate::core::config::InstanceConfig> {
     let id = req_str(p, "id")?;
     app.instance(&id)
         .cloned()
@@ -274,7 +280,7 @@ where
             Ok(v) => json!({ "id": id, "r": v }),
             Err(e) => json!({ "id": id, "e": e }),
         };
-        let _ = proxy.send_event(crate::app::Ev::Reply {
+        let _ = proxy.send_event(crate::runtime::app::Ev::Reply {
             win: CONTROL_WIN.to_string(),
             body: body.to_string(),
         });
@@ -294,7 +300,7 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
         "app.guide" => {
             let url = format!(
                 "http://{}:{}/__docs/index.html",
-                crate::server::CONTROL_HOST,
+                crate::ui::server::CONTROL_HOST,
                 app.port
             );
             crate::platform::shell::open(&url).map_err(BridgeError::new)?;
@@ -317,7 +323,7 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
             let lang = req_str(p, "lang")?;
             app.cfg_mut().language = lang.clone();
             app.save();
-            crate::text::set_locale(&lang);
+            crate::core::text::set_locale(&lang);
             let ids: Vec<String> = app.windows.keys().cloned().collect();
             for id in ids {
                 app.reload_instance(&id);
@@ -339,18 +345,18 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
         "app.openFolder" => {
             let which = jstr(p, "which").unwrap_or_else(|| "data".into());
             let path = match which.as_str() {
-                "widgets" => crate::paths::get().user_widgets_dir(),
-                "builtin" => crate::paths::get().builtin_widgets_dir(),
-                "local" => crate::paths::get().local_dir.clone(),
-                "logs" => crate::paths::get()
+                "widgets" => crate::core::paths::get().user_widgets_dir(),
+                "builtin" => crate::core::paths::get().builtin_widgets_dir(),
+                "local" => crate::core::paths::get().local_dir.clone(),
+                "logs" => crate::core::paths::get()
                     .log_file()
                     .parent()
                     .map(|p| p.to_path_buf())
-                    .unwrap_or_else(|| crate::paths::get().data_dir.clone()),
-                "themes" => crate::paths::get().themes_dir(),
-                "storage" => crate::paths::get().storage_dir(),
-                "exports" => crate::paths::get().exports_dir(),
-                _ => crate::paths::get().data_dir.clone(),
+                    .unwrap_or_else(|| crate::core::paths::get().data_dir.clone()),
+                "themes" => crate::core::paths::get().themes_dir(),
+                "storage" => crate::core::paths::get().storage_dir(),
+                "exports" => crate::core::paths::get().exports_dir(),
+                _ => crate::core::paths::get().data_dir.clone(),
             };
             std::fs::create_dir_all(&path).ok();
             crate::platform::shell::open(&path.to_string_lossy()).map_err(BridgeError::new)?;
@@ -373,22 +379,22 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
             Ok(Value::Null)
         }
         "app.updateCheck" => {
-            crate::updater::check(app);
+            crate::market::updater::check(app);
             refresh(app, None);
             Ok(Value::Null)
         }
         "app.updateInstall" => {
-            crate::updater::install(app);
+            crate::market::updater::install(app);
             refresh(app, None);
             Ok(Value::Null)
         }
         "app.updateCancel" => {
-            crate::updater::cancel(app);
+            crate::market::updater::cancel(app);
             refresh(app, None);
             Ok(Value::Null)
         }
         "app.updatePage" => {
-            crate::updater::page(app).map_err(BridgeError::new)?;
+            crate::market::updater::page(app).map_err(BridgeError::new)?;
             Ok(Value::Null)
         }
         "app.updateAuto" | "app.autoUpdate" => {
@@ -552,8 +558,12 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
                 .manifest_for(&inst.id)
                 .ok_or_else(|| BridgeError::new("this widget is no longer installed"))?;
             let s = &manifest.size;
-            let width = jnum(p, "width").unwrap_or(inst.width).clamp(s.min_width, s.max_width);
-            let height = jnum(p, "height").unwrap_or(inst.height).clamp(s.min_height, s.max_height);
+            let width = jnum(p, "width")
+                .unwrap_or(inst.width)
+                .clamp(s.min_width, s.max_width);
+            let height = jnum(p, "height")
+                .unwrap_or(inst.height)
+                .clamp(s.min_height, s.max_height);
             if let Some(target) = app.instance_mut(&inst.id) {
                 target.width = width;
                 target.height = height;
@@ -625,15 +635,16 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
             let grant = jbool(p, "grant").unwrap_or(false);
             if grant {
                 if let Some(manifest) = app.catalog.find(&widget).cloned() {
-                    crate::permissions::grant(app.cfg_mut(), &manifest);
+                    crate::model::permissions::grant(app.cfg_mut(), &manifest);
                     app.save();
                 }
             }
             let id = app.add_widget(&widget, None).map_err(BridgeError::new)?;
             if let Some(manifest) = app.catalog.find(&widget).cloned() {
-                let pending = crate::permissions::pending(app.cfg(), &manifest);
+                let pending = crate::model::permissions::pending(app.cfg(), &manifest);
                 if !pending.is_empty() {
-                    let consent = json!({ "widget": manifest.id, "then": "load", "permissions": pending });
+                    let consent =
+                        json!({ "widget": manifest.id, "then": "load", "permissions": pending });
                     app.send_to(
                         CONTROL_WIN,
                         &format!("{{\"ev\":\"consent\",\"d\":{consent}}}"),
@@ -647,7 +658,7 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
         "widget.grant" => {
             let widget = req_str(p, "widget")?;
             if let Some(manifest) = app.catalog.find(&widget).cloned() {
-                crate::permissions::grant(app.cfg_mut(), &manifest);
+                crate::model::permissions::grant(app.cfg_mut(), &manifest);
                 app.save();
             }
             app.rescan();
@@ -677,18 +688,18 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
         }
         "widget.export" => {
             let widget = req_str(p, "widget")?;
-            let out = crate::packages::export(app, &widget).map_err(BridgeError::new)?;
+            let out = crate::market::packages::export(app, &widget).map_err(BridgeError::new)?;
             Ok(out)
         }
         "widget.uninstall" => {
             let widget = req_str(p, "widget")?;
-            crate::packages::uninstall(app, &widget).map_err(BridgeError::new)?;
+            crate::market::packages::uninstall(app, &widget).map_err(BridgeError::new)?;
             app.refresh_tray_menu();
             Ok(Value::Null)
         }
         "widget.create" => {
             let name = req_str(p, "name")?;
-            let created = crate::packages::create(app, &name).map_err(BridgeError::new)?;
+            let created = crate::market::packages::create(app, &name).map_err(BridgeError::new)?;
             app.refresh_tray_menu();
             refresh(app, None);
             Ok(created)
@@ -719,7 +730,7 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
         }
         "theme.reset" => {
             app.cfg_mut().theme = Map::new();
-            app.cfg_mut().theme_id = crate::themes::DEFAULT_ID.to_string();
+            app.cfg_mut().theme_id = crate::model::themes::DEFAULT_ID.to_string();
             app.save();
             refresh_themes(app);
             Ok(Value::Null)
@@ -741,38 +752,44 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
         }
         "package.install" => {
             let token = req_str(p, "token")?;
-            let result = crate::packages::install(app, &token).map_err(BridgeError::new)?;
+            let result = crate::market::packages::install(app, &token).map_err(BridgeError::new)?;
             app.refresh_tray_menu();
             refresh(app, None);
             Ok(result)
         }
         "package.export" => {
             let widget = req_str(p, "widget")?;
-            Ok(crate::packages::export(app, &widget).map_err(BridgeError::new)?)
+            Ok(crate::market::packages::export(app, &widget).map_err(BridgeError::new)?)
         }
 
         // ── market ────────────────────────────────────────────────────────
         "market.list" => {
             let want_refresh = jbool(p, "refresh").unwrap_or(false);
-            let url = crate::market::list_url_of(app);
-            let site = crate::market::site_of(app);
-            let cache = crate::market::cache_path();
+            let url = crate::market::client::list_url_of(app);
+            let site = crate::market::client::site_of(app);
+            let cache = crate::market::client::cache_path();
             return Ok(spawn(app, id, move || {
-                Ok(crate::market::fetch_list(&url, &site, &cache, want_refresh))
+                Ok(crate::market::client::fetch_list(
+                    &url,
+                    &site,
+                    &cache,
+                    want_refresh,
+                ))
             }));
         }
         "market.install" => {
             let widget = req_str(p, "id")?;
-            let list = crate::market::cached_list(&crate::market::site_of(app));
-            let url = crate::market::download_url(&list, &widget).map_err(BridgeError::new)?;
+            let list = crate::market::client::cached_list(&crate::market::client::site_of(app));
+            let url =
+                crate::market::client::download_url(&list, &widget).map_err(BridgeError::new)?;
             let proxy = app.proxy.clone();
             let target = widget.clone();
             std::thread::spawn(move || {
-                let payload = match crate::market::download(&url, &target) {
+                let payload = match crate::market::client::download(&url, &target) {
                     Ok(path) => json!({ "ok": true, "id": target, "path": path.to_string_lossy() }),
                     Err(e) => json!({ "ok": false, "id": target, "message": e }),
                 };
-                let _ = proxy.send_event(crate::app::Ev::Command(format!(
+                let _ = proxy.send_event(crate::runtime::app::Ev::Command(format!(
                     "market.downloaded:{}",
                     payload
                 )));
@@ -781,7 +798,7 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
         }
         "market.open" => {
             let url = jstr(p, "url");
-            crate::market::open(app, url).map_err(BridgeError::new)?;
+            crate::market::client::open(app, url).map_err(BridgeError::new)?;
             Ok(Value::Null)
         }
 
@@ -814,7 +831,7 @@ fn refresh_themes(app: &mut App) {
 
 /// Reads a dropped or picked `.fwz` and asks the page to confirm it.
 pub fn stage_and_show(app: &mut App, path: &std::path::Path) {
-    match crate::packages::stage(app, path) {
+    match crate::market::packages::stage(app, path) {
         Ok(staged) => {
             let event = json!({
                 "token": staged.token,
