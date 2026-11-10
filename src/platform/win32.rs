@@ -61,6 +61,8 @@ pub const WM_SIZE: u32 = 0x0005;
 pub const WM_ACTIVATE: u32 = 0x0006;
 pub const WM_SHOWWINDOW: u32 = 0x0018;
 pub const WM_NCCALCSIZE: u32 = 0x0083;
+pub const WM_NCPAINT: u32 = 0x0085;
+pub const WM_NCACTIVATE: u32 = 0x0086;
 pub const WM_NCLBUTTONDOWN: u32 = 0x00A1;
 pub const WM_SIZING: u32 = 0x0214;
 pub const WM_MOVING: u32 = 0x0216;
@@ -670,7 +672,10 @@ pub fn clear_frame(hwnd: HWND) {
 /// non-client rendering off leaves the per-pixel alpha alone, so the card stays transparent and
 /// loses its "title bar" for good.
 pub fn disable_nc_rendering(hwnd: HWND) {
-    const DWMWA_NCRENDERING_POLICY: u32 = 9;
+    // `DWMWINDOWATTRIBUTE`: NCRENDERING_ENABLED is 1 and NCRENDERING_POLICY is 2. (9 is
+    // EXTENDED_FRAME_BOUNDS, a read-only RECT: passing 4 bytes there is what made this call fail
+    // with 0x8007007A and left DWM free to paint the caption.)
+    const DWMWA_NCRENDERING_POLICY: u32 = 2;
     const DWMNCRP_DISABLED: i32 = 1;
     let value = DWMNCRP_DISABLED;
     unsafe {
@@ -740,6 +745,26 @@ pub fn detach_from_desktop(hwnd: HWND) {
         if GetWindowLongPtrW(hwnd, GWLP_HWNDPARENT) != 0 {
             SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, 0);
         }
+    }
+}
+
+/// Puts a card in the topmost band, or back in with the ordinary windows.
+///
+/// This must not go through the toolkit's own "always on top" setter: that one routes the flag
+/// through the window-flags diff, which re-creates the window — the card keeps no style of ours,
+/// comes back hidden with a caption and border, and loses its web view. One `SetWindowPos` moves
+/// the window between z-order bands and changes nothing else.
+pub fn set_topmost(hwnd: HWND, on: bool) {
+    unsafe {
+        SetWindowPos(
+            hwnd,
+            if on { HWND_TOPMOST } else { HWND_NOTOPMOST },
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+        );
     }
 }
 

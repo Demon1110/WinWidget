@@ -208,15 +208,18 @@ impl WidgetWin {
             self.layer = layer.to_string();
             match layer {
                 "desktop" => {
+                    // Leaving the topmost band first: a card that is still topmost sits above every
+                    // app window instead of sinking back into the desktop.
+                    w::set_topmost(hwnd, false);
                     w::place_above_desktop(hwnd);
                 }
                 "top" => {
                     w::detach_from_desktop(hwnd);
-                    self.window.set_always_on_top(true);
+                    w::set_topmost(hwnd, true);
                 }
                 _ => {
                     w::detach_from_desktop(hwnd);
-                    self.window.set_always_on_top(false);
+                    w::set_topmost(hwnd, false);
                 }
             }
         }
@@ -310,6 +313,12 @@ pub fn build(
                 | w::SWP_NOACTIVATE
                 | w::SWP_FRAMECHANGED,
         );
+    }
+    // A card that starts life in the topmost band has to be put there explicitly: the layer diff
+    // in `apply_effects` only fires on a change, and a card built as "top" would otherwise open as
+    // an ordinary window and slide under every app.
+    if inst.layer == "top" {
+        w::set_topmost(hwnd, true);
     }
     w::extend_frame(hwnd);
     // tao asks Windows for the inner size and Windows answers by padding the window for a frame it
@@ -590,6 +599,17 @@ unsafe extern "system" fn card_proc(hwnd: w::HWND, msg: u32, wp: usize, lp: isiz
         }
         w::WM_ACTIVATE => {
             w::disable_nc_rendering(hwnd);
+        }
+        // Activating a card — a click — is the moment the frame would be painted: the caption strip
+        // across the top and the 1px border around the card. The card has no non-client area at all,
+        // so it answers the activation itself and never lets Windows paint that frame.
+        w::WM_NCACTIVATE => {
+            w::disable_nc_rendering(hwnd);
+            return 1;
+        }
+        w::WM_NCPAINT => {
+            w::disable_nc_rendering(hwnd);
+            return 0;
         }
         _ => {}
     }
