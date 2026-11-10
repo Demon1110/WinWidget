@@ -751,11 +751,14 @@ impl App {
             }
             interval = interval.min(*ms);
         }
+        let media = !self.media_subs.is_empty();
+        // The media module only polls the session while a card is actually subscribed.
+        crate::platform::media::set_watching(media);
         self.monitor.configure(crate::runtime::monitor::Request {
             topics,
             interval_ms: if interval == u64::MAX { 1000 } else { interval },
             audio: !self.audio_subs.is_empty(),
-            media: !self.media_subs.is_empty(),
+            media,
         });
     }
 

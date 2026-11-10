@@ -558,6 +558,26 @@ extern "system" {
     pub fn GlobalUnlock(mem: isize) -> i32;
 }
 
+#[link(name = "ole32")]
+extern "system" {
+    pub fn CoInitializeEx(reserved: *const c_void, model: u32) -> i32;
+}
+
+/// `COINIT_MULTITHREADED`.
+pub const COINIT_MULTITHREADED: u32 = 0x0;
+
+/// Marks the calling thread as an MTA apartment, which is what WinRT calls want.
+///
+/// A thread with no apartment at all gets `CO_E_NOTINITIALIZED` from every WinRT call, and a thread
+/// that holds an STA (the window/event-loop thread) makes a blocking `.get()` on an async operation
+/// wait forever: the completion is marshalled back to that very apartment, whose message pump
+/// cannot run while the call is still on the stack. Returns true when the apartment is usable.
+pub fn co_initialize_mta() -> bool {
+    // S_OK (0) or S_FALSE (1) means "this thread is an apartment now / already was one".
+    let hr = unsafe { CoInitializeEx(std::ptr::null(), COINIT_MULTITHREADED) };
+    matches!(hr, 0 | 1)
+}
+
 #[repr(C)]
 #[derive(Default)]
 pub struct SYSTEMTIME {

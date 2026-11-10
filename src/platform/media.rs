@@ -3,14 +3,191 @@
 
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 use windows::Media::Control::{
     GlobalSystemMediaTransportControlsSession, GlobalSystemMediaTransportControlsSessionManager,
 };
 use windows::Storage::Streams::{DataReader, IRandomAccessStreamReference};
 
+/// A refresh asked for by a reader, or a control command; the worker runs both.
+enum Job {
+    Refresh,
+    Control { action: String, position: i64 },
+}
+
+/// While a card is subscribed the worker re-reads this often; a reading older than `FRESH` makes a
+/// plain `state()` call ask for a new one. Between them the session read stays off the UI thread
+/// without polling WinRT when nothing is looking at it.
+const WATCH_REFRESH: Duration = Duration::from_millis(900);
+const FRESH: Duration = Duration::from_millis(800);
+
+/// The last reading the worker published, with the moment it was taken.
+static LATEST: Mutex<Option<(Instant, Value)>> = Mutex::new(None);
+static JOBS: OnceLock<Sender<Job>> = OnceLock::new();
+static WATCHING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static LAST_TRACK: Mutex<Option<String>> = Mutex::new(None);
 static CACHE: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
 static MANAGER: Mutex<Option<GlobalSystemMediaTransportControlsSessionManager>> = Mutex::new(None);
+
+/// Starts (once) the single thread that is allowed to talk to WinRT.
+///
+/// WinRT async completions are marshalled back to the apartment that issued them. The event-loop
+/// thread holds an STA, so a blocking `.get()` there waits for a completion that can only be
+/// delivered by the message pump currently blocked inside the call: the whole app freezes, which is
+/// exactly what happened when a media card loaded. An MTA worker gets its completions from the
+/// thread pool instead, so `.get()` returns. It also keeps the cover download and the lyrics
+/// request off the UI thread.
+fn worker() -> &'static Sender<Job> {
+    JOBS.get_or_init(|| {
+        let (tx, rx) = channel::<Job>();
+        if let Err(e) = std::thread::Builder::new()
+            .name("media".into())
+            .spawn(move || run_worker(rx))
+        {
+            crate::core::logging::warn(&format!("Media: worker thread could not start: {e}"));
+        }
+        tx
+    })
+}
+
+fn run_worker(rx: Receiver<Job>) {
+    if !crate::platform::win32::co_initialize_mta() {
+        crate::core::logging::warn("Media: worker could not enter an MTA apartment");
+    }
+    use std::sync::atomic::Ordering;
+    loop {
+        let job = if WATCHING.load(Ordering::Relaxed) {
+            match rx.recv_timeout(WATCH_REFRESH) {
+                Ok(job) => job,
+                Err(RecvTimeoutError::Timeout) => Job::Refresh,
+                Err(RecvTimeoutError::Disconnected) => return,
+            }
+        } else {
+            match rx.recv() {
+                Ok(job) => job,
+                Err(_) => return,
+            }
+        };
+        if let Job::Control { action, position } = job {
+            run_control(&action, position);
+        }
+        refresh();
+    }
+}
+
+fn refresh() {
+    let value = query_state();
+    // One line per actual change: makes "the card looks empty" reports diagnosable from the log.
+    let status = value
+        .get("status")
+        .and_then(|v| v.as_str())
+        .unwrap_or("closed")
+        .to_string();
+    let title = value
+        .get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    if let Ok(mut last) = LAST_TRACK.lock() {
+        let now = format!("{status}\t{title}");
+        if last.as_deref() != Some(now.as_str()) {
+            let line = if title.is_empty() {
+                format!("Media: {status}")
+            } else {
+                format!("Media: {status} — {title}")
+            };
+            crate::core::logging::info(&line);
+            *last = Some(now);
+        }
+    }
+    if let Ok(mut slot) = LATEST.lock() {
+        *slot = Some((Instant::now(), value));
+    }
+}
+
+/// The current media session, as the worker last read it.
+///
+/// Never blocks the caller beyond the very first call (which waits up to 600 ms so a freshly opened
+/// card does not start blank); afterwards it is a mutex read and a clone.
+pub fn state() -> Value {
+    let cached = LATEST
+        .lock()
+        .ok()
+        .and_then(|slot| slot.as_ref().map(|(at, v)| (*at, v.clone())));
+    match cached {
+        Some((at, value)) if at.elapsed() < FRESH => value,
+        Some((_, value)) => {
+            let _ = worker().send(Job::Refresh);
+            value
+        }
+        None => {
+            let _ = worker().send(Job::Refresh);
+            let deadline = Instant::now() + Duration::from_millis(600);
+            while Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(20));
+                if let Some(value) = LATEST
+                    .lock()
+                    .ok()
+                    .and_then(|slot| slot.as_ref().map(|(_, v)| v.clone()))
+                {
+                    return value;
+                }
+            }
+            empty_state()
+        }
+    }
+}
+
+/// Keeps the worker reading the session while a card is subscribed, and lets it go idle once the
+/// last one is gone.
+pub fn set_watching(on: bool) {
+    WATCHING.store(on, std::sync::atomic::Ordering::Relaxed);
+    if on {
+        let _ = worker().send(Job::Refresh);
+    }
+}
+
+/// `play` / `pause` / `toggle` / `next` / `previous` / `seek`: queued to the worker.
+///
+/// The answer is optimistic — a subscribed card gets the real status with the next push; waiting for
+/// the worker here would put a WinRT round trip back on the UI thread, which is what this worker
+/// exists to avoid.
+pub fn control(action: &str, position_ms: i64) -> Value {
+    if !matches!(
+        action,
+        "play" | "pause" | "toggle" | "next" | "previous" | "seek"
+    ) {
+        return json!({ "ok": false, "error": format!("unknown media action '{action}'") });
+    }
+    match worker().send(Job::Control {
+        action: action.to_string(),
+        position: position_ms,
+    }) {
+        Ok(()) => json!({ "ok": true }),
+        Err(_) => json!({ "ok": false, "error": "media worker is not running" }),
+    }
+}
+
+fn empty_state() -> Value {
+    json!({
+        "available": false,
+        "status": "closed",
+        "playing": false,
+        "title": "",
+        "artist": "",
+        "album": "",
+        "albumArtist": "",
+        "subtitle": "",
+        "duration": 0,
+        "position": 0,
+        "updated": crate::core::util::now_ms(),
+        "cover": Value::Null,
+        "app": { "name": "", "icon": Value::Null },
+        "can": { "play": false, "pause": false, "toggle": false, "next": false, "previous": false, "seek": false },
+    })
+}
 
 fn manager() -> Option<GlobalSystemMediaTransportControlsSessionManager> {
     let mut guard = MANAGER.lock().unwrap();
@@ -52,23 +229,9 @@ fn ms_to_ticks(ms: i64) -> i64 {
     ms.saturating_mul(10_000)
 }
 
-pub fn state() -> Value {
-    let empty = json!({
-        "available": false,
-        "status": "closed",
-        "playing": false,
-        "title": "",
-        "artist": "",
-        "album": "",
-        "albumArtist": "",
-        "subtitle": "",
-        "duration": 0,
-        "position": 0,
-        "updated": crate::core::util::now_ms(),
-        "cover": Value::Null,
-        "app": { "name": "", "icon": Value::Null },
-        "can": { "play": false, "pause": false, "toggle": false, "next": false, "previous": false, "seek": false },
-    });
+/// The reading itself. WinRT lives here, and this is only ever called from the worker thread.
+fn query_state() -> Value {
+    let empty = empty_state();
     let Some(session) = session() else {
         return empty;
     };
@@ -227,8 +390,8 @@ pub fn cover_path(key: &str) -> Option<std::path::PathBuf> {
     file.is_file().then_some(file)
 }
 
-/// `play` / `pause` / `toggle` / `next` / `previous` / `seek`.
-pub fn control(action: &str, position_ms: i64) -> Value {
+/// Runs one control command against the current session. Worker thread only.
+fn run_control(action: &str, position_ms: i64) -> Value {
     let Some(session) = session() else {
         return json!({ "ok": false, "error": "no media session" });
     };

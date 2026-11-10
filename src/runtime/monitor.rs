@@ -89,14 +89,15 @@ pub fn start(proxy: EventLoopProxy<Ev>) -> Monitor {
                     last_value = Value::Null;
                     continue;
                 }
-                let mut state = crate::platform::media::state();
+                let state = crate::platform::media::state();
                 // Position moves on its own between updates; skip it when comparing.
-                if let Some(obj) = state.as_object_mut() {
+                let mut comparable = state.clone();
+                if let Some(obj) = comparable.as_object_mut() {
                     obj.remove("updated");
                 }
-                if state != last_value {
-                    last_value = state;
-                    let _ = proxy.send_event(Ev::Media(crate::platform::media::state()));
+                if comparable != last_value {
+                    last_value = comparable;
+                    let _ = proxy.send_event(Ev::Media(state));
                 }
             }
         });
