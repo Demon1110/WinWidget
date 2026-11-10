@@ -1,0 +1,17 @@
+{
+  "id": "winwidget.worldclock",
+  "name": { "zh-TW": "世界時鐘", "zh-CN": "世界时钟", "en": "World clock" },
+  "description": { "zh-TW": "幾個城市的時間和時差並排", "zh-CN": "几个城市的时间和时差并排", "en": "Several cities' times and time differences side by side" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "time",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 300, "height": 200, "minWidth": 180, "minHeight": 110, "maxWidth": 900, "maxHeight": 700, "grow": 1 },
+  "permissions": [],
+  "settings": [
+    { "key": "use24h", "type": "toggle", "label": { "zh-TW": "24 小時制", "zh-CN": "24 小时制", "en": "24-hour clock" }, "default": true },
+    { "key": "showDiff", "type": "toggle", "label": { "zh-TW": "顯示時差", "zh-CN": "显示时差", "en": "Show time difference" }, "default": true }
+  ]
+}

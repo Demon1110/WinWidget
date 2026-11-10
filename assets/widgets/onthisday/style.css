@@ -1,0 +1,38 @@
+body { container-type: size; }
+[hidden] { display: none !important; }
+
+.ev { height: 100%; display: flex; flex-direction: column; gap: 0.35rem; }
+.head { display: flex; align-items: center; gap: 0.6rem; white-space: nowrap; min-width: 0; }
+.date { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.pos { font-variant-numeric: tabular-nums; }
+.btns { margin-left: auto; display: flex; gap: 0; opacity: 0; transition: opacity 0.15s; }
+body:hover .btns { opacity: 1; }
+.arrow { padding: 2px 4px; display: grid; }
+.arrow svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.year { display: flex; align-items: baseline; gap: 0.6rem; }
+.y { font-size: min(2.3rem, 18cqh); color: var(--w-accent); }
+.ago { font-size: 0.8rem; color: var(--w-fg-muted); }
+.text { flex: 1; min-height: 0; margin: 0; font-size: 0.9rem; line-height: 1.55; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
+.more { align-self: flex-start; max-width: 100%; color: var(--w-fg-muted); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.more:hover { color: var(--w-fg); text-decoration: underline; }
+.msg { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.4rem; color: var(--w-fg-muted); font-size: 0.9rem; }
+@container (max-height: 150px) { .more, .line { display: none !important; } }
+
+/* ── 量被畫出來: the year on a timeline of the events, this one lit ── */
+html:not([data-theme="type"]):not([data-theme="paper"]) .y { font-family: var(--w-font-num); }
+.line { display: none; }
+html:not([data-theme="type"]):not([data-theme="paper"]) .line { display: block; position: relative; height: 9px; margin: 0 4px; background: linear-gradient(var(--w-rule), var(--w-rule)) 0 50% / 100% 1px no-repeat; }
+.line i { position: absolute; top: 50%; width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; border-radius: 50%; background: var(--w-fg-muted); }
+.line i.on { width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; background: var(--w-accent); box-shadow: 0 0 0 2px var(--w-bg-solid); }
+
+/* ── 玻璃上的字: the year large and thin, the event in two or three lines ── */
+html[data-theme="type"] .y { color: var(--w-fg); font-size: min(3.2rem, 26cqh); }
+html[data-theme="type"] .ago { color: var(--w-fg); font-weight: 600; font-size: 0.93rem; }
+html[data-theme="type"] .text { font-size: 0.98rem; font-weight: 500; }
+html[data-theme="type"] .date { color: var(--w-fg); font-weight: 600; }
+
+/* ── 書桌上的紙: an almanac page with the year stamped in seal red ── */
+html[data-theme="paper"] .head { border-bottom: 1px solid var(--w-rule); padding-bottom: 0.25rem; }
+html[data-theme="paper"] .date { font-family: var(--w-font-title); color: var(--w-fg); font-size: 0.95rem; font-weight: 600; }
+html[data-theme="paper"] .y { font-family: var(--w-font-num); font-size: min(1.6rem, 14cqh); padding: 0 0.35em; border: 2px solid var(--w-accent); border-radius: 3px; line-height: 1.25; transform: rotate(-2deg); }
+html[data-theme="paper"] .text { font-family: var(--w-font-title); font-size: 0.95rem; line-height: 1.6; }

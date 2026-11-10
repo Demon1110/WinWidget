@@ -1,0 +1,26 @@
+{
+  "id": "winwidget.network",
+  "name": { "zh-TW": "網路狀態", "zh-CN": "网络状态", "en": "Network status" },
+  "description": { "zh-TW": "是否在線、延遲、本機 IP", "zh-CN": "是否在线、延迟、本机 IP", "en": "Online or not, latency, and your IP address" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "system",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 300, "height": 180, "minWidth": 190, "minHeight": 100, "maxWidth": 800, "maxHeight": 500, "grow": 1 },
+  "permissions": ["system", "network:get.geojs.io"],
+  "settings": [
+    { "key": "target", "type": "text", "label": { "zh-TW": "測延遲的位址", "zh-CN": "测延迟的地址", "en": "Ping address" },
+      "default": { "zh-TW": "1.1.1.1", "zh-CN": "223.5.5.5", "en": "1.1.1.1" },
+      "description": { "zh-TW": "IP 或網址，例如 1.1.1.1、www.google.com", "zh-CN": "IP 或网址，例如 223.5.5.5、www.baidu.com", "en": "An IP address or a site, e.g. 1.1.1.1 or www.google.com" } },
+    { "key": "interval", "type": "select", "label": { "zh-TW": "多久測一次", "zh-CN": "多久测一次", "en": "Ping every" }, "default": 5,
+      "options": [
+        { "value": 2, "label": { "zh-TW": "2 秒", "zh-CN": "2 秒", "en": "2 seconds" } },
+        { "value": 5, "label": { "zh-TW": "5 秒", "zh-CN": "5 秒", "en": "5 seconds" } },
+        { "value": 15, "label": { "zh-TW": "15 秒", "zh-CN": "15 秒", "en": "15 seconds" } }
+      ] },
+    { "key": "showPublic", "type": "toggle", "label": { "zh-TW": "顯示對外 IP", "zh-CN": "显示公网 IP", "en": "Show public IP" }, "default": false,
+      "description": { "zh-TW": "向 get.geojs.io 查詢；截圖分享時留意", "zh-CN": "向 get.geojs.io 查询；截图分享时注意", "en": "Asks get.geojs.io; mind it in screenshots you share" } }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "id": "paper",
+  "name": { "zh-TW": "書桌上的紙", "zh-CN": "书桌上的纸", "en": "Paper" },
+  "description": {
+    "zh-TW": "米白紙卡、墨色字與朱紅印章色",
+    "zh-CN": "米白纸卡、墨色字与朱红印章色",
+    "en": "Cream paper, ink and a vermilion seal colour"
+  },
+  "appearance": {
+    "style": "transparent",
+    "shadow": true,
+    "background": "#f3eee3",
+    "backgroundOpacity": 1,
+    "textColor": "#1f1c18",
+    "accentColor": "#c23b2b",
+    "radius": 4,
+    "padding": 18
+  }
+}

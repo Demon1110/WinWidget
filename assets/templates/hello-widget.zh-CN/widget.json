@@ -1,0 +1,21 @@
+{
+  // 组件的说明文件。可以写注释（像这两行）。
+  // 完整说明：控制中心 → 设置 → 开发文档
+  "id": "{{id}}",
+  "name": "{{name}}",
+  "description": "我自己写的组件",
+  "version": "1.0.0",
+  "author": "",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "size": { "width": 260, "height": 150, "minWidth": 180, "minHeight": 110, "grow": 1 },
+
+  // 要用到的权限，例如 "system"（系统信息）、"network:api.example.com"（连到这个网站）
+  "permissions": [],
+
+  // 控制中心“内容”页会照这里自动生成表单
+  "settings": [
+    { "key": "greeting", "type": "text", "label": "问候语", "default": "你好" },
+    { "key": "showSeconds", "type": "toggle", "label": "显示秒数", "default": false }
+  ]
+}

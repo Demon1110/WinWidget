@@ -1,0 +1,20 @@
+{
+  "id": "winwidget.netspeed",
+  "name": { "zh-TW": "網速", "zh-CN": "网速", "en": "Network speed" },
+  "description": { "zh-TW": "上傳下載速度、最近一分鐘的曲線、開機以來的用量", "zh-CN": "上传下载速度、最近一分钟的曲线、开机以来的用量", "en": "Download and upload speed, the last minute, and the total since start-up" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "system",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 300, "height": 170, "minWidth": 190, "minHeight": 100, "maxWidth": 800, "maxHeight": 500, "grow": 1 },
+  "permissions": ["system"],
+  "settings": [
+    { "key": "unit", "type": "select", "label": { "zh-TW": "單位", "zh-CN": "单位", "en": "Unit" }, "default": "bytes",
+      "options": [
+        { "value": "bytes", "label": "MB/s" },
+        { "value": "bits", "label": "Mbps" }
+      ] }
+  ]
+}

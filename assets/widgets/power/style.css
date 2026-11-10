@@ -1,0 +1,34 @@
+body { container-type: size; display: flex; align-items: center; }
+
+.acts { width: 100%; height: 100%; display: grid; grid-template-columns: repeat(var(--n, 4), 1fr); gap: 6px; }
+.act {
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.35rem;
+  min-width: 0; border: 0; border-radius: calc(var(--w-radius) * 0.55); padding: 0.4rem 0.2rem;
+  background: var(--w-control-bg); color: var(--w-fg); cursor: pointer; text-shadow: inherit;
+}
+.act:hover { background: var(--w-hover); }
+.act svg { width: min(1.7rem, 30cqh); height: min(1.7rem, 30cqh); fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.lab { font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+@container (max-height: 52px) { .lab { display: none; } }
+/* too narrow for the words under the icons: the icons alone (each has a tooltip) */
+@container (max-width: 210px) { .lab { display: none; } }
+
+/* armed: the colour of danger, and a fuse burning down for three seconds */
+.act.armed { color: var(--w-danger); background: color-mix(in srgb, var(--w-danger) 15%, transparent); font-weight: 600; }
+.fuse { position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: currentColor; transform-origin: left; transform: scaleX(0); }
+.act.armed .fuse { animation: fuse 3s linear forwards; }
+@keyframes fuse { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+/* ── 玻璃上的字: bare icons and words on the wallpaper ── */
+html[data-theme="type"] .act { background: transparent; }
+html[data-theme="type"] .act:hover { background: rgba(255, 255, 255, 0.1); }
+html[data-theme="type"] .act svg { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45)); }
+html[data-theme="type"] .lab { font-weight: 600; }
+html[data-theme="type"] .act.armed { color: #fff; background: rgba(232, 72, 64, 0.55); }
+
+/* ── 書桌上的紙: printed keys, seal red when armed ── */
+html[data-theme="paper"] .act { background: transparent; box-shadow: inset 0 0 0 1px var(--w-rule); border-radius: 3px; }
+html[data-theme="paper"] .act:hover { background: var(--w-hover); }
+html[data-theme="paper"] .lab { font-family: var(--w-font-title); }
+html[data-theme="paper"] .act.armed { color: var(--w-accent); background: transparent; box-shadow: inset 0 0 0 1.5px var(--w-accent); }

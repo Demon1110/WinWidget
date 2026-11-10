@@ -1,0 +1,27 @@
+/* Theme "玻璃上的字" (type): no card, thin display figures, a soft text shadow for legibility on
+   any wallpaper, Windows accent colour. The card only shows while the mouse is over the widget
+   or the user is typing in it. */
+:root {
+  --w-font-display: "Segoe UI Variable Display", "Segoe UI", var(--w-font-fallback);
+  --w-font-num: var(--w-font);
+  --w-num-weight: 600;
+  --w-display-weight: 200;
+  --w-display-tracking: -0.035em;
+  --w-fg-muted: color-mix(in srgb, var(--w-fg) 72%, transparent);
+  --w-fg-faint: color-mix(in srgb, var(--w-fg) 26%, transparent);
+  --w-border: transparent;
+  --w-rule: color-mix(in srgb, var(--w-fg) 30%, transparent);
+  --w-track: color-mix(in srgb, var(--w-fg) 22%, transparent);
+  --w-control-bg: rgba(255, 255, 255, 0.10);
+  --w-hover: rgba(255, 255, 255, 0.10);
+  --w-warn: #ffc46b;
+  --w-on-accent: #04131c;
+  --w-text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 2px 16px rgba(0, 0, 0, 0.32);
+}
+
+body { transition: background-color 0.25s ease, box-shadow 0.25s ease; }
+body:hover,
+body:focus-within {
+  background: rgba(8, 12, 30, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10);
+}

@@ -1,0 +1,33 @@
+{
+  "id": "winwidget.clock",
+  "name": { "zh-TW": "時鐘", "zh-CN": "时钟", "en": "Clock" },
+  "description": { "zh-TW": "時間、日期，可選時區", "zh-CN": "时间、日期，可选时区", "en": "Time and date, any time zone" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "time",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 300, "height": 150, "minWidth": 160, "minHeight": 80, "maxWidth": 900, "maxHeight": 500, "grow": 1 },
+  "permissions": [],
+  "settings": [
+    { "key": "use24h", "type": "toggle", "label": { "zh-TW": "24 小時制", "zh-CN": "24 小时制", "en": "24-hour clock" }, "default": true },
+    { "key": "showSeconds", "type": "toggle", "label": { "zh-TW": "顯示秒", "zh-CN": "显示秒", "en": "Show seconds" }, "default": true },
+    { "key": "showDate", "type": "toggle", "label": { "zh-TW": "顯示日期", "zh-CN": "显示日期", "en": "Show date" }, "default": true },
+    { "key": "timezone", "type": "select", "label": { "zh-TW": "時區", "zh-CN": "时区", "en": "Time zone" }, "default": "local",
+      "options": [
+        { "value": "local", "label": { "zh-TW": "本機", "zh-CN": "本机", "en": "This PC" } },
+        { "value": "Asia/Taipei", "label": { "zh-TW": "台北", "zh-CN": "台北", "en": "Taipei" } },
+        { "value": "Asia/Shanghai", "label": { "zh-TW": "上海", "zh-CN": "上海", "en": "Shanghai" } },
+        { "value": "Asia/Hong_Kong", "label": { "zh-TW": "香港", "zh-CN": "香港", "en": "Hong Kong" } },
+        { "value": "Asia/Tokyo", "label": { "zh-TW": "東京", "zh-CN": "东京", "en": "Tokyo" } },
+        { "value": "Asia/Singapore", "label": { "zh-TW": "新加坡", "zh-CN": "新加坡", "en": "Singapore" } },
+        { "value": "Europe/London", "label": { "zh-TW": "倫敦", "zh-CN": "伦敦", "en": "London" } },
+        { "value": "Europe/Paris", "label": { "zh-TW": "巴黎", "zh-CN": "巴黎", "en": "Paris" } },
+        { "value": "America/New_York", "label": { "zh-TW": "紐約", "zh-CN": "纽约", "en": "New York" } },
+        { "value": "America/Los_Angeles", "label": { "zh-TW": "洛杉磯", "zh-CN": "洛杉矶", "en": "Los Angeles" } },
+        { "value": "Australia/Sydney", "label": { "zh-TW": "雪梨", "zh-CN": "悉尼", "en": "Sydney" } },
+        { "value": "UTC", "label": "UTC" }
+      ] }
+  ]
+}

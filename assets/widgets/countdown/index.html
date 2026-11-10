@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="view" id="view" hidden>
+    <div class="head">
+      <span class="title w-title" id="title"></span>
+      <button class="w-btn edit" id="edit" data-no-drag></button>
+    </div>
+    <div class="big"><span class="w-display num" id="num"></span><span class="unit" id="unit"></span></div>
+    <div class="meta w-label" id="meta"></div>
+    <div class="dots" id="dots"></div>
+    <div class="stamp" id="stamp"></div>
+  </main>
+
+  <form class="setup" id="setup" hidden>
+    <label class="w-label" for="f-title" id="l-title"></label>
+    <input class="w-input" id="f-title" maxlength="40" autocomplete="off">
+    <label class="w-label" for="f-date" id="l-date"></label>
+    <input class="w-input" id="f-date" type="date" required>
+    <div class="actions">
+      <button class="w-btn" type="button" id="cancel"></button>
+      <button class="w-btn is-primary" type="submit" id="save"></button>
+    </div>
+  </form>
+  <script src="main.js"></script>
+</body>
+</html>

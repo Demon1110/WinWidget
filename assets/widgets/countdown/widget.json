@@ -1,0 +1,18 @@
+{
+  "id": "winwidget.countdown",
+  "name": { "zh-TW": "倒數日", "zh-CN": "倒数日", "en": "Countdown" },
+  "description": { "zh-TW": "距離重要的日子還有幾天", "zh-CN": "距离重要的日子还有几天", "en": "Days until a date that matters" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "time",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 280, "height": 180, "minWidth": 180, "minHeight": 110, "maxWidth": 700, "maxHeight": 500, "grow": 1 },
+  "permissions": [],
+  "settings": [
+    { "key": "title", "type": "text", "label": { "zh-TW": "名稱", "zh-CN": "名称", "en": "Name" },
+      "default": { "zh-TW": "重要的日子", "zh-CN": "重要的日子", "en": "The big day" } },
+    { "key": "date", "type": "date", "label": { "zh-TW": "日期", "zh-CN": "日期", "en": "Date" }, "default": "" }
+  ]
+}

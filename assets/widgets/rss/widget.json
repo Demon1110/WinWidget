@@ -1,0 +1,38 @@
+{
+  "id": "winwidget.rss",
+  "name": { "zh-TW": "新聞訂閱", "zh-CN": "新闻订阅", "en": "News feed" },
+  "description": { "zh-TW": "RSS / Atom 的最新標題，點了用瀏覽器打開", "zh-CN": "RSS / Atom 的最新标题，点击用浏览器打开", "en": "Latest headlines from an RSS or Atom feed; click to read" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "info",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 360, "height": 240, "minWidth": 220, "minHeight": 100, "maxWidth": 900, "maxHeight": 900, "grow": 0.5 },
+  "permissions": ["network:*", "shell.open"],
+  "settings": [
+    { "key": "feed", "type": "select", "label": { "zh-TW": "來源", "zh-CN": "来源", "en": "Source" },
+      "default": { "zh-TW": "cna", "zh-CN": "ithome", "en": "bbc" },
+      "options": [
+        { "value": "cna", "label": { "zh-TW": "中央社（國際）", "zh-CN": "中央社（国际）", "en": "CNA Taiwan (world, Chinese)" } },
+        { "value": "cna-tech", "label": { "zh-TW": "中央社（科技）", "zh-CN": "中央社（科技）", "en": "CNA Taiwan (tech, Chinese)" } },
+        { "value": "bbc-zh", "label": { "zh-TW": "BBC 中文", "zh-CN": "BBC 中文", "en": "BBC Chinese" } },
+        { "value": "rthk", "label": { "zh-TW": "香港電台（本地）", "zh-CN": "香港电台（本地）", "en": "RTHK (Hong Kong, Chinese)" } },
+        { "value": "ithome", "label": { "zh-TW": "IT之家", "zh-CN": "IT之家", "en": "IThome (Chinese)" } },
+        { "value": "sspai", "label": { "zh-TW": "少數派", "zh-CN": "少数派", "en": "sspai (Chinese)" } },
+        { "value": "bbc", "label": "BBC News – World" },
+        { "value": "verge", "label": "The Verge" },
+        { "value": "hn", "label": "Hacker News" },
+        { "value": "custom", "label": { "zh-TW": "自訂網址", "zh-CN": "自定义网址", "en": "Custom address" } }
+      ] },
+    { "key": "url", "type": "text", "label": { "zh-TW": "自訂 RSS 網址", "zh-CN": "自定义 RSS 网址", "en": "Custom feed address" }, "default": "",
+      "placeholder": "https://example.com/feed.xml",
+      "description": { "zh-TW": "來源選「自訂網址」時使用；RSS 或 Atom 都可以", "zh-CN": "来源选“自定义网址”时使用；RSS 或 Atom 都可以", "en": "Used with Custom address; RSS or Atom" } },
+    { "key": "refresh", "type": "select", "label": { "zh-TW": "多久更新", "zh-CN": "多久更新", "en": "Refresh" }, "default": 30,
+      "options": [
+        { "value": 15, "label": { "zh-TW": "15 分鐘", "zh-CN": "15 分钟", "en": "15 minutes" } },
+        { "value": 30, "label": { "zh-TW": "30 分鐘", "zh-CN": "30 分钟", "en": "30 minutes" } },
+        { "value": 60, "label": { "zh-TW": "1 小時", "zh-CN": "1 小时", "en": "1 hour" } }
+      ] }
+  ]
+}

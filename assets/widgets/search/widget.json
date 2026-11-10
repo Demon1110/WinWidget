@@ -1,0 +1,29 @@
+{
+  "id": "winwidget.search",
+  "name": { "zh-TW": "搜尋框", "zh-CN": "搜索框", "en": "Search box" },
+  "description": { "zh-TW": "輸入後用瀏覽器搜尋，可選搜尋引擎", "zh-CN": "输入后用浏览器搜索，可选搜索引擎", "en": "Type and search in your browser, with the engine you like" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "productivity",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 380, "height": 90, "minWidth": 200, "minHeight": 60, "maxWidth": 1000, "maxHeight": 240, "grow": 1 },
+  "permissions": ["shell.open"],
+  "settings": [
+    { "key": "engine", "type": "select", "label": { "zh-TW": "搜尋引擎", "zh-CN": "搜索引擎", "en": "Search engine" },
+      "default": { "zh-TW": "google", "zh-CN": "baidu", "en": "google" },
+      "options": [
+        { "value": "google", "label": "Google" },
+        { "value": "bing", "label": "Bing" },
+        { "value": "baidu", "label": { "zh-TW": "百度", "zh-CN": "百度", "en": "Baidu" } },
+        { "value": "duckduckgo", "label": "DuckDuckGo" },
+        { "value": "wikipedia", "label": { "zh-TW": "維基百科", "zh-CN": "维基百科", "en": "Wikipedia" } },
+        { "value": "youtube", "label": "YouTube" },
+        { "value": "custom", "label": { "zh-TW": "自訂", "zh-CN": "自定义", "en": "Custom" } }
+      ] },
+    { "key": "custom", "type": "text", "label": { "zh-TW": "自訂搜尋網址", "zh-CN": "自定义搜索网址", "en": "Custom search URL" }, "default": "",
+      "placeholder": "https://example.com/search?q=%s",
+      "description": { "zh-TW": "選「自訂」時使用；%s 會換成你輸入的字", "zh-CN": "选“自定义”时使用；%s 会换成你输入的字", "en": "Used with Custom; %s becomes what you type" } }
+  ]
+}

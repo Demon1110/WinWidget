@@ -1,0 +1,20 @@
+{
+  "id": "winwidget.power",
+  "name": { "zh-TW": "電源", "zh-CN": "电源", "en": "Power" },
+  "description": { "zh-TW": "鎖定、睡眠、重新啟動、關機；除了鎖定都要按兩次", "zh-CN": "锁定、睡眠、重启、关机；除了锁定都要按两次", "en": "Lock, sleep, restart, shut down; all but lock need two clicks" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "system",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 320, "height": 110, "minWidth": 160, "minHeight": 70, "maxWidth": 700, "maxHeight": 300, "grow": 1 },
+  "permissions": [],
+  "settings": [
+    { "key": "lock", "type": "toggle", "label": { "zh-TW": "鎖定", "zh-CN": "锁定", "en": "Lock" }, "default": true },
+    { "key": "sleep", "type": "toggle", "label": { "zh-TW": "睡眠", "zh-CN": "睡眠", "en": "Sleep" }, "default": true },
+    { "key": "restart", "type": "toggle", "label": { "zh-TW": "重新啟動", "zh-CN": "重启", "en": "Restart" }, "default": true },
+    { "key": "shutdown", "type": "toggle", "label": { "zh-TW": "關機", "zh-CN": "关机", "en": "Shut down" }, "default": true },
+    { "key": "signout", "type": "toggle", "label": { "zh-TW": "登出", "zh-CN": "注销", "en": "Sign out" }, "default": false }
+  ]
+}

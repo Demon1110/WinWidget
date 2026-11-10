@@ -1,0 +1,58 @@
+body { container-type: size; }
+[hidden] { display: none !important; }
+
+.view { height: 100%; display: flex; flex-direction: column; position: relative; }
+.head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.title { font-size: 0.93rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.edit { font-size: 0.8rem; opacity: 0; transition: opacity 0.15s; }
+body:hover .edit { opacity: 1; }
+
+.big { display: flex; align-items: baseline; gap: 0.3rem; margin: auto 0 0.15rem; }
+.num { font-size: min(42cqh, 30cqw); }
+.unit { font-size: 0.93rem; color: var(--w-fg-muted); }
+.meta { white-space: nowrap; }
+
+/* time as dots: filled = gone by, hollow = still to come */
+.dots { display: grid; grid-template-columns: repeat(20, 1fr); gap: 4px; margin-top: 0.7rem; }
+.dots i { aspect-ratio: 1; border-radius: 50%; background: var(--w-track); }
+.dots i.on { background: color-mix(in srgb, var(--w-accent) 45%, transparent); }
+.dots i.now { background: var(--w-accent); }
+.stamp { display: none; }
+@container (max-height: 110px) { .dots { display: none; } }
+
+.setup { height: 100%; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 0.5rem 0.6rem; align-content: center; }
+.setup .actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 0.4rem; }
+.setup input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(var(--w-invert, 1)); opacity: 0.6; }
+
+/* ── 玻璃上的字: the number is the whole widget ── */
+html[data-theme="type"] .dots { display: none; }
+html[data-theme="type"] .num { font-size: min(62cqh, 40cqw); }
+html[data-theme="type"] .big { margin-top: 0.2rem; }
+html[data-theme="type"] .unit { font-size: 1.07rem; font-weight: 600; color: var(--w-fg); }
+html[data-theme="type"] .head { order: 3; }
+html[data-theme="type"] .meta { order: 4; }
+
+/* ── 書桌上的紙: a seal-stamped date ── */
+html[data-theme="paper"] { --w-invert: 0; }
+html[data-theme="paper"] .dots { display: none; }
+html[data-theme="paper"] .title { font-size: 1.07rem; }
+html[data-theme="paper"] .num { font-size: min(44cqh, 30cqw); }
+html[data-theme="paper"] .stamp {
+  display: block;
+  position: absolute;
+  right: 0.2rem;
+  bottom: 0.3rem;
+  padding: 0.3em 0.55em 0.25em;
+  border: 2px solid var(--w-accent);
+  border-radius: 4px;
+  color: var(--w-accent);
+  font-family: var(--w-font-num);
+  font-size: 1.15rem;
+  line-height: 1.1;
+  text-align: center;
+  transform: rotate(-7deg);
+  opacity: 0.88;
+}
+/* no room for the seal beside the date: leave it off */
+@container (max-width: 230px) { html[data-theme="paper"] .stamp { display: none; } }
+html[data-theme="paper"] .stamp small { display: block; font-family: var(--w-font-title); font-size: 0.6em; letter-spacing: 0.1em; }

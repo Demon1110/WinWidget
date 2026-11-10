@@ -1,0 +1,18 @@
+body { container-type: size; }
+
+.card { height: 100%; display: flex; flex-direction: column; justify-content: safe center; gap: 0.3rem; overflow: hidden; }
+/* shrunk to fit when the lines don't (main.js sets --fit) */
+.card > * { zoom: var(--fit, 1); }
+.card > [hidden] { display: none; }
+.card.center { text-align: center; }
+.card > * { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.card .h1 { font-family: var(--w-font-display); font-weight: var(--w-display-weight); letter-spacing: var(--w-display-tracking); font-size: max(1.2rem, min(30cqh, 15cqw)); line-height: 1.05; }
+.card .h2 { font-family: var(--w-font-title); font-weight: 600; font-size: 1.15rem; }
+.card .p { font-size: 0.93rem; }
+.card .p:has(+ .p), .card .h1 + .p { color: var(--w-fg-muted); }
+.card .rule { height: 1px; background: var(--w-rule); margin: 0.35rem 0; }
+.card .gap { height: 0.4rem; }
+.card .num { font-family: var(--w-font-num); font-variant-numeric: tabular-nums; color: var(--w-fg); }
+
+html[data-theme="type"] .card .h1 { font-size: max(1.3rem, min(44cqh, 20cqw)); }
+html[data-theme="paper"] .card .rule { background: var(--w-fg); opacity: 0.5; }

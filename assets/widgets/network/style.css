@@ -1,0 +1,49 @@
+body { container-type: size; display: flex; flex-direction: column; gap: 0.45rem; }
+
+.head { display: flex; align-items: center; gap: 0.45rem; white-space: nowrap; min-width: 0; }
+.dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; flex: none; background: var(--w-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--w-accent) 22%, transparent); }
+body[data-state="bad"] .dot { background: var(--w-warn); box-shadow: 0 0 0 3px color-mix(in srgb, var(--w-warn) 22%, transparent); }
+body[data-state="off"] .dot { background: var(--w-danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--w-danger) 22%, transparent); }
+.status { font-size: 0.93rem; overflow: hidden; text-overflow: ellipsis; }
+.via { margin-left: auto; overflow: hidden; text-overflow: ellipsis; }
+
+.lat { display: flex; align-items: baseline; gap: 0.6rem; }
+.ms { font-size: min(24cqh, 14cqw); }
+.ms small { font-size: 0.4em; margin-left: 0.15em; color: var(--w-fg-muted); letter-spacing: 0; }
+.cap { font-size: 0.8rem; color: var(--w-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── 量被畫出來: the last 30 pings as bars; slow ones amber, misses red ── */
+.bars { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(30, 1fr); gap: 2px; align-items: end; }
+.bars i { display: block; border-radius: 1.5px; background: var(--w-accent); min-height: 2px; }
+.bars i.slow { background: var(--w-warn); }
+.bars i.miss { height: 100%; background: color-mix(in srgb, var(--w-danger) 55%, transparent); }
+.bars i.empty { height: 2px; background: var(--w-track); }
+
+.facts { display: flex; flex-wrap: wrap; gap: 0.2rem 1.1rem; margin: 0; }
+.facts div { min-width: 0; }
+.facts dt { font-size: 0.72rem; color: var(--w-fg-muted); }
+.facts dd { margin: 0; font-size: 0.86rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@container (max-height: 105px) { .bars { display: none; } }
+@container (max-height: 80px) { .facts { display: none; } }
+
+/* ── 玻璃上的字: the latency, large; the rest as words ── */
+html[data-theme="type"] .bars { display: none; }
+html[data-theme="type"] .ms { font-size: min(36cqh, 22cqw); }
+html[data-theme="type"] .lat { flex-direction: column; align-items: flex-start; gap: 0.2rem; margin-top: auto; }
+html[data-theme="type"] .cap { color: var(--w-fg); font-weight: 600; font-size: 0.93rem; }
+html[data-theme="type"] .head { order: 3; }
+html[data-theme="type"] .status { font-size: 0.86rem; }
+html[data-theme="type"] .via { margin-left: 0; color: var(--w-fg-muted); }
+html[data-theme="type"] .facts { order: 4; margin-bottom: auto; }
+html[data-theme="type"] .dot { box-shadow: none; }
+
+/* ── 書桌上的紙: a station log ── */
+html[data-theme="paper"] .status { font-family: var(--w-font-title); font-weight: 600; font-size: 1rem; }
+html[data-theme="paper"] .dot { box-shadow: none; background: var(--w-fg); }
+html[data-theme="paper"] body[data-state="bad"] .dot, html[data-theme="paper"] body[data-state="off"] .dot { background: var(--w-accent); }
+html[data-theme="paper"] .ms { font-family: var(--w-font-num); }
+html[data-theme="paper"] .bars i { background: var(--w-fg); }
+html[data-theme="paper"] .bars i.slow { background: color-mix(in srgb, var(--w-fg) 50%, transparent); }
+html[data-theme="paper"] .bars i.miss { background: var(--w-accent); }
+html[data-theme="paper"] .facts { border-top: 1px solid var(--w-rule); padding-top: 0.35rem; }
+html[data-theme="paper"] .facts dd { font-family: var(--w-font-num); }

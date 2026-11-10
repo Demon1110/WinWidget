@@ -1,0 +1,30 @@
+body { container-type: size; display: flex; flex-direction: column; gap: 0.5rem; }
+
+.up { display: none; }
+.os { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
+.os-n { font-size: 1.07rem; }
+.rows { margin: 0; flex: 1; min-height: 0; display: grid; align-content: space-evenly; row-gap: 0.15rem; overflow: hidden; }
+.rows div[hidden] { display: none; }
+.rows div { display: grid; grid-template-columns: 4.6em minmax(0, 1fr); column-gap: 0.6rem; align-items: baseline; }
+.rows dt { font-size: 0.8rem; color: var(--w-fg-muted); white-space: nowrap; }
+.rows dd { margin: 0; font-size: 0.86rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rows small { margin-left: 0.5em; font-size: 0.85em; color: var(--w-fg-muted); }
+.rows .uptime dd { color: var(--w-accent); }
+:root:lang(en) .rows div { grid-template-columns: 5.6em minmax(0, 1fr); }
+@container (max-height: 160px) { .rows small { display: none; } }
+
+/* ── 玻璃上的字: how long it has been on, large; the machine in a few words ── */
+html[data-theme="type"] .up { display: flex; flex-direction: column; margin-top: auto; }
+html[data-theme="type"] .up-v { font-size: min(26cqh, 12cqw); }
+html[data-theme="type"] .up-k { font-size: 0.93rem; font-weight: 600; margin-top: 0.25em; }
+html[data-theme="type"] .os-n { font-size: 0.93rem; }
+html[data-theme="type"] .rows { flex: none; margin-bottom: auto; }
+html[data-theme="type"] .rows .uptime { display: none; }
+html[data-theme="type"] .rows dt { color: var(--w-fg-muted); }
+
+/* ── 書桌上的紙: a specification label ── */
+html[data-theme="paper"] .os { border-bottom: 1.5px solid var(--w-fg); padding-bottom: 0.35rem; }
+html[data-theme="paper"] .os-n { font-family: var(--w-font-title); font-size: 1.15rem; }
+html[data-theme="paper"] .rows div + div { border-top: 1px dotted var(--w-rule); padding-top: 0.15rem; }
+html[data-theme="paper"] .rows dt { font-family: var(--w-font-title); color: var(--w-fg); }
+html[data-theme="paper"] .rows .uptime dd { color: var(--w-fg); font-family: var(--w-font-num); }

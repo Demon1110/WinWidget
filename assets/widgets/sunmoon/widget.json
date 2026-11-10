@@ -1,0 +1,18 @@
+{
+  "id": "winwidget.sunmoon",
+  "name": { "zh-TW": "日出日落", "zh-CN": "日出日落", "en": "Sun & moon" },
+  "description": { "zh-TW": "日出、日落、白晝長度和月相", "zh-CN": "日出、日落、白昼长度和月相", "en": "Sunrise, sunset, day length and the moon's phase" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "weather",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 300, "height": 190, "minWidth": 200, "minHeight": 110, "maxWidth": 800, "maxHeight": 500, "grow": 1 },
+  "permissions": ["network:geocoding-api.open-meteo.com", "network:get.geojs.io"],
+  "settings": [
+    { "key": "city", "type": "text", "label": { "zh-TW": "城市", "zh-CN": "城市", "en": "City" }, "default": "",
+      "placeholder": { "zh-TW": "留空：按網絡位置自動定位", "zh-CN": "留空：按网络位置自动定位", "en": "Empty: locate from your network" } },
+    { "key": "showMoon", "type": "toggle", "label": { "zh-TW": "顯示月相", "zh-CN": "显示月相", "en": "Show the moon" }, "default": true }
+  ]
+}

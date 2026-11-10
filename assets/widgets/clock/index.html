@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="clock">
+    <div class="head">
+      <span class="date" id="date"></span>
+      <span class="seal" id="seal"></span>
+    </div>
+    <div class="time">
+      <span class="w-display hm"><span id="hh"></span><span class="colon">:</span><span id="mm"></span></span>
+      <span class="sec w-num" id="sec"></span>
+      <span class="ampm" id="ampm"></span>
+    </div>
+    <div class="day">
+      <div class="ticks" id="ticks"></div>
+      <div class="scale w-num"><span>0</span><span>6</span><span>12</span><span>18</span><span>24</span></div>
+    </div>
+    <div class="foot w-label" id="foot"></div>
+  </main>
+  <script src="main.js"></script>
+</body>
+</html>

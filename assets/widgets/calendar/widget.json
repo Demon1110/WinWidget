@@ -1,0 +1,21 @@
+{
+  "id": "winwidget.calendar",
+  "name": { "zh-TW": "日曆", "zh-CN": "日历", "en": "Calendar" },
+  "description": { "zh-TW": "月曆與農曆", "zh-CN": "月历与农历", "en": "Month view with optional lunar dates" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "time",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 300, "height": 300, "minWidth": 220, "minHeight": 220, "maxWidth": 700, "maxHeight": 700, "grow": 1 },
+  "permissions": [],
+  "settings": [
+    { "key": "weekStart", "type": "select", "label": { "zh-TW": "每週第一天", "zh-CN": "每周第一天", "en": "Week starts on" }, "default": "monday",
+      "options": [
+        { "value": "monday", "label": { "zh-TW": "星期一", "zh-CN": "星期一", "en": "Monday" } },
+        { "value": "sunday", "label": { "zh-TW": "星期日", "zh-CN": "星期日", "en": "Sunday" } }
+      ] },
+    { "key": "showLunar", "type": "toggle", "label": { "zh-TW": "顯示農曆", "zh-CN": "显示农历", "en": "Show lunar dates (Chinese)" }, "default": true }
+  ]
+}

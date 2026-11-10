@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="view" id="view">
+    <ul class="cities" id="cities"></ul>
+    <button class="w-btn edit" id="edit" data-no-drag></button>
+  </main>
+
+  <section class="setup" id="setup" hidden>
+    <div class="setup-head"><span class="w-title" id="setup-title"></span><button class="w-btn is-primary" id="done" data-no-drag></button></div>
+    <ul class="picked" id="picked"></ul>
+    <div class="adder" data-no-drag>
+      <input class="w-input" id="find" autocomplete="off" spellcheck="false">
+      <ul class="found" id="found" hidden></ul>
+    </div>
+  </section>
+  <script src="main.js"></script>
+</body>
+</html>

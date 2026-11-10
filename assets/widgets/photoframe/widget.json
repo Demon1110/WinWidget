@@ -1,0 +1,44 @@
+{
+  "id": "winwidget.photoframe",
+  "name": { "zh-TW": "相框", "zh-CN": "相框", "en": "Photo frame" },
+  "description": { "zh-TW": "輪流顯示一個資料夾裏的照片", "zh-CN": "轮流显示一个文件夹里的照片", "en": "Shows the photos in a folder, one after another" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "media",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 320, "height": 240, "minWidth": 140, "minHeight": 110, "maxWidth": 1400, "maxHeight": 1000, "grow": 1 },
+  "permissions": [],
+  "settings": [
+    { "key": "folder", "type": "folder", "label": { "zh-TW": "照片資料夾", "zh-CN": "照片文件夹", "en": "Photo folder" }, "default": "%USERPROFILE%\\Pictures" },
+    { "key": "subfolders", "type": "toggle", "label": { "zh-TW": "包括子資料夾裏的照片", "zh-CN": "包括子文件夹里的照片", "en": "Include subfolders" }, "default": true },
+    { "key": "interval", "type": "select", "label": { "zh-TW": "多久換一張", "zh-CN": "多久换一张", "en": "Change every" }, "default": 60,
+      "options": [
+        { "value": 10, "label": { "zh-TW": "10 秒", "zh-CN": "10 秒", "en": "10 seconds" } },
+        { "value": 30, "label": { "zh-TW": "30 秒", "zh-CN": "30 秒", "en": "30 seconds" } },
+        { "value": 60, "label": { "zh-TW": "1 分鐘", "zh-CN": "1 分钟", "en": "1 minute" } },
+        { "value": 300, "label": { "zh-TW": "5 分鐘", "zh-CN": "5 分钟", "en": "5 minutes" } },
+        { "value": 900, "label": { "zh-TW": "15 分鐘", "zh-CN": "15 分钟", "en": "15 minutes" } },
+        { "value": 3600, "label": { "zh-TW": "1 小時", "zh-CN": "1 小时", "en": "1 hour" } },
+        { "value": 0, "label": { "zh-TW": "不自動換", "zh-CN": "不自动换", "en": "Don't change by itself" } }
+      ] },
+    { "key": "order", "type": "select", "label": { "zh-TW": "順序", "zh-CN": "顺序", "en": "Order" }, "default": "shuffle",
+      "options": [
+        { "value": "shuffle", "label": { "zh-TW": "隨機", "zh-CN": "随机", "en": "Shuffle" } },
+        { "value": "name", "label": { "zh-TW": "按檔名", "zh-CN": "按文件名", "en": "By name" } },
+        { "value": "newest", "label": { "zh-TW": "新的先", "zh-CN": "新的先", "en": "Newest first" } }
+      ] },
+    { "key": "fit", "type": "select", "label": { "zh-TW": "照片大小", "zh-CN": "照片大小", "en": "Photo size" }, "default": "cover",
+      "options": [
+        { "value": "cover", "label": { "zh-TW": "填滿", "zh-CN": "填满", "en": "Fill" } },
+        { "value": "contain", "label": { "zh-TW": "完整", "zh-CN": "完整", "en": "Whole" } }
+      ] },
+    { "key": "caption", "type": "select", "label": { "zh-TW": "照片說明", "zh-CN": "照片说明", "en": "Caption" }, "default": "date",
+      "options": [
+        { "value": "date", "label": { "zh-TW": "拍攝日期", "zh-CN": "拍摄日期", "en": "Date taken" } },
+        { "value": "name", "label": { "zh-TW": "檔名", "zh-CN": "文件名", "en": "File name" } },
+        { "value": "none", "label": { "zh-TW": "不顯示", "zh-CN": "不显示", "en": "None" } }
+      ] }
+  ]
+}

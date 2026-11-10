@@ -1,0 +1,23 @@
+{
+  "id": "winwidget.pomodoro",
+  "name": { "zh-TW": "番茄鐘", "zh-CN": "番茄钟", "en": "Pomodoro" },
+  "description": { "zh-TW": "專注 25 分、休息 5 分循環，時間到會通知", "zh-CN": "专注 25 分、休息 5 分循环，时间到会通知", "en": "25 minutes of focus, 5 of rest, with a notification when time is up" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "time",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 300, "height": 170, "minWidth": 190, "minHeight": 110, "maxWidth": 700, "maxHeight": 500, "grow": 1 },
+  "permissions": ["notify"],
+  "settings": [
+    { "key": "focus", "type": "number", "label": { "zh-TW": "專注（分鐘）", "zh-CN": "专注（分钟）", "en": "Focus (minutes)" }, "default": 25, "min": 1, "max": 180 },
+    { "key": "shortBreak", "type": "number", "label": { "zh-TW": "休息（分鐘）", "zh-CN": "休息（分钟）", "en": "Break (minutes)" }, "default": 5, "min": 1, "max": 60 },
+    { "key": "longBreak", "type": "number", "label": { "zh-TW": "長休息（分鐘）", "zh-CN": "长休息（分钟）", "en": "Long break (minutes)" }, "default": 15, "min": 1, "max": 120 },
+    { "key": "longEvery", "type": "number", "label": { "zh-TW": "每幾輪長休息一次", "zh-CN": "每几轮长休息一次", "en": "Long break every" }, "default": 4, "min": 2, "max": 10 },
+    { "key": "autoBreak", "type": "toggle", "label": { "zh-TW": "專注完自動開始休息", "zh-CN": "专注完自动开始休息", "en": "Start breaks automatically" }, "default": true },
+    { "key": "autoFocus", "type": "toggle", "label": { "zh-TW": "休息完自動開始專注", "zh-CN": "休息完自动开始专注", "en": "Start focus automatically" }, "default": false },
+    { "key": "notify", "type": "toggle", "label": { "zh-TW": "時間到時通知", "zh-CN": "时间到时通知", "en": "Notify when time is up" }, "default": true },
+    { "key": "sound", "type": "toggle", "label": { "zh-TW": "提示音", "zh-CN": "提示音", "en": "Chime" }, "default": true }
+  ]
+}

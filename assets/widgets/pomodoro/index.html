@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="pomo" id="pomo">
+    <div class="dial">
+      <svg class="ring" viewBox="0 0 100 100" aria-hidden="true">
+        <circle class="track" cx="50" cy="50" r="45"/>
+        <circle class="arc" id="arc" cx="50" cy="50" r="45" pathLength="1000"/>
+      </svg>
+      <div class="face">
+        <span class="seal" id="seal"></span>
+        <span class="time w-display" id="time"></span>
+        <span class="phase" id="phase"></span>
+      </div>
+    </div>
+    <div class="side">
+      <div class="cycle" id="cycle"></div>
+      <div class="today w-label" id="today"></div>
+      <div class="buttons">
+        <button class="w-btn is-primary main" id="main" data-no-drag></button>
+        <button class="w-btn" id="reset" data-no-drag></button>
+        <button class="w-btn" id="skip" data-no-drag></button>
+      </div>
+    </div>
+  </main>
+  <script src="main.js"></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+/* Theme "量被畫出來" (instrument): smoked graphite glass, monospaced figures, one mint accent.
+   Only variables the user cannot edit live here; colours, radius and padding come from theme.json. */
+:root {
+  --w-font-num: "Cascadia Mono", "Cascadia Code", Consolas, monospace;
+  --w-num-weight: 400;
+  --w-display-weight: 300;
+  --w-display-tracking: -0.03em;
+  --w-fg-muted: color-mix(in srgb, var(--w-fg) 58%, transparent);
+  --w-border: rgba(255, 255, 255, 0.07);
+  --w-rule: rgba(255, 255, 255, 0.08);
+  --w-track: rgba(255, 255, 255, 0.09);
+  --w-warn: #ffb547;
+  --w-on-accent: #0b1512;
+  --w-shadow: 0 calc(10px / var(--w-size-scale)) calc(26px / var(--w-size-scale)) rgba(0, 0, 0, 0.34);
+}

@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="head">
+    <span class="v cpu"><i></i><span class="k">CPU</span> <b class="w-num" id="cpu">—</b></span>
+    <span class="v mem" id="mem-wrap"><i></i><span class="k" id="mem-k"></span> <b class="w-num" id="mem">—</b></span>
+    <span class="span w-label" id="span"></span>
+  </div>
+  <div class="big" id="big"><span class="w-display" id="big-v"></span><span class="cap" id="big-c"></span></div>
+  <div class="chart">
+    <svg id="chart" viewBox="0 0 150 100" preserveAspectRatio="none" aria-hidden="true">
+      <path class="grid" d="M0 25H150M0 50H150M0 75H150"/>
+      <path class="mem-line" id="mem-line"/>
+      <path class="cpu-area" id="cpu-area"/>
+      <path class="cpu-line" id="cpu-line"/>
+    </svg>
+  </div>
+  <script src="main.js"></script>
+</body>
+</html>

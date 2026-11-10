@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="none">
+ <div class="wrap">
+  <div class="art" id="art">
+    <img id="cover" alt="" draggable="false">
+    <img class="badge" id="badge" alt="">
+    <svg class="ph" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 17.5V6l9-2v11.5"/><circle cx="7" cy="17.5" r="2.5"/><circle cx="16" cy="15.5" r="2.5"/></svg>
+  </div>
+  <div class="main">
+    <div class="app w-label" id="app"><img id="app-icon" alt=""><span id="app-name"></span></div>
+    <div class="text">
+      <div class="title" id="title"></div>
+      <div class="artist" id="artist"></div>
+    </div>
+    <div class="lyric" id="lyric"><div class="lyr" id="lyr"></div></div>
+    <div class="progress" id="progress" data-no-drag>
+      <div class="wave" id="wave"></div>
+      <div class="line"><i id="fill"></i><b id="knob"></b></div>
+    </div>
+    <div class="row">
+      <div class="controls">
+        <button id="prev" data-no-drag><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 5.5v13h-2v-13zM19 5.8v12.4L9 12z"/></svg></button>
+        <button id="play" class="play" data-no-drag><svg viewBox="0 0 24 24" aria-hidden="true" id="play-icon"></svg></button>
+        <button id="next" data-no-drag><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 5.5v13h2v-13zM5 5.8v12.4L15 12z"/></svg></button>
+      </div>
+      <span class="times w-num" id="times"></span>
+    </div>
+  </div>
+ </div>
+  <script src="main.js"></script>
+</body>
+</html>

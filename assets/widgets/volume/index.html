@@ -1,0 +1,20 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="top">
+    <button class="mute" id="mute" data-no-drag><svg id="spk" viewBox="0 0 24 24" aria-hidden="true"></svg></button>
+    <span class="pct w-display" id="pct">—</span>
+    <span class="dev w-label" id="dev"></span>
+  </div>
+  <div class="slider" id="slider" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" data-no-drag>
+    <div class="cells" id="cells"></div>
+    <div class="rail"><i class="fill" id="fill"></i><i class="knob" id="knob"></i></div>
+    <div class="ticks"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  </div>
+  <script src="main.js"></script>
+</body>
+</html>

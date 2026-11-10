@@ -1,0 +1,26 @@
+{
+  "id": "winwidget.dailyimage",
+  "name": { "zh-TW": "每日圖片", "zh-CN": "每日图片", "en": "Picture of the day" },
+  "description": { "zh-TW": "Bing 每日一圖和它的故事，可以翻看最近 8 天", "zh-CN": "必应每日一图和它的故事，可以翻看最近 8 天", "en": "Bing's picture of the day and its story; browse the last 8 days" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "info",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 400, "height": 250, "minWidth": 160, "minHeight": 100, "maxWidth": 1600, "maxHeight": 1000, "grow": 1 },
+  "permissions": ["network:www.bing.com", "shell.open"],
+  "settings": [
+    { "key": "caption", "type": "toggle", "label": { "zh-TW": "顯示說明", "zh-CN": "显示说明", "en": "Show the caption" }, "default": true },
+    { "key": "region", "type": "select", "label": { "zh-TW": "版本", "zh-CN": "版本", "en": "Edition" }, "default": "auto",
+      "description": { "zh-TW": "不同地區每天的圖片可能不一樣", "zh-CN": "不同地区每天的图片可能不一样", "en": "Each region may have its own picture" },
+      "options": [
+        { "value": "auto", "label": { "zh-TW": "跟隨語言", "zh-CN": "跟随语言", "en": "Match language" } },
+        { "value": "zh-CN", "label": { "zh-TW": "中國", "zh-CN": "中国", "en": "China" } },
+        { "value": "en-US", "label": { "zh-TW": "美國", "zh-CN": "美国", "en": "United States" } },
+        { "value": "en-GB", "label": { "zh-TW": "英國", "zh-CN": "英国", "en": "United Kingdom" } },
+        { "value": "ja-JP", "label": { "zh-TW": "日本", "zh-CN": "日本", "en": "Japan" } },
+        { "value": "en-WW", "label": { "zh-TW": "全球", "zh-CN": "全球", "en": "Worldwide" } }
+      ] }
+  ]
+}

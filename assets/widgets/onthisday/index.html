@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="ev" id="ev" hidden>
+    <div class="head">
+      <span class="date w-label" id="date"></span>
+      <span class="pos w-label" id="pos"></span>
+      <span class="btns" data-no-drag>
+        <button class="w-btn arrow" id="prev"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <button class="w-btn arrow" id="next"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+      </span>
+    </div>
+    <div class="year"><span class="y w-display" id="year"></span><span class="ago" id="ago"></span></div>
+    <p class="text" id="text"></p>
+    <div class="line" id="line" aria-hidden="true"></div>
+    <a class="more w-label" href="#" id="more" data-no-drag></a>
+  </main>
+  <div class="msg" id="msg"><span id="msg-text"></span><button class="w-btn" id="retry" data-no-drag hidden></button></div>
+  <script src="main.js"></script>
+</body>
+</html>

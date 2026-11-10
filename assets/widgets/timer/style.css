@@ -1,0 +1,72 @@
+body { container-type: size; display: flex; flex-direction: column; gap: 0.5rem; }
+[hidden] { display: none !important; }
+
+/* the two tools as small tabs */
+.modes { display: flex; gap: 2px; align-self: flex-start; padding: 2px; border-radius: 99px; background: var(--w-control-bg); }
+.modes button {
+  position: relative; border: 0; border-radius: 99px; padding: 2px 11px; background: transparent;
+  color: var(--w-fg-muted); font-size: 0.8rem; cursor: pointer; text-shadow: inherit;
+}
+.modes button.on { background: var(--w-hover); color: var(--w-fg); font-weight: 600; }
+.modes button.busy::after { content: ""; position: absolute; top: 3px; right: 4px; width: 5px; height: 5px; border-radius: 50%; background: var(--w-accent); }
+
+.pane { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.readout { display: flex; align-items: baseline; min-height: 0; }
+.time { font-size: min(30cqh, 17cqw); white-space: nowrap; cursor: default; outline: none; }
+.time small { font-size: 0.45em; color: var(--w-fg-muted); letter-spacing: 0; }
+body.cd-idle .cd .time { cursor: text; }
+body.cd-idle .cd .time:hover, body.cd-idle .cd .time:focus-visible { text-decoration: underline dotted var(--w-fg-faint); text-underline-offset: 0.12em; }
+.edit { font-family: var(--w-font-num); font-size: min(18cqh, 10cqw); width: 7em; padding: 0 0.3em; }
+.edit.bad { outline: 1.5px solid var(--w-danger); outline-offset: 0; }
+.edit-hint { margin-top: -0.25rem; font-size: 0.75rem; color: var(--w-danger); }
+
+/* countdown: presets before it starts, a draining bar while it runs */
+.track { display: none; }
+.track > i { transition: none; } /* it moves every second; an animation each time would never rest */
+body:not(.cd-idle) .cd .track { display: block; }
+body:not(.cd-idle) .presets { display: none; }
+/* one row only: whatever doesn't fit wraps out of sight */
+.presets { display: flex; gap: 2px; flex-wrap: wrap; align-content: flex-start; overflow: hidden; height: 1.6rem; margin-left: -6px; }
+.presets .w-btn { height: 1.6rem; font-size: 0.8rem; padding: 0 7px; }
+.ends { display: none; font-size: 0.8rem; color: var(--w-fg-muted); }
+body.cd-running .cd .ends, body.cd-paused .cd .ends { display: block; }
+.presets .w-btn.on { color: var(--w-fg); background: var(--w-hover); }
+.buttons { display: flex; gap: 4px; margin-top: auto; }
+.buttons .is-primary { padding-inline: 14px; }
+/* blinks for a few seconds, then stays lit: an endless animation would keep the CPU busy */
+body.cd-done .cd .time { color: var(--w-accent); animation: ring 1s ease-in-out 8; }
+@keyframes ring { 50% { opacity: 0.5; } }
+@media (prefers-reduced-motion: reduce) { body.cd-done .cd .time { animation: none; } }
+
+/* stopwatch laps: the one running on top, then newest first */
+.laps { list-style: none; margin: 0; padding: 0; flex: 1; min-height: 0; overflow-y: auto; font-size: 0.8rem; scrollbar-width: none; }
+.laps li { display: flex; justify-content: space-between; padding: 0.18em 0; color: var(--w-fg-muted); }
+.laps li + li { border-top: 1px solid var(--w-rule); }
+.laps li.cur { color: var(--w-fg); }
+.laps .fast { color: var(--w-accent); }
+.laps .slow { color: var(--w-warn); }
+.laps small { font-size: 0.85em; }
+body[data-mode="sw"] .time { font-size: min(26cqh, 15cqw); }
+@container (max-height: 160px) { .laps { display: none; } .ends { display: none !important; } }
+
+/* ── 玻璃上的字: big thin figures; tabs and buttons as plain words ── */
+html[data-theme="type"] .modes { background: transparent; padding: 0; margin-left: -8px; }
+html[data-theme="type"] .modes button.on { background: transparent; text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--w-accent); }
+html[data-theme="type"] .time { font-size: min(40cqh, 22cqw); margin-left: -0.04em; }
+html[data-theme="type"] body[data-mode="sw"] .time { font-size: min(34cqh, 19cqw); }
+html[data-theme="type"] .track { height: 2px; }
+html[data-theme="type"] .w-btn.is-primary { background: transparent; color: var(--w-fg); text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--w-accent); text-shadow: inherit; }
+html[data-theme="type"] .buttons { margin-left: -8px; }
+html[data-theme="type"] .laps li + li { border-top: 0; }
+
+/* ── 書桌上的紙: an ink timetable ── */
+html[data-theme="paper"] .modes { background: transparent; padding: 0; gap: 12px; }
+html[data-theme="paper"] .modes button { padding: 0 0 2px; border-radius: 0; font-family: var(--w-font-title); font-size: 0.93rem; }
+html[data-theme="paper"] .modes button.on { background: transparent; box-shadow: inset 0 -2px 0 var(--w-fg); }
+html[data-theme="paper"] .modes button.busy::after { top: 0; right: -7px; }
+html[data-theme="paper"] .time { font-family: var(--w-font-num); }
+html[data-theme="paper"] .laps li + li { border-top-style: dotted; }
+html[data-theme="paper"] .laps .fast { color: var(--w-fg); font-weight: 600; }
+html[data-theme="paper"] .laps .slow { color: var(--w-accent); }
+html[data-theme="paper"] .presets .w-btn.on { background: transparent; box-shadow: inset 0 0 0 1px var(--w-fg); }
+html[data-theme="paper"] .w-btn.is-primary { background: var(--w-fg); color: var(--w-bg-solid); border-radius: 3px; }

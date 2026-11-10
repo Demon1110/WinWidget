@@ -1,0 +1,62 @@
+body { container-type: size; }
+
+.clock { height: 100%; display: flex; flex-direction: column; }
+.head { display: flex; justify-content: space-between; align-items: center; min-height: 1.4em; }
+.date { font-size: 0.857rem; color: var(--w-fg-muted); }
+.seal { display: none; }
+
+.time { display: flex; align-items: baseline; margin: auto 0; white-space: nowrap; }
+.hm { font-size: min(46cqh, 22cqw); }
+.sec { font-size: min(15cqh, 7.5cqw); color: var(--w-fg-muted); margin-left: 0.35em; }
+.ampm { font-size: min(12cqh, 6cqw); color: var(--w-fg-muted); margin-left: 0.3em; }
+
+/* the day as 24 hour cells: past hours filled, this hour standing tall */
+.ticks { display: grid; grid-template-columns: repeat(24, 1fr); gap: 3px; align-items: end; height: 20px; }
+.ticks i { height: 9px; border-radius: 2px; background: var(--w-track); }
+.ticks i.past { background: color-mix(in srgb, var(--w-accent) 42%, transparent); }
+.ticks i.now { height: 20px; background: var(--w-accent); }
+.scale { display: flex; justify-content: space-between; margin-top: 5px; font-size: 0.75rem; color: var(--w-fg-muted); }
+.foot { display: none; }
+
+body.no-date .date, body.no-date .foot { visibility: hidden; }
+
+/* container sizes are the card's inner box, i.e. without padding */
+@container (max-height: 88px) {
+  .day { display: none; }
+  .hm { font-size: min(58cqh, 22cqw); }
+}
+
+/* ── 玻璃上的字: just the type ── */
+html[data-theme="type"] .day { display: none; }
+html[data-theme="type"] .date { font-size: 1.07rem; font-weight: 600; letter-spacing: 0.04em; }
+html[data-theme="type"] .time { margin-top: 0.1em; }
+html[data-theme="type"] .hm { font-size: min(74cqh, 28cqw); margin-left: -0.04em; }
+html[data-theme="type"] .colon { color: var(--w-accent); }
+html[data-theme="type"] .sec { font-weight: 300; }
+
+/* ── 書桌上的紙: a desk card with a weekday seal ── */
+html[data-theme="paper"] .day { display: none; }
+html[data-theme="paper"] .seal.latin { font-size: 0.8rem !important; letter-spacing: -0.02em; }
+html[data-theme="paper"] .seal {
+  display: grid;
+  place-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border: 2px solid var(--w-accent);
+  border-radius: 4px;
+  color: var(--w-accent);
+  font-family: var(--w-font-title);
+  font-weight: 700;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+html[data-theme="paper"] .hm { font-size: min(48cqh, 23cqw); }
+html[data-theme="paper"] .foot {
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid var(--w-rule);
+  padding-top: 0.5em;
+}
+@container (max-height: 88px) {
+  html[data-theme="paper"] .foot { display: none; }
+}

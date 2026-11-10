@@ -1,0 +1,111 @@
+/* WinWidget developer guide — the control center's language: graphite, one mint accent. */
+:root {
+  --bg: #0e1013;
+  --side: #0b0d10;
+  --panel: #14171c;
+  --raise: #1b1f26;
+  --line: rgba(255, 255, 255, 0.07);
+  --line-strong: rgba(255, 255, 255, 0.12);
+  --fg: #e9ecef;
+  --muted: #959ca6;
+  --faint: #6a717b;
+  --accent: #7de2c4;
+  --accent-soft: rgba(125, 226, 196, 0.12);
+  --text: "Segoe UI Variable Text", "Segoe UI", "Microsoft JhengHei UI", "Microsoft YaHei UI", sans-serif;
+  --num: "Cascadia Mono", Consolas, "Microsoft JhengHei UI", monospace;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  display: grid;
+  grid-template-columns: 232px 1fr;
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.75 var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+::selection { background: rgba(125, 226, 196, 0.28); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── contents ── */
+.toc { background: var(--side); border-right: 1px solid var(--line); padding: 26px 12px; overflow-y: auto; scrollbar-width: thin; }
+.toc-title { padding: 0 12px 14px; font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: 0.02em; }
+.toc a {
+  display: block;
+  padding: 6px 12px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.45;
+  text-decoration: none;
+  transition: color 0.15s, background 0.15s;
+}
+.toc a:hover { color: var(--fg); }
+.toc a.on { color: var(--fg); background: var(--raise); box-shadow: inset 2px 0 0 var(--accent); font-weight: 600; }
+
+/* ── page ── */
+.page { overflow-y: auto; min-width: 0; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.14) transparent; }
+.doc { max-width: 880px; padding: 36px 48px 120px; }
+
+.doc h1 { margin: 0 0 10px; font-size: 26px; line-height: 1.3; font-weight: 650; letter-spacing: 0.01em; }
+.doc h1 + p { font-size: 16px; color: var(--muted); margin-bottom: 8px; }
+.doc h2 { margin: 8px 0 12px; padding-top: 10px; font-size: 20px; line-height: 1.4; font-weight: 650; }
+.doc h3 { margin: 30px 0 8px; font-size: 16px; line-height: 1.45; font-weight: 650; }
+.doc hr { border: 0; height: 1px; background: var(--line); margin: 40px 0 28px; }
+.doc p { margin: 0 0 14px; text-wrap: pretty; }
+.doc ul, .doc ol { margin: 0 0 16px; padding-left: 22px; }
+.doc li { margin: 3px 0; }
+.doc li::marker { color: var(--faint); }
+.doc strong { font-weight: 650; color: #fff; }
+.doc a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(125, 226, 196, 0.35); }
+.doc a:hover { text-decoration-color: var(--accent); }
+
+.doc code { font: 0.86em var(--num); padding: 1px 5px; border-radius: 5px; background: rgba(255, 255, 255, 0.07); color: #d9f5ec; }
+
+.code { position: relative; margin: 6px 0 18px; }
+.code pre {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: var(--side);
+  border: 1px solid var(--line);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  font: 12.5px/1.65 var(--num);
+  tab-size: 2;
+}
+.code pre code { padding: 0; background: none; color: #dfe4ea; font-size: inherit; }
+.copy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--raise);
+  color: var(--muted);
+  font: 12px var(--text);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+}
+.code:hover .copy, .copy:focus-visible, .copy.done { opacity: 1; }
+.copy:hover { color: var(--fg); }
+.copy.done { color: #0b1512; background: var(--accent); border-color: var(--accent); font-weight: 600; }
+
+.table { margin: 4px 0 18px; overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+.table table { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.6; }
+.table th { text-align: left; font-weight: 600; font-size: 13px; color: var(--muted); background: var(--panel); padding: 8px 14px; white-space: nowrap; }
+.table td { padding: 8px 14px; border-top: 1px solid var(--line); vertical-align: top; }
+.table td:first-child { white-space: nowrap; }
+.table td code { white-space: nowrap; }
+
+@media (max-width: 760px) {
+  body { grid-template-columns: 1fr; }
+  .toc { display: none; }
+  .doc { padding: 24px 22px 80px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }

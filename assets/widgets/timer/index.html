@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="modes" id="modes" data-no-drag>
+    <button data-mode="cd" id="m-cd"></button><button data-mode="sw" id="m-sw"></button>
+  </nav>
+
+  <section class="pane cd" id="cd">
+    <div class="readout">
+      <span class="time w-display" id="cd-time" tabindex="0" data-no-drag></span>
+      <input class="w-input edit" id="cd-edit" inputmode="numeric" autocomplete="off" spellcheck="false" hidden data-no-drag aria-describedby="cd-hint">
+    </div>
+    <div class="edit-hint" id="cd-hint" role="alert" hidden></div>
+    <div class="w-bar track" id="cd-track"><i id="cd-bar"></i></div>
+    <div class="ends" id="cd-ends"></div>
+    <div class="presets" id="presets" data-no-drag></div>
+    <div class="buttons">
+      <button class="w-btn is-primary" id="cd-main" data-no-drag></button>
+      <button class="w-btn" id="cd-reset" data-no-drag></button>
+    </div>
+  </section>
+
+  <section class="pane sw" id="sw" hidden>
+    <div class="readout"><span class="time w-display" id="sw-time"></span></div>
+    <ol class="laps" id="laps"></ol>
+    <div class="buttons">
+      <button class="w-btn is-primary" id="sw-main" data-no-drag></button>
+      <button class="w-btn" id="sw-second" data-no-drag></button>
+    </div>
+  </section>
+  <script src="main.js"></script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "id": "winwidget.launcher",
+  "name": { "zh-TW": "快捷啟動", "zh-CN": "快捷启动", "en": "Launcher" },
+  "description": { "zh-TW": "常用程式、資料夾、網址，一點就打開；把檔案拖進來就能加入", "zh-CN": "常用程序、文件夹、网址，一点就打开；把文件拖进来就能加入", "en": "Programs, folders and links one click away; drop files on it to add them" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "productivity",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 340, "height": 160, "minWidth": 90, "minHeight": 80, "maxWidth": 1000, "maxHeight": 800, "grow": 0.7 },
+  "permissions": ["shell.launch", "shell.open"],
+  "settings": [
+    { "key": "labels", "type": "toggle", "label": { "zh-TW": "顯示名稱", "zh-CN": "显示名称", "en": "Show names" }, "default": true },
+    { "key": "size", "type": "select", "label": { "zh-TW": "圖標大小", "zh-CN": "图标大小", "en": "Icon size" }, "default": "medium",
+      "options": [
+        { "value": "small", "label": { "zh-TW": "小", "zh-CN": "小", "en": "Small" } },
+        { "value": "medium", "label": { "zh-TW": "中", "zh-CN": "中", "en": "Medium" } },
+        { "value": "large", "label": { "zh-TW": "大", "zh-CN": "大", "en": "Large" } }
+      ] }
+  ]
+}

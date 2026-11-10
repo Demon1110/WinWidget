@@ -1,0 +1,19 @@
+{
+  "id": "winwidget.forecast",
+  "name": { "zh-TW": "一週天氣", "zh-CN": "一周天气", "en": "7-day forecast" },
+  "description": { "zh-TW": "未來 7 天的天氣、最高最低溫和降雨機率", "zh-CN": "未来 7 天的天气、最高最低温和降雨概率", "en": "The next 7 days: weather, highs and lows, chance of rain" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "weather",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 360, "height": 210, "minWidth": 240, "minHeight": 140, "maxWidth": 900, "maxHeight": 600, "grow": 1 },
+  "permissions": ["network:api.open-meteo.com", "network:geocoding-api.open-meteo.com", "network:get.geojs.io"],
+  "settings": [
+    { "key": "city", "type": "text", "label": { "zh-TW": "城市", "zh-CN": "城市", "en": "City" }, "default": "",
+      "placeholder": { "zh-TW": "留空：按網絡位置自動定位", "zh-CN": "留空：按网络位置自动定位", "en": "Empty: locate from your network" } },
+    { "key": "unit", "type": "select", "label": { "zh-TW": "溫度單位", "zh-CN": "温度单位", "en": "Unit" }, "default": "celsius",
+      "options": [ { "value": "celsius", "label": "°C" }, { "value": "fahrenheit", "label": "°F" } ] }
+  ]
+}

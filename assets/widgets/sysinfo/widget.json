@@ -1,0 +1,22 @@
+{
+  "id": "winwidget.sysinfo",
+  "name": { "zh-TW": "系統監控", "zh-CN": "系统监控", "en": "System monitor" },
+  "description": { "zh-TW": "CPU、記憶體、磁碟與網速", "zh-CN": "CPU、内存、磁盘与网速", "en": "CPU, memory, disk and network speed" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "system",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 300, "height": 210, "minWidth": 200, "minHeight": 130, "maxWidth": 700, "maxHeight": 500, "grow": 1 },
+  "permissions": ["system"],
+  "settings": [
+    { "key": "interval", "type": "select", "label": { "zh-TW": "刷新頻率", "zh-CN": "刷新频率", "en": "Refresh rate" }, "default": 1000,
+      "options": [
+        { "value": 1000, "label": { "zh-TW": "每秒", "zh-CN": "每秒", "en": "Every second" } },
+        { "value": 2000, "label": { "zh-TW": "每 2 秒", "zh-CN": "每 2 秒", "en": "Every 2 seconds" } },
+        { "value": 5000, "label": { "zh-TW": "每 5 秒", "zh-CN": "每 5 秒", "en": "Every 5 seconds" } }
+      ] },
+    { "key": "drive", "type": "text", "label": { "zh-TW": "磁碟", "zh-CN": "磁盘", "en": "Drive" }, "default": "C:" }
+  ]
+}

@@ -1,0 +1,243 @@
+/* WinWidget base stylesheet. Loaded automatically before the theme and the widget's own CSS.
+ *
+ * Layout: <html> is the transparent window, padded by --w-margin to leave room for the shadow;
+ * <body> is the card. Put your content straight into <body>.
+ * Use the --w-* variables and the w-* classes below, and your widget follows every theme
+ * and the user's appearance settings. Themes set html[data-theme="<id>"]. */
+
+:root {
+  --w-font-fallback: "Segoe UI Variable Text", "Segoe UI", "Microsoft JhengHei UI", "Microsoft YaHei UI", sans-serif;
+  --w-font: var(--w-font-fallback);
+  --w-font-num: var(--w-font);          /* figures */
+  --w-font-display: var(--w-font-num);  /* the one big number of a widget */
+  --w-font-title: var(--w-font);        /* headings */
+  --w-num-weight: 400;
+  --w-display-weight: 300;
+  --w-display-tracking: -0.02em;
+
+  --w-bg: rgba(22, 24, 34, 0.62);
+  --w-bg-solid: rgb(22, 24, 34);        /* the card colour without transparency */
+  --w-fg: #ffffff;
+  --w-fg-muted: color-mix(in srgb, var(--w-fg) 62%, transparent);
+  --w-fg-faint: color-mix(in srgb, var(--w-fg) 18%, transparent);
+  --w-accent: #4cc9f0;
+  --w-on-accent: #0b0d10;
+  --w-warn: #ffb547;
+  --w-danger: #ff6b5e;
+  --w-border: rgba(255, 255, 255, 0.10);
+  --w-rule: rgba(255, 255, 255, 0.09);
+  --w-track: rgba(255, 255, 255, 0.09);
+  --w-control-bg: rgba(255, 255, 255, 0.06);
+  --w-hover: rgba(255, 255, 255, 0.07);
+  --w-text-shadow: none;
+
+  --w-radius: 16px;
+  --w-padding: 16px;
+  --w-margin: 20px;
+  /* lengths divided by the zoom, so a bigger card keeps the same shadow */
+  --w-shadow: 0 calc(6px / var(--w-size-scale)) calc(16px / var(--w-size-scale)) rgba(0, 0, 0, 0.32);
+  --w-font-scale: 1;
+  --w-size-scale: 1;                    /* > 1 while the card is bigger than its default size (widget.json "size.grow"): the card is zoomed by it */
+  --w-opacity: 1;
+  color-scheme: dark;
+}
+
+html {
+  box-sizing: border-box;
+  height: 100%;
+  margin: 0;
+  padding: var(--w-margin);
+  /* A background image (even an invisible one) stops CSS from propagating the body's
+     background to the whole window, which would paint over the shadow margin. */
+  background: transparent linear-gradient(transparent, transparent);
+  overflow: hidden;
+  font-size: calc(14px * var(--w-font-scale));
+}
+
+*, *::before, *::after { box-sizing: inherit; }
+
+body {
+  position: relative;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  padding: var(--w-padding);
+  /* Bigger than its default size, a widget that asks for it ("size.grow") is magnified as a
+     whole; the corners and the outline stay as they are on screen. */
+  zoom: var(--w-size-scale);
+  border-radius: calc(var(--w-radius) / var(--w-size-scale));
+  background: var(--w-bg);
+  box-shadow: var(--w-shadow), inset 0 0 0 calc(1px / var(--w-size-scale)) var(--w-border);
+  color: var(--w-fg);
+  font-family: var(--w-font);
+  line-height: 1.4;
+  opacity: var(--w-opacity);
+  text-shadow: var(--w-text-shadow);
+  user-select: none;
+  cursor: default;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Frosted: the window itself is the blurred, rounded card. */
+html[data-style="frosted"] body { border-radius: 0; box-shadow: none; }
+
+input, textarea, [contenteditable] { user-select: text; font: inherit; color: inherit; }
+button { font: inherit; color: inherit; }
+
+/* ── kit: small parts every widget can use; themes restyle them through the variables ── */
+
+.w-label { font-size: 0.857rem; color: var(--w-fg-muted); letter-spacing: 0.01em; }
+.w-num { font-family: var(--w-font-num); font-weight: var(--w-num-weight); font-variant-numeric: tabular-nums; }
+.w-display {
+  font-family: var(--w-font-display);
+  font-weight: var(--w-display-weight);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--w-display-tracking);
+  line-height: 1;
+}
+.w-title { font-family: var(--w-font-title); font-weight: 600; }
+.w-rule { height: 1px; border: 0; margin: 0; background: var(--w-rule); }
+
+.w-bar { height: 4px; border-radius: 99px; background: var(--w-track); overflow: hidden; }
+.w-bar > i { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--w-accent); transition: width 0.5s ease; }
+.w-bar.is-warn > i { background: var(--w-warn); }
+
+.w-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--w-border);
+  border-radius: calc(var(--w-radius) * 0.5);
+  background: var(--w-control-bg);
+  outline: none;
+  text-shadow: none;
+}
+.w-input::placeholder { color: var(--w-fg-muted); }
+.w-input:focus { border-color: color-mix(in srgb, var(--w-accent) 70%, transparent); }
+
+.w-btn {
+  appearance: none;
+  border: 0;
+  border-radius: 8px;
+  padding: 4px 8px;
+  background: transparent;
+  color: var(--w-fg-muted);
+  cursor: pointer;
+  text-shadow: inherit;
+}
+.w-btn:hover { background: var(--w-hover); color: var(--w-fg); }
+.w-btn.is-primary { background: var(--w-accent); color: var(--w-on-accent); font-weight: 600; text-shadow: none; }
+.w-btn.is-primary:hover { filter: brightness(1.08); }
+
+/* Round check box: <button class="w-check" aria-pressed="true|false"> */
+.w-check {
+  appearance: none;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1.5px solid var(--w-fg-muted);
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.15s, border-color 0.15s;
+}
+.w-check[aria-pressed="true"] { background: var(--w-accent); border-color: var(--w-accent); }
+.w-check[aria-pressed="true"]::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--w-on-accent);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+/* Resize grip, added by the SDK when the widget is resizable. */
+.fw-resize {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 12px;
+  height: 12px;
+  cursor: nwse-resize;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 2147483647;
+  background:
+    linear-gradient(135deg, transparent 45%, var(--w-fg-muted) 45%, var(--w-fg-muted) 55%, transparent 55%,
+                    transparent 70%, var(--w-fg-muted) 70%, var(--w-fg-muted) 80%, transparent 80%);
+}
+body:hover .fw-resize { opacity: 0.6; }
+html[data-locked="true"] .fw-resize { display: none; }
+
+/* Arrange mode: a dashed outline with the widget's name and size. */
+.fw-edit-label { display: none; }
+html[data-edit="true"] body { outline: 1.5px dashed color-mix(in srgb, var(--w-accent) 80%, transparent); outline-offset: -1.5px; }
+html[data-edit="true"] .fw-resize { opacity: 0.8; }
+html[data-edit="true"] .fw-edit-label {
+  display: block;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 3px 10px;
+  border-radius: 99px;
+  background: rgba(8, 10, 14, 0.82);
+  color: #e9ecef;
+  font: 600 12px/1.4 "Segoe UI Variable Text", "Microsoft JhengHei UI", sans-serif;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-shadow: none;
+  pointer-events: none;
+  z-index: 2147483646;
+}
+
+/* Developer mode: the latest script error, at the bottom of the card. */
+.fw-error {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 6px 6px 10px;
+  border-radius: 8px;
+  background: #2b100e;
+  box-shadow: inset 3px 0 0 #ff6b5e, 0 4px 12px rgba(0, 0, 0, 0.4);
+  color: #ffd9d4;
+  font: 11.5px/1.45 "Cascadia Mono", Consolas, monospace;
+  text-shadow: none;
+  cursor: pointer;
+  z-index: 2147483645;
+  animation: fw-error-in 0.18s ease-out;
+}
+.fw-error-text { flex: 1; min-width: 0; }
+.fw-error-msg { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-word; }
+.fw-error-at { display: block; color: #ff9d92; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fw-error-at:empty { display: none; }
+.fw-error-n { color: #ff9d92; }
+.fw-error-x { flex: none; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: #ff9d92; font: 14px/1 sans-serif; cursor: pointer; }
+.fw-error-x:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+@keyframes fw-error-in { from { opacity: 0; transform: translateY(4px); } }
+
+/* Locate: two quick pulses of an accent ring around the card. */
+.fw-identify {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 3px var(--w-accent);
+  pointer-events: none;
+  z-index: 2147483646;
+  animation: fw-identify 1.6s ease-out forwards;
+}
+@keyframes fw-identify {
+  0%, 50% { opacity: 0; }
+  10%, 35% { opacity: 1; }
+  60%, 85% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .fw-identify { animation-duration: 2.4s; } }

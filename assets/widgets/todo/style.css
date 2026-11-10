@@ -1,0 +1,38 @@
+[hidden] { display: none !important; }
+
+.todo { height: 100%; display: flex; flex-direction: column; gap: 0.6rem; }
+header { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
+.title { font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.count { font-family: var(--w-font-num); font-size: 0.857rem; color: var(--w-fg-muted); white-space: nowrap; }
+.count b { color: var(--w-fg); font-weight: var(--w-num-weight); }
+.count .big { display: none; }
+
+.list { list-style: none; margin: 0; padding: 0; flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--w-fg-faint) transparent; }
+.list li { display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.38rem 0; }
+.list .w-check { margin-top: 0.12rem; }
+.list .text { flex: 1; min-width: 0; overflow-wrap: anywhere; line-height: 1.4; }
+.list li.done .text { color: var(--w-fg-muted); text-decoration: line-through; text-decoration-color: var(--w-fg-faint); }
+.list .del { padding: 0 6px; font-size: 1.05rem; line-height: 1.2; opacity: 0; }
+.list li:hover .del { opacity: 1; }
+
+.empty { flex: 1; display: grid; place-content: center; text-align: center; }
+footer { display: flex; gap: 0.4rem; align-items: center; }
+footer form { flex: 1; }
+.clear { white-space: nowrap; font-size: 0.8rem; }
+
+/* ── 玻璃上的字: what's left, as one big number ── */
+html[data-theme="type"] .progress { display: none; }
+html[data-theme="type"] header { flex-direction: row-reverse; justify-content: flex-end; align-items: baseline; gap: 0.6rem; }
+html[data-theme="type"] .count .big {
+  display: inline; font-family: var(--w-font-display); font-weight: var(--w-display-weight);
+  letter-spacing: var(--w-display-tracking); font-size: 3.4rem; line-height: 0.9; color: var(--w-fg);
+}
+html[data-theme="type"] .count .small { display: none; }
+html[data-theme="type"] .title { font-weight: 600; font-size: 1.07rem; }
+
+/* ── 書桌上的紙: a printed check list on ruled lines ── */
+html[data-theme="paper"] .progress { display: none; }
+html[data-theme="paper"] header { border-bottom: 2px solid var(--w-fg); padding-bottom: 0.35rem; }
+html[data-theme="paper"] .title { font-size: 1.15rem; }
+html[data-theme="paper"] .list li { border-bottom: 1px solid var(--w-rule); padding: 0.42rem 0; }
+html[data-theme="paper"] .list li.done .text { text-decoration-color: var(--w-fg); }

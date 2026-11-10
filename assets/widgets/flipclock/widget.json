@@ -1,0 +1,18 @@
+{
+  "id": "winwidget.flipclock",
+  "name": { "zh-TW": "翻頁時鐘", "zh-CN": "翻页时钟", "en": "Flip clock" },
+  "description": { "zh-TW": "翻牌式數字，換分鐘時翻頁", "zh-CN": "翻牌式数字，换分钟时翻页", "en": "Split-flap digits that flip every minute" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "time",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 320, "height": 160, "minWidth": 170, "minHeight": 90, "maxWidth": 900, "maxHeight": 420, "grow": 1 },
+  "permissions": [],
+  "settings": [
+    { "key": "use24h", "type": "toggle", "label": { "zh-TW": "24 小時制", "zh-CN": "24 小时制", "en": "24-hour clock" }, "default": true },
+    { "key": "showSeconds", "type": "toggle", "label": { "zh-TW": "顯示秒", "zh-CN": "显示秒", "en": "Show seconds" }, "default": false },
+    { "key": "showDate", "type": "toggle", "label": { "zh-TW": "顯示日期", "zh-CN": "显示日期", "en": "Show date" }, "default": true }
+  ]
+}

@@ -1,0 +1,41 @@
+body { --note-size: 1.07rem; --line: 1.65; display: flex; flex-direction: column; }
+body.size-small { --note-size: 0.93rem; }
+body.size-large { --note-size: 1.3rem; }
+
+textarea {
+  flex: 1;
+  width: 100%;
+  resize: none;
+  border: 0;
+  outline: none;
+  padding: 0;
+  background: transparent;
+  font-size: var(--note-size);
+  line-height: var(--line);
+  text-shadow: inherit;
+  scrollbar-width: thin;
+  scrollbar-color: var(--w-fg-faint) transparent;
+}
+textarea::placeholder { color: var(--w-fg-muted); }
+
+.count { align-self: flex-end; font-size: 0.7rem; color: var(--w-fg-muted); opacity: 0; transition: opacity 0.2s; margin-top: 0.2rem; }
+body:hover .count, body:focus-within .count { opacity: 1; }
+
+/* ── 書桌上的紙: an index card with ruled lines and a red top line ── */
+html[data-theme="paper"] body { padding-top: calc(var(--w-padding) + 0.9rem); }
+html[data-theme="paper"] body::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--w-padding) + 0.2rem);
+  height: 2px;
+  background: color-mix(in srgb, var(--w-accent) 70%, transparent);
+}
+html[data-theme="paper"] textarea {
+  font-family: var(--w-font-title);
+  background-image: linear-gradient(transparent calc(var(--note-size) * var(--line) - 1px), color-mix(in srgb, var(--w-fg) 13%, transparent) 0);
+  background-size: 100% calc(var(--note-size) * var(--line));
+  background-attachment: local;
+}
+html[data-theme="paper"] .count { display: none; }

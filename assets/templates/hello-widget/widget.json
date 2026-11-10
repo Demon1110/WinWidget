@@ -1,0 +1,21 @@
+{
+  // 組件的說明檔。可以寫註解（像這兩行）。
+  // 完整說明：控制中心 → 設定 → 開發文檔
+  "id": "{{id}}",
+  "name": "{{name}}",
+  "description": "我自己寫的組件",
+  "version": "1.0.0",
+  "author": "",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "size": { "width": 260, "height": 150, "minWidth": 180, "minHeight": 110, "grow": 1 },
+
+  // 要用到的權限，例如 "system"（系統資訊）、"network:api.example.com"（連到這個網站）
+  "permissions": [],
+
+  // 控制中心「內容」頁會照這裏自動生成表單
+  "settings": [
+    { "key": "greeting", "type": "text", "label": "問候語", "default": "你好" },
+    { "key": "showSeconds", "type": "toggle", "label": "顯示秒數", "default": false }
+  ]
+}

@@ -1,0 +1,47 @@
+body { container-type: size; display: flex; flex-direction: column; gap: 0.4rem; }
+
+.history { list-style: none; margin: 0; padding: 0; flex: 1 1 0; min-height: 0; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; justify-content: flex-end; }
+.history li { flex: none; }
+.history button { width: 100%; display: flex; justify-content: flex-end; align-items: baseline; gap: 0.4em; padding: 1px 4px; border: 0; border-radius: 6px; background: transparent; cursor: pointer; text-align: right; color: var(--w-fg-muted); text-shadow: inherit; }
+.history button:hover { background: var(--w-hover); color: var(--w-fg); }
+.history .q { font-size: 0.78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.history .a { font-size: 0.9rem; color: var(--w-fg); white-space: nowrap; }
+
+.screen { flex: none; display: flex; flex-direction: column; align-items: stretch; }
+.expr {
+  width: 100%; border: 0; outline: none; background: transparent; padding: 0; text-align: right;
+  font-family: var(--w-font-display); font-weight: var(--w-display-weight); letter-spacing: var(--w-display-tracking);
+  font-size: min(2.4rem, 13cqw); line-height: 1.15; caret-color: var(--w-accent); text-shadow: inherit;
+}
+.expr::placeholder { color: var(--w-fg-muted); }
+.expr.bad { color: var(--w-warn); }
+.result { min-height: 1.3em; text-align: right; font-size: 0.93rem; color: var(--w-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── 量被畫出來: graphite keys, the operators in mint, "=" filled ── */
+.keys { flex: none; display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: min(2.4rem, 11cqh); gap: 5px; }
+.k { border: 0; border-radius: calc(var(--w-radius) * 0.4); background: var(--w-control-bg); color: var(--w-fg); font-family: var(--w-font-num); font-size: 1.05rem; cursor: pointer; text-shadow: inherit; transition: background 0.12s; }
+.k:hover { background: var(--w-hover); }
+.k:active { transform: scale(0.96); }
+.k.op { color: var(--w-accent); font-size: 1.2rem; }
+.k.fn { color: var(--w-fg-muted); }
+.k.eq { background: var(--w-accent); color: var(--w-on-accent); font-size: 1.2rem; font-weight: 600; text-shadow: none; }
+.k.eq:hover { filter: brightness(1.08); }
+@container (max-height: 250px) { .history { display: none; } .screen { flex: 1; justify-content: flex-end; } }
+@container (max-height: 160px) { .keys { display: none; } .screen { justify-content: center; } }
+
+/* ── 玻璃上的字: keys as bare figures on the wallpaper ── */
+html[data-theme="type"] .k { background: rgba(255, 255, 255, 0.07); border-radius: 99px; font-family: var(--w-font-display); font-weight: 300; font-size: 1.2rem; }
+html[data-theme="type"] .k:hover { background: rgba(255, 255, 255, 0.16); }
+html[data-theme="type"] .k.op { color: var(--w-fg); font-weight: 400; }
+html[data-theme="type"] .k.fn { color: var(--w-fg-muted); }
+html[data-theme="type"] .k.eq { background: var(--w-accent); color: var(--w-on-accent); }
+html[data-theme="type"] .expr { font-size: min(3rem, 15cqw); }
+
+/* ── 書桌上的紙: an adding-machine tape above printed keys ── */
+html[data-theme="paper"] .history { border-bottom: 1px dashed var(--w-rule); }
+html[data-theme="paper"] .history .a, html[data-theme="paper"] .expr { font-family: var(--w-font-num); }
+html[data-theme="paper"] .k { background: transparent; box-shadow: inset 0 0 0 1px var(--w-rule); border-radius: 3px; font-family: var(--w-font-num); }
+html[data-theme="paper"] .k:hover { background: var(--w-hover); }
+html[data-theme="paper"] .k.op { color: var(--w-fg); font-weight: 600; }
+html[data-theme="paper"] .k.eq { background: var(--w-accent); color: var(--w-on-accent); box-shadow: none; }
+html[data-theme="paper"] .expr { caret-color: var(--w-accent); }

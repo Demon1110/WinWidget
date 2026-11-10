@@ -1,0 +1,19 @@
+{
+  "id": "type",
+  "name": { "zh-TW": "玻璃上的字", "zh-CN": "玻璃上的字", "en": "Type" },
+  "description": {
+    "zh-TW": "沒有卡片，超大細體數字直接浮在桌布上",
+    "zh-CN": "没有卡片，超大细体数字直接浮在壁纸上",
+    "en": "No cards: large thin type straight on the wallpaper"
+  },
+  "appearance": {
+    "style": "transparent",
+    "shadow": false,
+    "background": "#0a0f24",
+    "backgroundOpacity": 0,
+    "textColor": "#ffffff",
+    "accentColor": "system",
+    "radius": 18,
+    "padding": 12
+  }
+}

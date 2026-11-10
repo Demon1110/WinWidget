@@ -1,0 +1,46 @@
+body { container-type: size; }
+[hidden] { display: none !important; }
+
+.pic { position: relative; height: 100%; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.frame { position: relative; flex: 1; min-height: 0; overflow: hidden; border-radius: calc(var(--w-radius) * 0.55); background: var(--w-track); }
+.frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.4s ease; cursor: pointer; }
+.frame img.ready { opacity: 1; }
+.cap { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.title { font-size: 0.93rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.credit { font-size: 0.72rem; color: var(--w-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.no-caption .cap { display: none; }
+.msg { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.4rem; color: var(--w-fg-muted); font-size: 0.9rem; }
+
+/* day arrows, shown while the mouse is over the picture */
+.nav { position: absolute; top: 8px; right: 8px; display: flex; align-items: center; gap: 2px; padding: 2px; border-radius: 99px; background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(6px); color: #fff; opacity: 0; transition: opacity 0.2s; }
+body:hover .nav { opacity: 1; }
+.arrow { width: 24px; height: 24px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
+.arrow:hover:not(:disabled) { background: rgba(255, 255, 255, 0.18); }
+.arrow:disabled { opacity: 0.35; cursor: default; }
+.arrow svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.day { font-size: 0.75rem; min-width: 2.6em; text-align: center; font-variant-numeric: tabular-nums; }
+
+/* ── 量被畫出來: the picture fills the card; the caption sits on it ── */
+html:not([data-theme="type"]):not([data-theme="paper"]) body { padding: 0; }
+html:not([data-theme="type"]):not([data-theme="paper"]) .pic { gap: 0; }
+html:not([data-theme="type"]):not([data-theme="paper"]) .frame { border-radius: 0; }
+html:not([data-theme="type"]):not([data-theme="paper"]) .cap {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 2.2rem var(--w-padding) 0.75rem;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.62)); color: #fff; pointer-events: none;
+}
+html:not([data-theme="type"]):not([data-theme="paper"]) .credit { color: rgba(255, 255, 255, 0.78); }
+
+/* ── 玻璃上的字: a rounded photo, the words under it on the wallpaper ── */
+html[data-theme="type"] .frame { border-radius: calc(var(--w-radius) * 0.7); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); }
+html[data-theme="type"] .title { font-size: 1.02rem; }
+html[data-theme="type"] .credit { color: var(--w-fg-muted); }
+html[data-theme="type"] body:hover, html[data-theme="type"] body:focus-within { background: transparent; box-shadow: none; }
+
+/* ── 書桌上的紙: a print pasted on the card, with a white border and a handwritten-looking caption ── */
+html[data-theme="paper"] .frame { border-radius: 1px; border: 6px solid #fffdf8; box-shadow: 0 1px 3px rgba(31, 28, 24, 0.25); transform: rotate(-0.6deg); }
+html[data-theme="paper"] .title { font-family: var(--w-font-title); font-weight: 600; font-size: 0.98rem; }
+html[data-theme="paper"] .cap { padding: 0 0.2rem; }
+html[data-theme="paper"] .nav { top: 14px; right: 14px; }
+/* short: the picture first; the credit, then the caption, give way */
+@container (max-height: 160px) { .credit { display: none; } }
+@container (max-height: 115px) { html[data-theme="type"] .cap, html[data-theme="paper"] .cap { display: none; } }

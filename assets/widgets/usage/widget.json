@@ -1,0 +1,22 @@
+{
+  "id": "winwidget.usage",
+  "name": { "zh-TW": "使用曲線", "zh-CN": "使用曲线", "en": "Usage graph" },
+  "description": { "zh-TW": "CPU 和記憶體最近幾分鐘的曲線", "zh-CN": "CPU 和内存最近几分钟的曲线", "en": "CPU and memory over the last few minutes" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "system",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 320, "height": 180, "minWidth": 200, "minHeight": 110, "maxWidth": 900, "maxHeight": 500, "grow": 1 },
+  "permissions": ["system"],
+  "settings": [
+    { "key": "span", "type": "select", "label": { "zh-TW": "顯示多久", "zh-CN": "显示多久", "en": "Time shown" }, "default": 300,
+      "options": [
+        { "value": 60, "label": { "zh-TW": "1 分鐘", "zh-CN": "1 分钟", "en": "1 minute" } },
+        { "value": 300, "label": { "zh-TW": "5 分鐘", "zh-CN": "5 分钟", "en": "5 minutes" } },
+        { "value": 900, "label": { "zh-TW": "15 分鐘", "zh-CN": "15 分钟", "en": "15 minutes" } }
+      ] },
+    { "key": "memory", "type": "toggle", "label": { "zh-TW": "顯示記憶體", "zh-CN": "显示内存", "en": "Show memory" }, "default": true }
+  ]
+}

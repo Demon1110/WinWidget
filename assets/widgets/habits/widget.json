@@ -1,0 +1,21 @@
+{
+  "id": "winwidget.habits",
+  "name": { "zh-TW": "習慣打卡", "zh-CN": "习惯打卡", "en": "Habits" },
+  "description": { "zh-TW": "每天打勾，看連續天數和最近幾週的格子", "zh-CN": "每天打勾，看连续天数和最近几周的格子", "en": "Tick off each day; see your streak and the last few weeks" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "productivity",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 340, "height": 190, "minWidth": 200, "minHeight": 90, "maxWidth": 900, "maxHeight": 700, "grow": 0.7 },
+  "permissions": [],
+  "settings": [
+    { "key": "days", "type": "select", "label": { "zh-TW": "顯示幾天", "zh-CN": "显示几天", "en": "Days shown" }, "default": 14,
+      "options": [
+        { "value": 7, "label": { "zh-TW": "7 天", "zh-CN": "7 天", "en": "7 days" } },
+        { "value": 14, "label": { "zh-TW": "14 天", "zh-CN": "14 天", "en": "14 days" } },
+        { "value": 28, "label": { "zh-TW": "28 天", "zh-CN": "28 天", "en": "28 days" } }
+      ] }
+  ]
+}

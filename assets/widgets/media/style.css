@@ -1,0 +1,131 @@
+body { container-type: size; }
+.wrap { height: 100%; display: flex; gap: 0.85rem; align-items: center; }
+[hidden] { display: none !important; }
+
+.art { position: relative; flex: none; width: min(42cqw, 100cqh, 220px); aspect-ratio: 1; border-radius: calc(var(--w-radius) * 0.6); background: var(--w-track); display: grid; place-items: center; }
+.art img#cover { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; opacity: 0; }
+.art.has img#cover { opacity: 1; }
+.art .ph { width: 40%; height: 40%; fill: none; stroke: var(--w-fg-faint); stroke-width: 1.4; stroke-linecap: round; }
+.art.has .ph { display: none; }
+/* the app's icon on the corner of the cover */
+.badge { position: absolute; right: -5px; bottom: -5px; width: 22px; height: 22px; padding: 3px; border-radius: 7px; background: var(--w-bg-solid); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3); }
+body.no-app .badge, body.none .badge { display: none; }
+
+.main { flex: 1; min-width: 0; align-self: stretch; display: flex; flex-direction: column; justify-content: center; }
+.app { display: none; align-items: center; gap: 0.4rem; white-space: nowrap; overflow: hidden; margin-bottom: 0.35rem; font-size: 0.75rem; }
+.app img { width: 15px; height: 15px; flex: none; }
+.app span { overflow: hidden; text-overflow: ellipsis; }
+.title { font-size: 1.02rem; font-weight: 600; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.artist { font-size: 0.82rem; line-height: 1.35; color: var(--w-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.none .title { font-weight: 500; }
+body.none .artist { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 0.78rem; }
+
+.progress { position: relative; margin-top: 0.4rem; padding: 2px 0; }
+body.seekable .progress { cursor: pointer; }
+body.no-progress .progress, body.no-progress .times { display: none; }
+.wave { display: flex; align-items: center; gap: 2px; height: 15px; }
+.wave i { flex: 1; min-height: 2px; border-radius: 1px; background: var(--w-track); }
+.wave i.on { background: var(--w-accent); }
+.line { display: none; position: relative; }
+
+.row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.2rem; }
+.controls { display: flex; align-items: center; gap: 0.2rem; margin-left: -5px; }
+.controls button { appearance: none; border: 0; background: transparent; padding: 5px; border-radius: 8px; display: grid; place-items: center; cursor: pointer; color: var(--w-fg); }
+.controls button:hover:not(:disabled) { background: var(--w-hover); }
+.controls button:disabled { opacity: 0.28; cursor: default; }
+.controls svg { width: 17px; height: 17px; fill: currentColor; }
+.controls .play { width: 32px; height: 32px; border-radius: 50%; background: var(--w-accent); color: var(--w-on-accent); }
+.controls .play:hover:not(:disabled) { background: var(--w-accent); filter: brightness(1.1); }
+.controls .play svg { width: 15px; height: 15px; }
+body.none .controls .play { background: var(--w-track); color: var(--w-fg); }
+.times { margin-left: auto; font-size: 0.72rem; color: var(--w-fg-muted); white-space: nowrap; }
+
+/* small: the words and the buttons */
+@container (max-height: 84px) {
+  .progress, .times { display: none; }
+  .row { margin-top: 0.1rem; }
+  .controls .play { width: 28px; height: 28px; }
+}
+/* very short: one line, the title beside the buttons */
+@container (max-height: 56px) {
+  .main { flex-direction: row; align-items: center; gap: 0.4rem; }
+  .text { flex: 1; min-width: 0; }
+  .artist, .app { display: none !important; }
+  .row { margin: 0; }
+}
+@container (max-height: 56px) and (max-width: 260px) { #prev, #next { display: none; } }
+@container (max-width: 250px) { .times { display: none; } }
+@container (min-height: 150px) { .app { display: flex; } .badge { display: none; } }
+/* taller than wide: the cover on top, everything centred under it */
+@container (min-height: 190px) and (max-aspect-ratio: 1.15) {
+  .wrap { flex-direction: column; justify-content: center; gap: 0.75rem; }
+  .art { width: min(100cqw, 100cqh - 150px); }
+  .main { align-self: stretch; flex: none; text-align: center; }
+  .app { justify-content: center; }
+  .row { flex-direction: column; gap: 0.15rem; }
+  .times { margin: 0; order: -1; }
+  .controls { margin: 0; gap: 0.6rem; }
+}
+
+/* ── lyrics ── */
+/* the lyric takes the artist's line; the artist moves after the title */
+.title[data-by]:not([data-by=""])::after { content: "  ·  " attr(data-by); font-family: var(--w-font); font-size: 0.8em; font-weight: 400; letter-spacing: 0; color: var(--w-fg-muted); }
+.lyric { display: none; position: relative; overflow: hidden; height: 1.45em; font-size: 0.86rem; line-height: 1.45; }
+body.lyrics .lyric { display: block; }
+body.lyrics .artist { display: none; }
+.lyr { will-change: transform; transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1); }
+.lyr.jump { transition: none; }
+.lyr p { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--w-fg-muted); opacity: 0.45; transition: opacity 0.45s, color 0.45s; }
+.lyr p.on { color: var(--w-accent); opacity: 1; font-weight: 600; }
+.lyr .tr { display: none; }
+
+/* room for more: the lyrics fill it, the line playing in the middle, with translations */
+@container (min-height: 150px) {
+  body.lyrics .main { justify-content: flex-start; padding-top: 0.15rem; }
+  body.lyrics .lyric { flex: 1; height: auto; min-height: 2.9em; margin: 0.45rem 0 0.2rem; font-size: 0.92rem; }
+  body.lyrics .lyric { mask-image: linear-gradient(#000 55%, transparent); }
+  body.lyrics .lyric.many { mask-image: linear-gradient(transparent, #000 24%, #000 76%, transparent); }
+  .lyr p { white-space: normal; padding: 0.2em 0; overflow: visible; }
+  .lyr .tr { display: block; font-size: 0.84em; font-weight: 400; line-height: 1.35; opacity: 0.85; }
+  body.no-tr .lyr .tr { display: none; }
+}
+/* cover on top: it gives up some height to the words */
+@container (min-height: 190px) and (max-aspect-ratio: 1.15) {
+  body.lyrics .art { width: min(56cqw, 34cqh); }
+  body.lyrics .main { flex: 1; min-height: 0; }
+}
+
+/* ── 玻璃上的字: the cover as a photo on the wallpaper, a hairline for the time ── */
+html[data-theme="type"] .art { border-radius: 10px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35); background: rgba(255, 255, 255, 0.14); }
+html[data-theme="type"] .art .ph { stroke: rgba(255, 255, 255, 0.6); }
+html[data-theme="type"] .badge { background: rgba(20, 20, 24, 0.55); backdrop-filter: blur(8px); }
+html[data-theme="type"] .title { font-family: var(--w-font-display); font-size: 1.22rem; letter-spacing: -0.01em; }
+html[data-theme="type"] .artist { color: var(--w-fg); opacity: 0.82; font-weight: 500; }
+html[data-theme="type"] .wave { display: none; }
+html[data-theme="type"] .line { display: block; height: 2px; margin: 6px 0; border-radius: 2px; background: rgba(255, 255, 255, 0.3); }
+html[data-theme="type"] .line i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; background: var(--w-fg); }
+html[data-theme="type"] .line b { position: absolute; top: 50%; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border-radius: 50%; background: var(--w-fg); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4); }
+html[data-theme="type"] .controls svg { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45)); }
+html[data-theme="type"] .controls .play { background: transparent; color: var(--w-fg); }
+html[data-theme="type"] .controls .play svg { width: 22px; height: 22px; }
+html[data-theme="type"] .times { color: var(--w-fg); opacity: 0.8; }
+html[data-theme="type"] .lyr p { color: var(--w-fg); opacity: 0.5; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35); }
+html[data-theme="type"] .lyr p.on { opacity: 1; }
+
+/* ── 書桌上的紙: a snapshot pasted on the card, an ink rule for the time ── */
+html[data-theme="paper"] .art { border-radius: 1px; background: #fbf8f1; box-shadow: 0 1px 2px rgba(60, 40, 10, 0.25), 0 4px 10px rgba(60, 40, 10, 0.14); transform: rotate(-2deg); }
+html[data-theme="paper"] .art img#cover { inset: 4px; width: calc(100% - 8px); height: calc(100% - 8px); border-radius: 0; }
+html[data-theme="paper"] .art .ph { stroke: var(--w-fg-muted); }
+html[data-theme="paper"] .badge { right: -7px; bottom: -7px; border-radius: 50%; background: #fbf8f1; transform: rotate(2deg); }
+html[data-theme="paper"] .title { font-family: var(--w-font-title); font-size: 1.08rem; }
+html[data-theme="paper"] .artist { font-style: italic; }
+html[data-theme="paper"] .wave { display: none; }
+html[data-theme="paper"] .line { display: block; height: 1.5px; margin: 9px 0 6px; background: var(--w-fg); }
+html[data-theme="paper"] .line i { display: none; }
+html[data-theme="paper"] .line b { position: absolute; top: 50%; width: 6px; height: 14px; margin: -7px 0 0 -3px; border-radius: 1px; background: var(--w-accent); box-shadow: 0 0 0 2px var(--w-bg-solid); }
+html[data-theme="paper"] .controls .play { border-radius: 3px; background: transparent; color: var(--w-fg); box-shadow: inset 0 0 0 1.5px var(--w-fg); }
+html[data-theme="paper"] .controls .play:hover:not(:disabled) { background: var(--w-hover); filter: none; }
+html[data-theme="paper"] body.none .controls .play { background: transparent; }
+html[data-theme="paper"] .times { font-family: var(--w-font-num); }
+html[data-theme="paper"] .lyr p { font-family: var(--w-font-title); }
+html[data-theme="paper"] .lyr p.on { color: var(--w-fg); }

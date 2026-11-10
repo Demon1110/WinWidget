@@ -1,0 +1,52 @@
+body { container-type: size; }
+[hidden] { display: none !important; }
+
+.fc { height: 100%; display: flex; flex-direction: column; gap: 0.5rem; }
+.head { display: flex; justify-content: space-between; font-size: 0.857rem; color: var(--w-fg-muted); white-space: nowrap; }
+.stale { font-size: 0.7rem; }
+.msg { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.4rem; color: var(--w-fg-muted); text-align: center; font-size: 0.93rem; }
+
+/* ── 量被畫出來: a column per day; each bar spans that day's low to high on one shared scale ── */
+.days { list-style: none; margin: 0; padding: 0; flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(var(--n, 7), 1fr); column-gap: 4px; }
+.day { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; min-height: 0; }
+.dn { font-size: 0.75rem; color: var(--w-fg-muted); white-space: nowrap; }
+.today .dn { color: var(--w-fg); font-weight: 600; }
+.ic { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; opacity: 0.9; }
+.cond, .both { display: none; }
+.hi, .lo { font-size: 0.8rem; line-height: 1.1; }
+.lo { color: var(--w-fg-muted); }
+.range { position: relative; flex: 1; min-height: 10px; width: 5px; border-radius: 3px; background: var(--w-track); }
+.range i { position: absolute; left: 0; right: 0; border-radius: 3px; background: linear-gradient(var(--w-warn), var(--w-accent)); }
+.rain { font-size: 0.7rem; color: var(--w-fg-muted); min-height: 1.1em; }
+.rain.wet { color: var(--w-accent); }
+@container (max-height: 160px) { .rain { display: none; } .ic { width: 16px; height: 16px; } }
+
+/* ── 玻璃上的字: highs as big thin figures, nothing drawn ── */
+html[data-theme="type"] .head { color: var(--w-fg); font-weight: 600; font-size: 0.93rem; }
+html[data-theme="type"] .range { display: none; }
+html[data-theme="type"] .day { justify-content: center; gap: 4px; }
+html[data-theme="type"] .dn { color: var(--w-fg); font-weight: 600; font-size: 0.8rem; }
+html[data-theme="type"] .hi { order: 2; font-family: var(--w-font-display); font-weight: var(--w-display-weight); font-size: min(15cqh, 6.4cqw); letter-spacing: -0.03em; }
+html[data-theme="type"] .ic { order: 1; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35)); }
+html[data-theme="type"] .lo { order: 3; font-weight: 400; }
+html[data-theme="type"] .rain { order: 4; color: var(--w-fg); }
+
+/* ── 書桌上的紙: a printed forecast table, one day a line ── */
+html[data-theme="paper"] .head { font-family: var(--w-font-title); font-weight: 600; font-size: 1rem; color: var(--w-fg); }
+html[data-theme="paper"] .days { grid-template-columns: none; grid-template-rows: repeat(var(--n, 7), 1fr); }
+html[data-theme="paper"] .day { display: grid; grid-template-columns: 2.6em 1.4em minmax(0, 1fr) auto 2.8em; align-items: center; column-gap: 0.4em; }
+html[data-theme="paper"] .day + .day { border-top: 1px dotted var(--w-rule); }
+html[data-theme="paper"] .dn { font-size: 0.86rem; color: var(--w-fg); }
+html[data-theme="paper"] .ic { width: 16px; height: 16px; stroke-width: 1.6; }
+html[data-theme="paper"] .cond { display: block; font-size: 0.8rem; color: var(--w-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html[data-theme="paper"] .range, html[data-theme="paper"] .hi, html[data-theme="paper"] .lo { display: none; }
+html[data-theme="paper"] .both { display: block; grid-column: 4; font-family: var(--w-font-num); font-size: 0.93rem; white-space: nowrap; }
+html[data-theme="paper"] .rain { grid-column: 5; text-align: right; font-family: var(--w-font-num); }
+html[data-theme="paper"] .rain.wet { color: var(--w-accent); }
+@container (max-width: 280px) { html[data-theme="paper"] .cond { visibility: hidden; } }
+/* paper, short: fewer days, each still a readable line */
+@container (max-height: 150px) {
+  html[data-theme="paper"] body .days { grid-template-rows: none; grid-auto-rows: 1fr; }
+  html[data-theme="paper"] body .day:nth-child(n+5) { display: none; }
+}
+@container (max-height: 120px) { html[data-theme="paper"] body .day:nth-child(n+4) { display: none; } }

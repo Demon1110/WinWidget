@@ -1,0 +1,33 @@
+body { container-type: size; display: flex; flex-direction: column; justify-content: center; gap: 0.3rem; }
+[hidden] { display: none !important; }
+
+.note { flex: none; font-size: 0.8rem; color: var(--w-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.02em; }
+.box { flex: 1; min-height: 0; display: flex; align-items: center; }
+.text { width: 100%; max-height: 100%; font-family: var(--w-font); font-weight: 400; line-height: 1.16; letter-spacing: -0.01em;
+  white-space: pre-wrap; overflow-wrap: normal; word-break: normal; text-wrap: balance; outline: none; cursor: default; }
+body[data-align="center"] .text, body[data-align="center"] .note { text-align: center; }
+body[data-align="end"] .text, body[data-align="end"] .note { text-align: end; }
+body[data-weight="light"] .text { font-weight: 300; }
+body[data-weight="bold"] .text { font-weight: 700; }
+body[data-color="accent"] .text { color: var(--w-accent); }
+body[data-color="muted"] .text { color: var(--w-fg-muted); }
+body.editing .text { cursor: text; border-radius: 4px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--w-accent) 60%, transparent); user-select: text; }
+body.tight { padding-top: 4px; padding-bottom: 4px; }
+body.tight .note { display: none; }
+html[data-theme="paper"] body.tight::before { display: none; }
+
+/* ── 量被畫出來: a nameplate, the small line marked with the accent ── */
+html:not([data-theme="type"]):not([data-theme="paper"]) .note { font-family: var(--w-font-num); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; }
+html:not([data-theme="type"]):not([data-theme="paper"]) .note::before { content: ""; display: inline-block; width: 14px; height: 2px; margin: 0 8px 0 0; vertical-align: middle; background: var(--w-accent); }
+html:not([data-theme="type"]):not([data-theme="paper"]) body[data-weight="regular"] .text { font-weight: 350; }
+
+/* ── 玻璃上的字: the words straight on the wallpaper ── */
+html[data-theme="type"] body[data-font="theme"] .text { font-family: var(--w-font-display); }
+html[data-theme="type"] body[data-weight="regular"] .text { font-weight: 600; letter-spacing: -0.02em; }
+html[data-theme="type"] .note { color: var(--w-fg); font-weight: 600; opacity: 0.85; }
+
+/* ── 書桌上的紙: printed on card, a strip of tape on the corner ── */
+html[data-theme="paper"] body[data-font="theme"] .text { font-family: var(--w-font-title); }
+html[data-theme="paper"] .note { font-family: var(--w-font-title); font-style: italic; color: var(--w-accent); }
+html[data-theme="paper"] body::before { content: ""; position: absolute; top: 3px; right: 16px; width: 54px; height: 16px; rotate: 6deg; background: rgba(232, 214, 168, 0.72); box-shadow: 0 1px 2px rgba(60, 40, 10, 0.12); }
+html[data-theme="paper"] body[data-align="end"]::before { right: auto; left: 16px; rotate: -6deg; }

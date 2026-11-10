@@ -1,0 +1,23 @@
+/* <body> is the card. Use the --w-* variables and w-* classes and the widget follows the theme and the user's appearance settings. */
+body {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.time {
+  font-size: 2.6rem;
+  color: var(--w-fg);
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+#count {
+  margin-right: -8px;
+  font-size: 0.857rem;
+}

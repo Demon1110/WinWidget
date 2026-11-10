@@ -1,0 +1,95 @@
+body { container-type: size; }
+
+.clock { height: 100%; display: flex; flex-direction: column; gap: 6%; }
+.head { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.857rem; color: var(--w-fg-muted); min-height: 1.3em; }
+body.no-date .head .date { visibility: hidden; }
+body.no-head .head { display: none; }
+
+.row { flex: 1; min-height: 0; display: flex; justify-content: center; align-items: stretch; gap: 4%; }
+.flip {
+  --h: 100%;
+  position: relative;
+  flex: 0 1 auto;
+  height: 100%;
+  aspect-ratio: 1.04;
+  max-width: 47%;
+  perspective: 800px; /* main.js sets it in proportion to the card */
+  border-radius: var(--tile-r, 8px);
+  font-family: var(--w-font-num);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+body.with-sec .flip { max-width: 36%; }
+body.with-sec .flip.sec { height: 56%; align-self: flex-end; max-width: 22%; }
+
+/* four halves: two still, two flaps that turn on the hinge. A still half is a window (.win) around
+   its face; during a flip the two slide apart so the face shows only where no flap covers it. */
+.half, .flap { position: absolute; left: 0; right: 0; height: 50%; }
+.win, .face { position: absolute; inset: 0; will-change: transform; }
+.win { overflow: hidden; }
+.face, .flap { overflow: hidden; background: var(--tile); }
+.half.top, .flap.top { top: 0; transform-origin: 50% 100%; }
+.half.bottom, .flap.bottom { bottom: 0; transform-origin: 50% 0; }
+.top .face, .flap.top { border-radius: var(--tile-r, 8px) var(--tile-r, 8px) 0 0; }
+.bottom .face, .flap.bottom { border-radius: 0 0 var(--tile-r, 8px) var(--tile-r, 8px); }
+.flap { backface-visibility: hidden; }
+.flap.bottom { transform: rotateX(90deg); }
+.face span, .flap span {
+  position: absolute;
+  left: 0; right: 0;
+  height: 200%;
+  display: grid;
+  place-items: center;
+  color: var(--tile-fg, var(--w-fg));
+  font-size: var(--digit, 60px);
+  font-weight: var(--digit-weight, 400);
+  letter-spacing: var(--digit-tracking, -0.02em);
+}
+.top span { top: 0; }
+.bottom span { bottom: 0; }
+/* the hinge: a thin gap across the middle */
+.flip::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: var(--hinge-w, 2px); transform: translateY(-50%); background: var(--hinge); z-index: 3; }
+.flap.top { z-index: 2; }
+.flap.bottom { z-index: 2; }
+.half.bottom .face::after, .flap.bottom::after { content: ""; position: absolute; inset: 0; background: var(--shade, transparent); pointer-events: none; }
+/* light during a flip: a turning flap darkens, and the falling one shades the half below the hinge */
+.dim, .cast { position: absolute; inset: 0; opacity: 0; pointer-events: none; z-index: 1; will-change: opacity; }
+.dim { background: var(--flap-dim, #000); }
+.cast { background: linear-gradient(var(--flap-cast, rgba(0, 0, 0, 0.55)), transparent 75%); }
+
+/* ── 量被畫出來: graphite tiles, mono figures ── */
+:root {
+  --tile: color-mix(in srgb, var(--w-fg) 7%, transparent);
+  --hinge: color-mix(in srgb, var(--w-bg-solid, #101216) 85%, transparent);
+  --shade: linear-gradient(rgba(0, 0, 0, 0.18), transparent 40%);
+}
+.ampm { font-family: var(--w-font-num); color: var(--w-accent); letter-spacing: 0.06em; }
+
+/* ── 玻璃上的字: frosted panes, thin display figures ── */
+html[data-theme="type"] {
+  --tile: rgba(255, 255, 255, 0.10);
+  --hinge: rgba(0, 0, 0, 0.28);
+  --shade: none;
+  --digit-weight: var(--w-display-weight);
+  --digit-tracking: -0.04em;
+}
+html[data-theme="type"] .flip { font-family: var(--w-font-display); }
+html[data-theme="type"] .face, html[data-theme="type"] .flap { backdrop-filter: blur(6px); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10); }
+html[data-theme="type"] .head { color: var(--w-fg); font-weight: 600; }
+html[data-theme="type"] .ampm { color: var(--w-fg); font-family: var(--w-font); }
+
+/* ── 書桌上的紙: cream cards with ink serif figures, like a desk flip calendar ── */
+html[data-theme="paper"] {
+  --tile: #fbf8f1;
+  --tile-fg: var(--w-fg);
+  --hinge: rgba(31, 28, 24, 0.55);
+  --hinge-w: 1px;
+  --shade: linear-gradient(rgba(31, 28, 24, 0.08), transparent 35%);
+  --tile-r: 3px;
+  --flap-dim: #6b5d4b;
+  --flap-cast: rgba(58, 49, 39, 0.35);
+}
+/* Georgia's old-style figures dip below the hinge; Cambria's lining figures sit on it */
+html[data-theme="paper"] .flip { font-family: Cambria, "Noto Serif", "Times New Roman", serif; box-shadow: 0 1px 0 rgba(31, 28, 24, 0.12), 0 3px 6px rgba(31, 28, 24, 0.14); }
+html[data-theme="paper"] .head { font-family: var(--w-font-title); color: var(--w-fg); }
+html[data-theme="paper"] .ampm { color: var(--w-accent); font-family: var(--w-font-title); font-weight: 700; }

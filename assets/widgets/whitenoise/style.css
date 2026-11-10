@@ -1,0 +1,69 @@
+body { container-type: size; display: flex; flex-direction: column; gap: 0.7rem; }
+
+.head { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+.play { flex: none; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer; background: var(--w-accent); color: var(--w-on-accent); }
+.play:hover { filter: brightness(1.1); }
+.play svg { width: 15px; height: 15px; fill: currentColor; }
+.status { flex: 1; min-width: 0; font-size: 0.84rem; color: var(--w-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.playing .status { color: var(--w-fg); }
+.timer { flex: none; display: flex; align-items: center; gap: 0.3rem; height: 28px; padding: 0 8px; border: 0; border-radius: 14px; background: transparent; color: var(--w-fg-muted); cursor: pointer; font-size: 0.78rem; }
+.timer:hover { background: var(--w-hover); color: var(--w-fg); }
+.timer svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+.timer.set { color: var(--w-accent); }
+
+.ic { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; cursor: pointer; }
+.nm { font-size: 0.78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.ch { color: var(--w-fg-muted); }
+.ch.on { color: var(--w-fg); }
+.val { font-size: 0.7rem; color: var(--w-fg-muted); }
+.fader { position: relative; cursor: pointer; touch-action: none; outline: none; }
+.fader:focus-visible { box-shadow: 0 0 0 2px color-mix(in srgb, var(--w-accent) 55%, transparent); border-radius: 4px; }
+.fader::before, .fill, .knob { position: absolute; content: ""; }
+
+/* ── 量被畫出來: a mixing desk, one channel strip per sound ── */
+.mixer { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.25rem; }
+.ch { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; min-width: 0; }
+.ch .val { order: 0; }
+.ch .fader { order: 1; flex: 1; width: 26px; }
+.ch .ic { order: 2; }
+.ch .nm { order: 3; max-width: 100%; }
+.fader::before { left: 50%; top: 0; bottom: 0; width: 4px; margin-left: -2px; border-radius: 2px; background: var(--w-track); }
+.fill { left: 50%; bottom: 0; width: 4px; margin-left: -2px; height: calc(var(--v) * 100%); border-radius: 2px; background: var(--w-accent); }
+.knob { left: 50%; bottom: calc(var(--v) * 100%); width: 20px; height: 7px; margin: 0 0 -3.5px -10px; border-radius: 2px; background: var(--w-fg); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4); }
+.ch:not(.on) .knob { background: color-mix(in srgb, var(--w-fg) 55%, transparent); }
+
+/* ── 玻璃上的字 and 書桌上的紙: a list, one line per sound ── */
+html[data-theme="type"] .mixer, html[data-theme="paper"] .mixer { display: flex; flex-direction: column; justify-content: space-between; gap: 0; }
+html[data-theme="type"] .ch, html[data-theme="paper"] .ch { display: grid; grid-template-columns: 20px 5.2em minmax(0, 1fr) 2em; align-items: center; gap: 0.55rem; }
+html[data-theme="type"] .ch > *, html[data-theme="paper"] .ch > * { order: 0; }
+html[data-theme="type"] .ch .fader, html[data-theme="paper"] .ch .fader { width: auto; height: 20px; }
+html[data-theme="type"] .val, html[data-theme="paper"] .val { text-align: right; }
+html[data-theme="type"] .fader::before, html[data-theme="paper"] .fader::before { left: 0; right: 0; top: 50%; bottom: auto; width: auto; height: 2px; margin: -1px 0 0; }
+html[data-theme="type"] .fill, html[data-theme="paper"] .fill { left: 0; top: 50%; bottom: auto; width: calc(var(--v) * 100%); height: 2px; margin: -1px 0 0; }
+html[data-theme="type"] .knob, html[data-theme="paper"] .knob { left: calc(var(--v) * 100%); top: 50%; bottom: auto; }
+
+html[data-theme="type"] .play { background: transparent; color: var(--w-fg); }
+html[data-theme="type"] .play svg { width: 22px; height: 22px; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45)); }
+html[data-theme="type"] .status { font-weight: 600; }
+html[data-theme="type"] .timer.set { color: var(--w-fg); }
+html[data-theme="type"] .ch { color: var(--w-fg); opacity: 0.55; }
+html[data-theme="type"] .ch.on { opacity: 1; }
+html[data-theme="type"] .nm { font-family: var(--w-font-display); font-size: 0.95rem; font-weight: 600; }
+html[data-theme="type"] .val { color: var(--w-fg); }
+html[data-theme="type"] .fader::before { background: rgba(255, 255, 255, 0.3); }
+html[data-theme="type"] .fill { background: var(--w-fg); }
+html[data-theme="type"] .knob { width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px; border-radius: 50%; background: var(--w-fg); }
+html[data-theme="type"] .ch:not(.on) .knob { background: var(--w-fg); }
+html[data-theme="type"] .ic { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4)); }
+
+html[data-theme="paper"] .play { border-radius: 3px; background: transparent; color: var(--w-fg); box-shadow: inset 0 0 0 1.5px var(--w-fg); }
+html[data-theme="paper"] .play:hover { background: var(--w-hover); filter: none; }
+html[data-theme="paper"] .status { font-family: var(--w-font-title); font-style: italic; }
+html[data-theme="paper"] .nm { font-family: var(--w-font-title); font-size: 0.86rem; }
+html[data-theme="paper"] .val { font-family: var(--w-font-num); }
+html[data-theme="paper"] .fader::before { height: 1.5px; background: var(--w-fg); }
+html[data-theme="paper"] .fill { display: none; }
+html[data-theme="paper"] .knob { width: 6px; height: 15px; margin: -7.5px 0 0 -3px; border-radius: 1px; background: var(--w-fg); box-shadow: 0 0 0 2px var(--w-bg-solid); }
+html[data-theme="paper"] .ch.on .knob { background: var(--w-accent); }
+html[data-theme="paper"] .ch:not(.on) .knob { background: var(--w-fg); }
+html[data-theme="paper"] .timer.set { color: var(--w-accent); }

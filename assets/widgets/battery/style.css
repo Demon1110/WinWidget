@@ -1,0 +1,46 @@
+body { container-type: size; }
+
+.bat { height: 100%; display: flex; align-items: center; gap: 7%; }
+.cell { height: min(42cqh, 30cqw); aspect-ratio: 64 / 30; flex: none; overflow: visible; }
+.cell .body { fill: none; stroke: color-mix(in srgb, var(--w-fg) 55%, transparent); stroke-width: 1.6; }
+.cell .nub { fill: color-mix(in srgb, var(--w-fg) 55%, transparent); }
+.cell .seg { fill: var(--w-track); }
+.cell .seg.on { fill: var(--w-accent); }
+.cell .fill { fill: var(--w-accent); }
+.cell .bolt { fill: var(--w-fg); stroke: var(--w-bg-solid); stroke-width: 1.5; paint-order: stroke; }
+body.low .cell .seg.on, body.low .cell .fill { fill: var(--w-warn); }
+body.critical .cell .seg.on, body.critical .cell .fill { fill: var(--w-danger); }
+
+.txt { display: flex; flex-direction: column; min-width: 0; gap: 0.15em; }
+.pct { font-size: min(34cqh, 17cqw); }
+.pct small { font-size: 0.42em; color: var(--w-fg-muted); margin-left: 0.05em; letter-spacing: 0; }
+.state { font-size: 0.93rem; white-space: nowrap; }
+@container (max-width: 200px) { .state { white-space: normal; } }
+.left { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.low .pct { color: var(--w-warn); }
+body.none .pct { display: none; }
+body.none .state { font-weight: 600; }
+
+/* ── 玻璃上的字: the percentage, with a small outline battery under it ── */
+html[data-theme="type"] .bat { flex-direction: column-reverse; align-items: flex-start; justify-content: center; gap: 0.5rem; }
+html[data-theme="type"] .cell { height: 16px; }
+html[data-theme="type"] .cell .body { stroke: var(--w-fg); }
+html[data-theme="type"] .cell .nub { fill: var(--w-fg); }
+html[data-theme="type"] .cell .fill { fill: var(--w-fg); }
+html[data-theme="type"] .cell .bolt { stroke: rgba(0, 0, 0, 0.5); }
+html[data-theme="type"] .cell { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4)); }
+html[data-theme="type"] .pct { font-size: min(46cqh, 28cqw); }
+html[data-theme="type"] .state { font-weight: 600; }
+html[data-theme="type"] .txt { flex-direction: row; flex-wrap: wrap; align-items: baseline; column-gap: 0.6rem; }
+html[data-theme="type"] .pct { flex-basis: 100%; }
+html[data-theme="type"] body.low .cell .fill { fill: var(--w-warn); }
+
+/* ── 書桌上的紙: an ink outline, filled in ink; seal red when low ── */
+html[data-theme="paper"] .cell .body { stroke: var(--w-fg); stroke-width: 1.4; }
+html[data-theme="paper"] .cell .nub { fill: var(--w-fg); }
+html[data-theme="paper"] .cell .fill { fill: var(--w-fg); }
+html[data-theme="paper"] .cell .bolt { fill: var(--w-bg-solid); stroke: var(--w-fg); stroke-width: 1.2; }
+html[data-theme="paper"] body.low .cell .fill, html[data-theme="paper"] body.critical .cell .fill { fill: var(--w-accent); }
+html[data-theme="paper"] body.low .pct { color: var(--w-accent); }
+html[data-theme="paper"] .pct { font-family: var(--w-font-num); }
+html[data-theme="paper"] .state { font-family: var(--w-font-title); font-weight: 600; }

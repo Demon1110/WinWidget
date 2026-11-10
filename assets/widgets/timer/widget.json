@@ -1,0 +1,17 @@
+{
+  "id": "winwidget.timer",
+  "name": { "zh-TW": "計時器", "zh-CN": "计时器", "en": "Timer" },
+  "description": { "zh-TW": "倒數計時和碼錶，時間到會通知", "zh-CN": "倒计时和秒表，时间到会通知", "en": "Countdown and stopwatch, with a notification when time is up" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "time",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 300, "height": 200, "minWidth": 200, "minHeight": 130, "maxWidth": 700, "maxHeight": 600, "grow": 1 },
+  "permissions": ["notify"],
+  "settings": [
+    { "key": "notify", "type": "toggle", "label": { "zh-TW": "時間到時通知", "zh-CN": "时间到时通知", "en": "Notify when time is up" }, "default": true },
+    { "key": "sound", "type": "toggle", "label": { "zh-TW": "提示音", "zh-CN": "提示音", "en": "Chime" }, "default": true }
+  ]
+}

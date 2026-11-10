@@ -1,0 +1,17 @@
+{
+  "id": "winwidget.todo",
+  "name": { "zh-TW": "待辦清單", "zh-CN": "待办清单", "en": "To-do list" },
+  "description": { "zh-TW": "勾掉做完的事", "zh-CN": "勾掉做完的事", "en": "Tick things off" },
+  "version": "1.2.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "productivity",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 280, "height": 300, "minWidth": 200, "minHeight": 160, "maxWidth": 700, "maxHeight": 1000, "grow": 0.5 },
+  "permissions": [],
+  "settings": [
+    { "key": "title", "type": "text", "label": { "zh-TW": "標題", "zh-CN": "标题", "en": "Title" },
+      "default": { "zh-TW": "待辦", "zh-CN": "待办", "en": "To do" } }
+  ]
+}

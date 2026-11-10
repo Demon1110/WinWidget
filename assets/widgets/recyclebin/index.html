@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="rb">
+    <svg class="bin" id="bin" viewBox="0 0 40 48" aria-hidden="true">
+      <clipPath id="inside"><path d="M7 12h26l-2.4 32H9.4z"/></clipPath>
+      <rect class="level" id="level" x="0" y="44" width="40" height="0" clip-path="url(#inside)"/>
+      <path class="can" d="M7 12h26l-2.4 32H9.4z"/>
+      <path class="lid" d="M4 9.5h32M15 9.5V5.5h10v4"/>
+    </svg>
+    <div class="txt">
+      <span class="count"><b class="w-display" id="count">—</b><span id="unit"></span></span>
+      <span class="size w-label" id="size"></span>
+      <div class="buttons">
+        <button class="w-btn empty" id="empty" data-no-drag></button>
+        <button class="w-btn" id="open" data-no-drag></button>
+      </div>
+    </div>
+  </main>
+  <script src="main.js"></script>
+</body>
+</html>

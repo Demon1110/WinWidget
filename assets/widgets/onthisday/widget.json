@@ -1,0 +1,22 @@
+{
+  "id": "winwidget.onthisday",
+  "name": { "zh-TW": "歷史上的今天", "zh-CN": "历史上的今天", "en": "On this day" },
+  "description": { "zh-TW": "維基百科上這一天發生的事", "zh-CN": "维基百科上这一天发生的事", "en": "What happened on this day, from Wikipedia" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "info",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 340, "height": 190, "minWidth": 200, "minHeight": 110, "maxWidth": 900, "maxHeight": 700, "grow": 1 },
+  "permissions": ["network:zh.wikipedia.org", "network:en.wikipedia.org", "shell.open"],
+  "settings": [
+    { "key": "rotate", "type": "select", "label": { "zh-TW": "自動換下一則", "zh-CN": "自动换下一则", "en": "Next event every" }, "default": 60,
+      "options": [
+        { "value": 0, "label": { "zh-TW": "不換", "zh-CN": "不换", "en": "Never" } },
+        { "value": 30, "label": { "zh-TW": "30 秒", "zh-CN": "30 秒", "en": "30 seconds" } },
+        { "value": 60, "label": { "zh-TW": "1 分鐘", "zh-CN": "1 分钟", "en": "1 minute" } },
+        { "value": 300, "label": { "zh-TW": "5 分鐘", "zh-CN": "5 分钟", "en": "5 minutes" } }
+      ] }
+  ]
+}

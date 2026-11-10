@@ -1,0 +1,19 @@
+{
+  "id": "winwidget.weather",
+  "name": { "zh-TW": "天氣", "zh-CN": "天气", "en": "Weather" },
+  "description": { "zh-TW": "現在的天氣與接下來幾小時", "zh-CN": "现在的天气与接下来几小时", "en": "Current weather and the next few hours" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "weather",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 320, "height": 200, "minWidth": 200, "minHeight": 110, "maxWidth": 800, "maxHeight": 500, "grow": 1 },
+  "permissions": ["network:api.open-meteo.com", "network:geocoding-api.open-meteo.com", "network:get.geojs.io"],
+  "settings": [
+    { "key": "city", "type": "text", "label": { "zh-TW": "城市", "zh-CN": "城市", "en": "City" }, "default": "",
+      "placeholder": { "zh-TW": "留空：按網絡位置自動定位", "zh-CN": "留空：按网络位置自动定位", "en": "Empty: locate from your network" } },
+    { "key": "unit", "type": "select", "label": { "zh-TW": "溫度單位", "zh-CN": "温度单位", "en": "Unit" }, "default": "celsius",
+      "options": [ { "value": "celsius", "label": "°C" }, { "value": "fahrenheit", "label": "°F" } ] }
+  ]
+}

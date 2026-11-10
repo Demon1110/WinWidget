@@ -1,0 +1,51 @@
+{
+  "id": "winwidget.currency",
+  "name": { "zh-TW": "匯率", "zh-CN": "汇率", "en": "Exchange rates" },
+  "description": { "zh-TW": "常用貨幣的匯率和換算，每天更新", "zh-CN": "常用货币的汇率和换算，每天更新", "en": "Rates and conversion for the currencies you use, updated daily" },
+  "version": "1.2.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "info",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 300, "height": 330, "minWidth": 200, "minHeight": 110, "maxWidth": 700, "maxHeight": 800, "grow": 0.7 },
+  "permissions": ["network:open.er-api.com", "network:www.boc.cn", "shell.open"],
+  "settings": [
+    { "key": "source", "type": "select", "label": { "zh-TW": "匯率來源", "zh-CN": "汇率来源", "en": "Rates from" },
+      "default": "market",
+      "options": [
+        { "value": "market", "label": { "zh-TW": "國際市場價（每天更新）", "zh-CN": "国际市场价（每天更新）", "en": "Market rates (daily)" } },
+        { "value": "boc", "label": { "zh-TW": "中國銀行外匯牌價", "zh-CN": "中国银行外汇牌价", "en": "Bank of China board rates" } }
+      ] },
+    { "key": "price", "type": "select", "label": { "zh-TW": "中國銀行用哪個價", "zh-CN": "中国银行用哪个价", "en": "Bank of China price" },
+      "description": { "zh-TW": "只在來源是中國銀行時使用", "zh-CN": "只在来源是中国银行时使用", "en": "Used only with Bank of China rates" },
+      "default": "middle",
+      "options": [
+        { "value": "middle", "label": { "zh-TW": "中行折算價", "zh-CN": "中行折算价", "en": "Middle rate" } },
+        { "value": "spotSell", "label": { "zh-TW": "現匯賣出價", "zh-CN": "现汇卖出价", "en": "Selling rate (transfer)" } },
+        { "value": "cashSell", "label": { "zh-TW": "現鈔賣出價", "zh-CN": "现钞卖出价", "en": "Selling rate (cash)" } },
+        { "value": "spotBuy", "label": { "zh-TW": "現匯買入價", "zh-CN": "现汇买入价", "en": "Buying rate (transfer)" } },
+        { "value": "cashBuy", "label": { "zh-TW": "現鈔買入價", "zh-CN": "现钞买入价", "en": "Buying rate (cash)" } }
+      ] },
+    { "key": "base", "type": "select", "label": { "zh-TW": "我的貨幣", "zh-CN": "我的货币", "en": "My currency" },
+      "default": { "zh-TW": "TWD", "zh-CN": "CNY", "en": "USD" },
+      "options": [
+        { "value": "TWD", "label": { "zh-TW": "新台幣 TWD", "zh-CN": "新台币 TWD", "en": "New Taiwan dollar (TWD)" } },
+        { "value": "CNY", "label": { "zh-TW": "人民幣 CNY", "zh-CN": "人民币 CNY", "en": "Chinese yuan (CNY)" } },
+        { "value": "HKD", "label": { "zh-TW": "港幣 HKD", "zh-CN": "港币 HKD", "en": "Hong Kong dollar (HKD)" } },
+        { "value": "MOP", "label": { "zh-TW": "澳門幣 MOP", "zh-CN": "澳门元 MOP", "en": "Macanese pataca (MOP)" } },
+        { "value": "SGD", "label": { "zh-TW": "新加坡幣 SGD", "zh-CN": "新加坡元 SGD", "en": "Singapore dollar (SGD)" } },
+        { "value": "MYR", "label": { "zh-TW": "馬來西亞令吉 MYR", "zh-CN": "马来西亚林吉特 MYR", "en": "Malaysian ringgit (MYR)" } },
+        { "value": "USD", "label": { "zh-TW": "美元 USD", "zh-CN": "美元 USD", "en": "US dollar (USD)" } },
+        { "value": "EUR", "label": { "zh-TW": "歐元 EUR", "zh-CN": "欧元 EUR", "en": "Euro (EUR)" } },
+        { "value": "GBP", "label": { "zh-TW": "英鎊 GBP", "zh-CN": "英镑 GBP", "en": "Pound sterling (GBP)" } },
+        { "value": "JPY", "label": { "zh-TW": "日圓 JPY", "zh-CN": "日元 JPY", "en": "Japanese yen (JPY)" } },
+        { "value": "KRW", "label": { "zh-TW": "韓元 KRW", "zh-CN": "韩元 KRW", "en": "South Korean won (KRW)" } },
+        { "value": "AUD", "label": { "zh-TW": "澳幣 AUD", "zh-CN": "澳元 AUD", "en": "Australian dollar (AUD)" } },
+        { "value": "CAD", "label": { "zh-TW": "加幣 CAD", "zh-CN": "加元 CAD", "en": "Canadian dollar (CAD)" } }
+      ] },
+    { "key": "list", "type": "text", "label": { "zh-TW": "要看的貨幣", "zh-CN": "要看的货币", "en": "Currencies shown" },
+      "default": { "zh-TW": "USD, JPY, EUR, CNY, HKD", "zh-CN": "USD, HKD, JPY, EUR, TWD", "en": "EUR, GBP, JPY, CNY, CAD" },
+      "description": { "zh-TW": "三個字母的代碼，用逗號分開", "zh-CN": "三个字母的代码，用逗号分开", "en": "Three-letter codes, separated by commas" } }
+  ]
+}

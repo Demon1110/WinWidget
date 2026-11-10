@@ -1,0 +1,19 @@
+{
+  "id": "instrument",
+  "name": { "zh-TW": "量被畫出來", "zh-CN": "量被画出来", "en": "Instrument" },
+  "description": {
+    "zh-TW": "煙燻石墨玻璃卡片，數字畫成看得見的量",
+    "zh-CN": "烟熏石墨玻璃卡片，数字画成看得见的量",
+    "en": "Smoked graphite cards; every number drawn as a visible quantity"
+  },
+  "appearance": {
+    "style": "transparent",
+    "shadow": true,
+    "background": "#101216",
+    "backgroundOpacity": 0.74,
+    "textColor": "#e9ecef",
+    "accentColor": "#7de2c4",
+    "radius": 22,
+    "padding": 18
+  }
+}

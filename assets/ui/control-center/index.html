@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <title>WinWidget 控制中心</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="enter">
+  <aside class="side">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><rect x="4" y="4" width="18" height="56" rx="7" fill="#4cc9f0"/><rect x="26" y="4" width="34" height="18" rx="7" fill="#9b5de5"/><rect x="26" y="26" width="20" height="16" rx="7" fill="#ffd166"/><circle cx="51.5" cy="51.5" r="8.5" fill="#06d6a0"/></svg>
+      <div>
+        <div class="brand-name">WinWidget</div>
+        <div class="brand-ver num" id="version"></div>
+      </div>
+    </div>
+    <nav class="nav" id="nav">
+      <div class="nav-mark" aria-hidden="true"></div>
+      <button data-page="mine" style="--i:0"><span data-t="我的組件">我的組件</span><b class="num" id="count-mine"></b></button>
+      <button data-page="add" style="--i:1"><span data-t="添加組件">添加組件</span><b class="num" id="count-add"></b></button>
+      <button data-page="themes" style="--i:2"><span data-t="主題">主題</span></button>
+      <button data-page="settings" style="--i:3"><span data-t="設定">設定</span></button>
+    </nav>
+    <div class="side-foot">
+      <div class="arrange">
+        <div class="arrange-top">
+          <span class="arrange-title" data-t="排列模式">排列模式</span>
+          <button class="switch" role="switch" data-act="toggle" id="edit-switch" data-t-label="排列模式" aria-label="排列模式"></button>
+        </div>
+        <div class="arrange-desc" data-t="暫時解鎖並顯示外框。&#10;拖動會自動對齊，&#10;按住 Ctrl 不對齊。">暫時解鎖並顯示外框。<br>拖動會自動對齊，<br>按住 Ctrl 不對齊。</div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main" id="main"></main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="sheet-back" id="sheet" aria-hidden="true"></div>
+  <div class="drop" aria-hidden="true"><div class="drop-box"><b data-t="放開以安裝組件">放開以安裝組件</b><span data-t=".fwz 組件檔案">.fwz 組件檔案</span></div></div>
+  <datalist id="fonts"></datalist>
+  <script src="i18n.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

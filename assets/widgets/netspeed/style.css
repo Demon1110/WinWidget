@@ -1,0 +1,41 @@
+body { container-type: size; display: flex; flex-direction: column; gap: 0.5rem; }
+
+.rates { display: flex; gap: 1.2rem; }
+.rate { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.k { font-size: 0.8rem; color: var(--w-fg-muted); }
+.k::before { content: ""; display: inline-block; width: 0.55em; height: 0.55em; margin-right: 0.4em; border-radius: 50%; }
+.down .k::before { background: var(--w-accent); }
+.up .k::before { background: color-mix(in srgb, var(--w-fg) 45%, transparent); }
+.val { white-space: nowrap; }
+.val b { font-weight: inherit; font-size: min(1.6rem, 13cqh); letter-spacing: -0.02em; }
+.val small { font-size: 0.8rem; color: var(--w-fg-muted); margin-left: 0.3em; }
+.total { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── 量被畫出來: the last minute as columns; download rises, upload hangs below the line ── */
+.chart { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(60, 1fr); gap: 1px; }
+.chart span { display: grid; grid-template-rows: 1fr 1fr; min-height: 0; border-top: 0; }
+.chart i { display: block; min-height: 0; }
+.chart .d { align-self: end; background: var(--w-accent); border-radius: 1px 1px 0 0; }
+.chart .u { align-self: start; background: color-mix(in srgb, var(--w-fg) 40%, transparent); border-radius: 0 0 1px 1px; }
+.chart { background: linear-gradient(var(--w-rule), var(--w-rule)) 0 50% / 100% 1px no-repeat; }
+@container (max-height: 120px) { .chart { display: none; } }
+
+/* ── 玻璃上的字: the two speeds, big and thin ── */
+html[data-theme="type"] .chart { display: none; }
+html[data-theme="type"] .rates { flex-direction: column; gap: 0.2rem; margin-top: auto; }
+html[data-theme="type"] .rate { flex-direction: row; align-items: baseline; gap: 0.6rem; }
+html[data-theme="type"] .k { order: 2; font-size: 0.93rem; font-weight: 600; color: var(--w-fg); }
+html[data-theme="type"] .k::before { display: none; }
+html[data-theme="type"] .val b { font-family: var(--w-font-display); font-weight: var(--w-display-weight); font-size: min(22cqh, 13cqw); letter-spacing: -0.03em; }
+html[data-theme="type"] .val small { font-size: 0.93rem; color: var(--w-fg); }
+html[data-theme="type"] .total { margin-bottom: auto; }
+
+/* ── 書桌上的紙: two ledger lines and an ink trace ── */
+html[data-theme="paper"] .rates { justify-content: space-between; border-bottom: 1px solid var(--w-rule); padding-bottom: 0.4rem; }
+html[data-theme="paper"] .k { font-family: var(--w-font-title); color: var(--w-fg); font-size: 0.9rem; }
+html[data-theme="paper"] .down .k::before { background: var(--w-fg); }
+html[data-theme="paper"] .up .k::before { background: transparent; box-shadow: inset 0 0 0 1.2px var(--w-fg); }
+html[data-theme="paper"] .val b { font-family: var(--w-font-num); }
+html[data-theme="paper"] .up { text-align: right; }
+html[data-theme="paper"] .chart .d { background: var(--w-fg); }
+html[data-theme="paper"] .chart .u { background: color-mix(in srgb, var(--w-fg) 35%, transparent); }

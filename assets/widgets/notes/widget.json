@@ -1,0 +1,21 @@
+{
+  "id": "winwidget.notes",
+  "name": { "zh-TW": "便利貼", "zh-CN": "便利贴", "en": "Sticky note" },
+  "description": { "zh-TW": "隨手記下，自動保存", "zh-CN": "随手记下，自动保存", "en": "Jot things down; saved as you type" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "productivity",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 260, "height": 230, "minWidth": 160, "minHeight": 100, "maxWidth": 900, "maxHeight": 900, "grow": 0.5 },
+  "permissions": [],
+  "settings": [
+    { "key": "fontSize", "type": "select", "label": { "zh-TW": "字號", "zh-CN": "字号", "en": "Text size" }, "default": "medium",
+      "options": [
+        { "value": "small", "label": { "zh-TW": "小", "zh-CN": "小", "en": "Small" } },
+        { "value": "medium", "label": { "zh-TW": "中", "zh-CN": "中", "en": "Medium" } },
+        { "value": "large", "label": { "zh-TW": "大", "zh-CN": "大", "en": "Large" } }
+      ] }
+  ]
+}

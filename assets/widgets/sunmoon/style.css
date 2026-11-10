@@ -1,0 +1,61 @@
+body { container-type: size; }
+[hidden] { display: none !important; }
+
+.sm { height: 100%; display: flex; flex-direction: column; gap: 0.35rem; }
+.head { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; font-size: 0.857rem; color: var(--w-fg-muted); white-space: nowrap; }
+.place { overflow: hidden; text-overflow: ellipsis; }
+.moon { display: flex; align-items: center; gap: 0.35em; }
+.moon .pct { color: var(--w-fg-muted); font-size: 0.92em; }
+.mn { width: 1.15rem; height: 1.15rem; flex: none; }
+.mn .dark { fill: color-mix(in srgb, var(--w-fg) 14%, transparent); }
+.mn .lit { fill: var(--w-fg); }
+.msg { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.4rem; color: var(--w-fg-muted); text-align: center; font-size: 0.93rem; }
+
+.next, .length { display: none; }
+
+/* ── 量被畫出來: the sun's arc over the horizon, the part it has travelled lit ── */
+.sky { flex: 1; min-height: 0; width: 100%; overflow: visible; }
+.sky .horizon { stroke: var(--w-rule); stroke-width: 1; }
+.sky .path { fill: none; stroke: var(--w-track); stroke-width: 2; stroke-dasharray: 2 4; stroke-linecap: round; }
+.sky .done { fill: none; stroke: var(--w-accent); stroke-width: 2.2; stroke-linecap: round; }
+.sky .sun { fill: var(--w-warn); }
+.sky .halo { fill: var(--w-warn); opacity: 0.2; }
+.sky .sun.down { fill: var(--w-fg-faint); }
+.times { display: grid; grid-template-columns: 1fr auto 1fr; align-items: end; }
+.col { display: flex; flex-direction: column; gap: 0.1em; }
+.col.mid { align-items: center; }
+.col.end { align-items: flex-end; }
+.k { font-size: 0.72rem; color: var(--w-fg-muted); }
+.v { font-size: 1rem; white-space: nowrap; }
+.mid .v { font-size: 0.8rem; color: var(--w-fg-muted); }
+@container (max-height: 140px) { .sky { display: none; } .times { margin-top: auto; } }
+
+/* ── 玻璃上的字: when the next sunrise or sunset is, in big thin type ── */
+html[data-theme="type"] .sky, html[data-theme="type"] .times { display: none; }
+html[data-theme="type"] .head { order: 3; color: var(--w-fg); }
+html[data-theme="type"] .place { display: none; }
+html[data-theme="type"] .next { display: flex; align-items: baseline; gap: 0.5rem; margin-top: auto; }
+html[data-theme="type"] .next .tm { font-size: min(40cqh, 26cqw); }
+html[data-theme="type"] .next .ev { font-size: 1.07rem; font-weight: 600; }
+html[data-theme="type"] .length { display: block; order: 2; font-size: 0.86rem; color: var(--w-fg-muted); }
+html[data-theme="type"] .moon .pct { color: var(--w-fg-muted); }
+html[data-theme="type"] .mn { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35)); }
+html[data-theme="type"] .sm { justify-content: flex-end; }
+
+/* ── 書桌上的紙: an almanac entry ── */
+html[data-theme="paper"] .head { font-family: var(--w-font-title); font-weight: 600; font-size: 1rem; color: var(--w-fg); }
+html[data-theme="paper"] .moon { font-family: var(--w-font); font-weight: 400; font-size: 0.8rem; }
+html[data-theme="paper"] .mn .dark { fill: none; stroke: var(--w-fg); stroke-width: 0.9; }
+/* the sun's path printed in ink, the sun in seal red */
+html[data-theme="paper"] .sky .horizon { stroke: var(--w-fg); stroke-width: 0.8; }
+html[data-theme="paper"] .sky .path { stroke: color-mix(in srgb, var(--w-fg) 40%, transparent); stroke-width: 1.2; stroke-dasharray: 1 3.5; }
+html[data-theme="paper"] .sky .done { stroke: var(--w-fg); stroke-width: 1.6; }
+html[data-theme="paper"] .sky .sun { fill: var(--w-accent); }
+html[data-theme="paper"] .sky .halo { fill: none; stroke: var(--w-accent); stroke-width: 0.8; opacity: 0.6; }
+html[data-theme="paper"] .times { grid-template-columns: 1fr 1fr; }
+html[data-theme="paper"] .col.mid { display: none; }
+html[data-theme="paper"] .k { font-family: var(--w-font-title); font-size: 0.86rem; color: var(--w-fg); }
+html[data-theme="paper"] .v { font-family: var(--w-font-num); font-size: min(17cqh, 1.7rem); line-height: 1.1; }
+html[data-theme="paper"] .length { display: block; border-top: 1px solid var(--w-rule); padding-top: 0.45rem; font-size: 0.8rem; color: var(--w-fg-muted); }
+@container (max-height: 150px) { html[data-theme="paper"] .length { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }
+@container (max-height: 120px) { html[data-theme="paper"] body .length { display: none; } }

@@ -1,0 +1,14 @@
+{
+  "id": "winwidget.battery",
+  "name": { "zh-TW": "電池", "zh-CN": "电池", "en": "Battery" },
+  "description": { "zh-TW": "電量、是否在充電、還能用多久", "zh-CN": "电量、是否在充电、还能用多久", "en": "Charge, whether it's charging, and how long it will last" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "system",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 240, "height": 140, "minWidth": 160, "minHeight": 90, "maxWidth": 600, "maxHeight": 400, "grow": 1 },
+  "permissions": ["system"],
+  "settings": []
+}

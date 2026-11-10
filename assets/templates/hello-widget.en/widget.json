@@ -1,0 +1,21 @@
+{
+  // This file describes the widget. Comments like these two lines are allowed.
+  // Full guide: Control Center → Settings → Developer guide
+  "id": "{{id}}",
+  "name": "{{name}}",
+  "description": "A widget I made",
+  "version": "1.0.0",
+  "author": "",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "size": { "width": 260, "height": 150, "minWidth": 180, "minHeight": 110, "grow": 1 },
+
+  // What it needs, e.g. "system" (system figures) or "network:api.example.com" (that site)
+  "permissions": [],
+
+  // The Control Center builds the widget's Content form from these
+  "settings": [
+    { "key": "greeting", "type": "text", "label": "Greeting", "default": "Hello" },
+    { "key": "showSeconds", "type": "toggle", "label": "Show seconds", "default": false }
+  ]
+}

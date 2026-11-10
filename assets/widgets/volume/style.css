@@ -1,0 +1,45 @@
+body { container-type: size; display: flex; flex-direction: column; justify-content: center; gap: 0.6rem; }
+
+.top { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+.mute { appearance: none; border: 0; padding: 4px; margin: -4px; border-radius: 8px; background: transparent; cursor: pointer; flex: none; display: grid; }
+.mute:hover { background: var(--w-hover); }
+.mute svg { width: 1.6rem; height: 1.6rem; fill: none; stroke: var(--w-fg); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.mute svg .body { fill: color-mix(in srgb, var(--w-fg) 15%, transparent); }
+body.muted .mute svg { stroke: var(--w-danger); }
+.pct { font-size: min(32cqh, 1.9rem); }
+.pct small { font-size: 0.5em; color: var(--w-fg-muted); margin-left: 0.05em; letter-spacing: 0; }
+.dev { margin-left: auto; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+body.off .slider { opacity: 0.3; pointer-events: none; }
+
+.slider { position: relative; cursor: pointer; outline: none; padding: 4px 0; touch-action: none; }
+.slider:focus-visible { box-shadow: 0 0 0 2px color-mix(in srgb, var(--w-accent) 60%, transparent); border-radius: 4px; }
+.rail, .ticks { display: none; }
+
+/* ── 量被畫出來: 25 cells, lit up to the level ── */
+.cells { display: grid; grid-template-columns: repeat(25, 1fr); gap: 2px; height: min(16px, 14cqh); }
+.cells i { border-radius: 2px; background: var(--w-track); }
+.cells i.on { background: var(--w-accent); }
+body.muted .cells i.on { background: color-mix(in srgb, var(--w-fg) 30%, transparent); }
+
+/* ── 玻璃上的字: a thin line with a round knob ── */
+html[data-theme="type"] .cells { display: none; }
+html[data-theme="type"] .rail { display: block; position: relative; height: 2px; margin: 8px 0; background: rgba(255, 255, 255, 0.3); border-radius: 2px; }
+html[data-theme="type"] .fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--w-fg); border-radius: 2px; }
+html[data-theme="type"] .knob { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--w-fg); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4); }
+html[data-theme="type"] .pct { font-size: min(46cqh, 2.6rem); }
+html[data-theme="type"] .mute svg { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4)); }
+html[data-theme="type"] .dev { color: var(--w-fg); font-weight: 600; }
+html[data-theme="type"] body.muted .fill { background: rgba(255, 255, 255, 0.45); }
+
+/* ── 書桌上的紙: an ink scale with a slide ── */
+html[data-theme="paper"] .cells { display: none; }
+html[data-theme="paper"] .rail { display: block; position: relative; height: 1.5px; margin: 10px 0 0; background: var(--w-fg); }
+html[data-theme="paper"] .fill { display: none; }
+html[data-theme="paper"] .knob { position: absolute; top: 50%; width: 8px; height: 18px; margin: -9px 0 0 -4px; border-radius: 1px; background: var(--w-fg); box-shadow: 0 0 0 2px var(--w-bg-solid); }
+html[data-theme="paper"] body.muted .knob { background: var(--w-accent); }
+html[data-theme="paper"] .ticks { display: flex; justify-content: space-between; margin-top: 3px; }
+html[data-theme="paper"] .ticks i { width: 1px; height: 5px; background: var(--w-fg); }
+html[data-theme="paper"] .ticks i:nth-child(odd) { height: 8px; }
+html[data-theme="paper"] .pct { font-family: var(--w-font-num); }
+html[data-theme="paper"] .mute svg .body { fill: none; }
+html[data-theme="paper"] body.muted .mute svg { stroke: var(--w-accent); }

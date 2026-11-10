@@ -1,0 +1,86 @@
+body { container-type: size; }
+
+.sys { height: 100%; display: flex; flex-direction: column; font-variant-numeric: tabular-nums; }
+.top { display: flex; align-items: center; gap: 1rem; flex: 1; min-height: 0; }
+
+/* three concentric rings: CPU outside, memory, disk inside */
+.rings { flex: none; width: min(132px, 40cqw, 100cqh - 76px); aspect-ratio: 1; }
+.rings .track { fill: none; stroke: var(--w-track); stroke-width: 9; }
+/* values change every second: no transitions, or the card would be animating all the time (≈20% of a CPU core) */
+.rings .arc { fill: none; stroke: var(--w-accent); stroke-width: 9; stroke-linecap: round; }
+.rings .arc.r1 { stroke-opacity: 0.7; }
+.rings .arc.r2 { stroke-opacity: 0.45; }
+.rings .arc.hot { stroke: var(--w-warn); stroke-opacity: 1; }
+
+.rows { display: grid; gap: 0.55rem; min-width: 0; flex: 1; }
+.row { display: grid; grid-template-columns: auto auto 1fr; column-gap: 0.4rem; align-items: baseline; }
+.row .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--w-accent); align-self: center; }
+.row:nth-child(2) .dot { opacity: 0.7; }
+.row:nth-child(3) .dot { opacity: 0.45; }
+.row.hot .dot { background: var(--w-warn); opacity: 1; }
+.row .k { white-space: nowrap; }
+.row .leader { display: none; }
+.row .v { font-size: 1.15rem; justify-self: start; grid-column: 3; }
+.row.hot .v { color: var(--w-warn); }
+.row .w-bar { display: none; grid-column: 1 / -1; }
+.row .w-bar > i { transition: none; }
+.row .sub { grid-column: 2 / -1; font-size: 0.75rem; color: var(--w-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.net { display: grid; gap: 0.45rem; margin-top: 0.8rem; padding-top: 0.75rem; border-top: 1px solid var(--w-rule); }
+.net .line { display: grid; grid-template-columns: 2.6em 6.2em 1fr; align-items: end; gap: 0.4rem; white-space: nowrap; }
+.net .v { font-size: 0.93rem; }
+.spark { display: flex; gap: 2px; align-items: end; height: 18px; }
+.spark i { flex: 1; min-height: 2px; border-radius: 1px; background: color-mix(in srgb, var(--w-accent) 55%, transparent); }
+.spark.up i { background: var(--w-fg-faint); }
+
+/* short: no network line (the themes' own rules are more specific, hence "html body") */
+@container (max-height: 130px) {
+  html body .sys .net { display: none; }
+  .rings { width: min(132px, 40cqw, 100cqh); }
+}
+@container (max-width: 240px) {
+  .row .sub { display: none; }
+  .rings { width: min(132px, 30cqw, 100cqh - 76px); }
+  .top { gap: 0.6rem; }
+  .row .v { font-size: 1rem; }
+}
+@container (max-width: 240px) and (max-height: 130px) { .rings { width: min(30cqw, 100cqh); } }
+/* paper: a short ledger keeps only the figures */
+@container (max-height: 160px) {
+  html[data-theme="paper"] body .rows .row .w-bar, html[data-theme="paper"] body .rows .row .sub { display: none; }
+}
+
+/* ── 玻璃上的字: three big numbers in a row ── */
+html[data-theme="type"] .rings, html[data-theme="type"] .spark { display: none; }
+html[data-theme="type"] .sys { justify-content: center; }
+html[data-theme="type"] .top { flex: none; }
+html[data-theme="type"] .rows { grid-template-columns: repeat(3, auto); justify-content: start; column-gap: 1.8rem; }
+html[data-theme="type"] .row { display: flex; flex-direction: column-reverse; align-items: flex-start; }
+html[data-theme="type"] .row .dot, html[data-theme="type"] .row .sub, html[data-theme="type"] .row .leader { display: none; }
+html[data-theme="type"] .row .k { font-weight: 600; font-size: 0.93rem; color: var(--w-fg-muted); margin-top: 0.3rem; }
+html[data-theme="type"] .row .v {
+  font-family: var(--w-font-display); font-weight: var(--w-display-weight); letter-spacing: var(--w-display-tracking);
+  font-size: min(34cqh, 15cqw); line-height: 0.95;
+}
+html[data-theme="type"] .row .v .pct { font-size: 0.34em; font-weight: 400; vertical-align: 1.6em; margin-left: 0.08em; color: var(--w-fg-muted); }
+html[data-theme="type"] .row.hot .k::after { content: var(--hot-label); color: var(--w-warn); }
+html[data-theme="type"] .row.hot .v { color: var(--w-fg); }
+html[data-theme="type"] .net { border: 0; padding-top: 0; display: flex; gap: 1.2rem; }
+html[data-theme="type"] .net .line { display: flex; gap: 0.35rem; align-items: baseline; }
+html[data-theme="type"] .net .k { font-weight: 600; }
+html[data-theme="type"] .net .v { font-family: var(--w-font); font-weight: 600; }
+
+/* ── 書桌上的紙: a ledger with dotted leaders ── */
+html[data-theme="paper"] .rings, html[data-theme="paper"] .spark, html[data-theme="paper"] .row .dot { display: none; }
+html[data-theme="paper"] .rows { gap: 0.4rem; }
+html[data-theme="paper"] .row { grid-template-columns: auto 1fr auto; }
+html[data-theme="paper"] .row .k { color: var(--w-fg); font-size: 0.93rem; }
+html[data-theme="paper"] .row .leader { display: block; border-bottom: 1.5px dotted color-mix(in srgb, var(--w-fg) 35%, transparent); transform: translateY(-4px); }
+html[data-theme="paper"] .row .v { grid-column: 3; font-size: 1.3rem; }
+html[data-theme="paper"] .row .w-bar { display: block; margin-top: 0.15rem; }
+html[data-theme="paper"] .row .sub { grid-column: 1 / -1; display: none; }
+html[data-theme="paper"] .row.hot .sub, html[data-theme="paper"] .row.has-sub .sub { display: block; }
+html[data-theme="paper"] .row.hot .sub { color: var(--w-accent); }
+html[data-theme="paper"] .net { display: flex; justify-content: space-between; }
+html[data-theme="paper"] .net .line { display: flex; gap: 0.35rem; align-items: baseline; }
+html[data-theme="paper"] .net .v { font-size: 1rem; }

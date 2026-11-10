@@ -1,0 +1,64 @@
+body { container-type: size; }
+
+.cal { height: 100%; display: flex; flex-direction: column; gap: 0.6rem; }
+
+header { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.today { display: flex; align-items: baseline; gap: 0.5rem; min-width: 0; overflow: hidden; }
+.dnum { display: none; }
+/* one line that ends in "…" when narrow (the glass theme stacks it instead) */
+html:not([data-theme="type"]) .meta { display: block; min-width: 0; }
+html:not([data-theme="type"]) .meta > span + span { margin-left: 0.5em; }
+.meta { display: flex; gap: 0.5em; font-size: 0.857rem; color: var(--w-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+nav { flex: none; display: flex; align-items: center; margin-right: -6px; }
+nav .w-btn { padding: 2px 7px; font-size: 1rem; line-height: 1.2; }
+nav .month { font-family: var(--w-font-num); font-size: 0.93rem; color: var(--w-fg); white-space: nowrap; }
+
+.progress { flex: none; }
+
+.grid { flex: 1; display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: 1fr; align-items: center; text-align: center; }
+.grid .h { font-size: 0.75rem; color: var(--w-fg-muted); align-self: end; padding-bottom: 2px; }
+.c { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; height: 100%; }
+.c b { font-family: var(--w-font-num); font-weight: var(--w-num-weight); font-size: 0.93rem; font-variant-numeric: tabular-nums; }
+.c small { font-size: 0.6rem; color: var(--w-fg-muted); margin-top: 1px; white-space: nowrap; }
+.c.out { opacity: 0.28; }
+.c.past b { color: var(--w-fg-muted); }
+.c.today::before {
+  content: "";
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: min(2.3rem, 92%);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--w-accent);
+  z-index: -1;
+}
+.c.today b, .c.today small { color: var(--w-on-accent); font-weight: 600; }
+.grid { position: relative; z-index: 0; }
+
+body.no-lunar .c small { display: none; }
+
+@container (max-height: 250px) { .c small { display: none; } }
+
+/* ── 量被畫出來: the month's progress as a bar ── */
+html[data-theme="instrument"] .meta { font-size: 0.93rem; }
+
+/* ── 玻璃上的字: today's date as the big number ── */
+html[data-theme="type"] .progress { display: none; }
+html[data-theme="type"] .dnum { display: block; font-size: min(22cqh, 26cqw); }
+html[data-theme="type"] .meta { flex-direction: column; gap: 0.1em; font-weight: 600; color: var(--w-fg); }
+html[data-theme="type"] .meta .lunar { font-weight: 400; color: var(--w-fg-muted); }
+html[data-theme="type"] .c.today::before { background: transparent; box-shadow: inset 0 0 0 1.5px var(--w-accent); }
+html[data-theme="type"] .c.today b { color: var(--w-fg); }
+html[data-theme="type"] .c.today small { color: var(--w-fg-muted); }
+
+/* ── 書桌上的紙: a printed month sheet; Sundays in seal red, today circled by hand ── */
+html[data-theme="paper"] .progress { display: none; }
+html[data-theme="paper"] header { border-bottom: 2px solid var(--w-accent); padding-bottom: 0.45rem; }
+html[data-theme="paper"] .meta { color: var(--w-fg-muted); }
+html[data-theme="paper"] #wk { display: none; }
+html[data-theme="paper"] nav .month { font-family: var(--w-font-title); font-weight: 600; font-size: 1.07rem; }
+html[data-theme="paper"] .c.sun b, html[data-theme="paper"] .h.sun { color: var(--w-accent); }
+html[data-theme="paper"] .c.today::before { background: transparent; box-shadow: 0 0 0 1.5px var(--w-accent); border-radius: 48% 52% 50% 46%; }
+html[data-theme="paper"] .c.today b { color: var(--w-accent); }
+html[data-theme="paper"] .c.today small { color: var(--w-fg-muted); font-weight: 400; }

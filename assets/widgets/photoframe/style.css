@@ -1,0 +1,56 @@
+body { container-type: size; display: flex; flex-direction: column; gap: 0.45rem; position: relative; }
+[hidden] { display: none !important; }
+
+.frame { position: relative; flex: 1; min-height: 0; overflow: hidden; border-radius: calc(var(--w-radius) * 0.6); background: var(--w-track); }
+.layer { position: absolute; inset: 0; margin: 0; opacity: 0; transition: opacity 0.9s ease; }
+.layer.on { opacity: 1; }
+.layer.instant { transition: none; }
+.layer img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.layer.contain img { object-fit: contain; }
+
+.nav { position: absolute; top: 50%; translate: 0 -50%; z-index: 2; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center;
+  background: rgba(0, 0, 0, 0.38); color: #fff; opacity: 0; transition: opacity 0.2s; cursor: pointer; backdrop-filter: blur(6px); }
+.nav svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.nav:hover { background: rgba(0, 0, 0, 0.58); }
+.prev { left: 8px; }
+.next { right: 8px; }
+.frame:hover .nav { opacity: 1; }
+
+.caption { display: flex; align-items: baseline; gap: 0.5rem; font-size: 0.78rem; color: var(--w-fg-muted); white-space: nowrap; }
+#cap-text { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.count { margin-left: auto; font-size: 0.7rem; }
+body.no-caption #cap-text { display: none; }
+body.is-empty .nav, body.is-empty .caption { display: none; }
+@container (max-height: 150px) { .caption { display: none; } }
+
+.empty { position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.55rem; padding: 1rem; text-align: center; color: var(--w-fg-muted); font-size: 0.86rem; }
+.empty svg { width: 34px; height: 34px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linejoin: round; }
+.empty p { margin: 0; }
+@container (max-height: 150px) { .empty svg { display: none; } }
+
+/* ── 量被畫出來: the photo to the edges, date and count on it like a camera's display ── */
+html:not([data-theme="type"]):not([data-theme="paper"]) body { padding: 0; }
+html:not([data-theme="type"]):not([data-theme="paper"]) .frame { border-radius: inherit; }
+html:not([data-theme="type"]):not([data-theme="paper"]) .frame::after { content: ""; position: absolute; inset: auto 0 0; height: 42%; background: linear-gradient(transparent, rgba(0, 0, 0, 0.5)); pointer-events: none; }
+html:not([data-theme="type"]):not([data-theme="paper"]) body.is-empty .frame::after,
+html:not([data-theme="type"]):not([data-theme="paper"]) body.no-caption .frame::after { display: none; }
+html:not([data-theme="type"]):not([data-theme="paper"]) .caption { position: absolute; left: 12px; right: 12px; bottom: 9px; z-index: 1; color: #fff; font-family: var(--w-font-num); font-size: 0.72rem; letter-spacing: 0.02em; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); pointer-events: none; }
+html:not([data-theme="type"]):not([data-theme="paper"]) .count { color: rgba(255, 255, 255, 0.75); }
+html:not([data-theme="type"]):not([data-theme="paper"]) body.no-caption .caption { display: none; }
+
+/* ── 玻璃上的字: a photo on the wallpaper, the date under it ── */
+html[data-theme="type"] .frame { border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); background: rgba(255, 255, 255, 0.12); }
+html[data-theme="type"] .caption { color: var(--w-fg); font-size: 0.86rem; font-weight: 600; padding: 0 2px; }
+html[data-theme="type"] .count { display: none; }
+html[data-theme="type"] body.no-caption .caption { display: none; }
+
+/* ── 書桌上的紙: an instant photo with a strip of tape, the date written under it ── */
+html[data-theme="paper"] body { padding: 10px 10px 0; gap: 0; background: #fbf8f1; }
+html[data-theme="paper"] .frame { border-radius: 0; box-shadow: inset 0 0 0 1px rgba(60, 40, 10, 0.08); background: #ece6d8; }
+html[data-theme="paper"] body::before { content: ""; position: absolute; top: 1px; left: 50%; z-index: 4; width: 76px; height: 20px; translate: -50% 0; rotate: -3deg;
+  background: rgba(232, 214, 168, 0.72); box-shadow: 0 1px 2px rgba(60, 40, 10, 0.12); }
+html[data-theme="paper"] .caption { justify-content: center; height: 2.3rem; align-items: center; color: var(--w-fg); font-family: var(--w-font-title); font-size: 0.92rem; font-style: italic; }
+html[data-theme="paper"] .count { display: none; }
+html[data-theme="paper"] body.no-caption .caption { height: 10px; }
+html[data-theme="paper"] .empty { color: var(--w-fg-muted); }
+@container (max-height: 150px) { html[data-theme="paper"] .frame { margin-bottom: 10px; } }

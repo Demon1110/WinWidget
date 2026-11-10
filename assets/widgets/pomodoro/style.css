@@ -1,0 +1,65 @@
+body { container-type: size; }
+[hidden] { display: none !important; }
+
+.pomo { height: 100%; display: flex; align-items: center; gap: 6%; }
+
+/* the dial: a ring that empties as the phase runs out, the time inside */
+.dial { position: relative; height: 100%; aspect-ratio: 1; flex: none; max-width: 52%; display: grid; place-items: center; }
+.ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring circle { fill: none; stroke-width: 5; }
+.ring .track { stroke: var(--w-track); }
+/* no transition: it would animate all the time while running; one step a second is invisible anyway */
+.ring .arc { stroke: var(--w-accent); stroke-linecap: round; stroke-dasharray: 1000; }
+body[data-phase="short"] .ring .arc, body[data-phase="long"] .ring .arc { stroke: color-mix(in srgb, var(--w-accent) 45%, var(--w-fg)); }
+.face { position: relative; display: flex; flex-direction: column; align-items: center; gap: 0.2em; }
+.time { font-size: min(19cqh, 11cqw); }
+.phase { font-size: 0.8rem; color: var(--w-fg-muted); }
+.seal { display: none; }
+
+.side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.55rem; }
+.cycle { display: flex; gap: 6px; }
+.cycle i { width: 10px; height: 10px; border-radius: 50%; background: var(--w-track); }
+.cycle i.on { background: color-mix(in srgb, var(--w-accent) 55%, transparent); }
+.cycle i.now { box-shadow: inset 0 0 0 2px var(--w-accent); }
+body.running .cycle i.now { background: var(--w-accent); }
+.buttons { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 0.15rem; }
+.buttons .main { padding-inline: 14px; }
+
+@container (max-width: 230px) { .side .today { display: none; } }
+@container (max-height: 120px) { .phase { display: none; } }
+
+/* ── 玻璃上的字: the minutes, large and thin; no ring ── */
+html[data-theme="type"] .pomo { flex-direction: column; align-items: flex-start; justify-content: center; gap: 0.4rem; }
+html[data-theme="type"] .ring { display: none; }
+html[data-theme="type"] .dial { height: auto; aspect-ratio: auto; max-width: none; display: block; }
+html[data-theme="type"] .face { flex-direction: column-reverse; align-items: flex-start; }
+html[data-theme="type"] .time { font-size: min(42cqh, 30cqw); margin-left: -0.04em; }
+html[data-theme="type"] .phase { font-size: 0.93rem; font-weight: 600; color: var(--w-fg); }
+html[data-theme="type"] .side { flex: none; width: 100%; flex-direction: row; align-items: center; gap: 1.2rem; }
+html[data-theme="type"] .cycle { display: none; }
+html[data-theme="type"] .today { order: 2; }
+html[data-theme="type"] .buttons { margin: 0 0 0 -8px; }
+html[data-theme="type"] .w-btn.is-primary { background: transparent; color: var(--w-fg); text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--w-accent); text-shadow: inherit; }
+html[data-theme="type"] .w-btn.is-primary:hover { background: var(--w-hover); }
+html[data-theme="type"] body.running .time { color: var(--w-fg); }
+
+/* ── 書桌上的紙: a printed timer slip: seal for the phase, ruled boxes for the rounds ── */
+html[data-theme="paper"] .ring { display: none; }
+html[data-theme="paper"] .dial { height: auto; aspect-ratio: auto; max-width: none; }
+html[data-theme="paper"] .face { flex-direction: row; align-items: center; gap: 0.6rem; }
+html[data-theme="paper"] .seal {
+  display: grid; place-items: center; width: 2.1rem; height: 2.1rem; flex: none;
+  border: 2px solid var(--w-accent); border-radius: 4px; color: var(--w-accent);
+  font-family: var(--w-font-title); font-weight: 700; font-size: 1.15rem; line-height: 1;
+}
+html[data-theme="paper"] body[data-phase="short"] .seal, html[data-theme="paper"] body[data-phase="long"] .seal { border-style: dashed; }
+html[data-theme="paper"] .time { font-size: min(34cqh, 17cqw); font-family: var(--w-font-num); }
+html[data-theme="paper"] .phase { display: none; }
+html[data-theme="paper"] .pomo { flex-direction: column; align-items: stretch; justify-content: center; gap: 0.7rem; }
+html[data-theme="paper"] .side { flex: none; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.8rem; border-top: 1px solid var(--w-rule); padding-top: 0.6rem; }
+html[data-theme="paper"] .cycle i { width: 11px; height: 11px; border-radius: 2px; background: transparent; border: 1.3px solid color-mix(in srgb, var(--w-fg) 70%, transparent); }
+html[data-theme="paper"] .cycle i.on { background: var(--w-fg); border-color: var(--w-fg); }
+html[data-theme="paper"] .cycle i.now { box-shadow: none; border-color: var(--w-accent); }
+html[data-theme="paper"] body.running .cycle i.now { background: transparent; }
+html[data-theme="paper"] .buttons { margin: 0 0 0 auto; }
+html[data-theme="paper"] .w-btn.is-primary { background: var(--w-fg); color: var(--w-bg-solid); border-radius: 3px; }

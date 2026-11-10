@@ -1,0 +1,24 @@
+{
+  "id": "winwidget.progress",
+  "name": { "zh-TW": "時間進度", "zh-CN": "时间进度", "en": "Time progress" },
+  "description": { "zh-TW": "今天、本週、本月、今年過了多少", "zh-CN": "今天、本周、本月、今年过了多少", "en": "How much of today, this week, month and year has gone" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "time",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 300, "height": 200, "minWidth": 180, "minHeight": 100, "maxWidth": 800, "maxHeight": 600, "grow": 1 },
+  "permissions": [],
+  "settings": [
+    { "key": "day", "type": "toggle", "label": { "zh-TW": "今天", "zh-CN": "今天", "en": "Today" }, "default": true },
+    { "key": "week", "type": "toggle", "label": { "zh-TW": "本週", "zh-CN": "本周", "en": "This week" }, "default": true },
+    { "key": "month", "type": "toggle", "label": { "zh-TW": "本月", "zh-CN": "本月", "en": "This month" }, "default": true },
+    { "key": "year", "type": "toggle", "label": { "zh-TW": "今年", "zh-CN": "今年", "en": "This year" }, "default": true },
+    { "key": "weekStart", "type": "select", "label": { "zh-TW": "每週第一天", "zh-CN": "每周第一天", "en": "Week starts on" }, "default": "monday",
+      "options": [
+        { "value": "monday", "label": { "zh-TW": "星期一", "zh-CN": "星期一", "en": "Monday" } },
+        { "value": "sunday", "label": { "zh-TW": "星期日", "zh-CN": "星期日", "en": "Sunday" } }
+      ] }
+  ]
+}

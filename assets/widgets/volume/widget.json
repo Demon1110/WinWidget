@@ -1,0 +1,21 @@
+{
+  "id": "winwidget.volume",
+  "name": { "zh-TW": "音量", "zh-CN": "音量", "en": "Volume" },
+  "description": { "zh-TW": "調整系統音量、靜音；在組件上滾動滑鼠也能調", "zh-CN": "调整系统音量、静音；在组件上滚动鼠标也能调", "en": "System volume and mute; scroll over it to adjust" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "system",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 280, "height": 110, "minWidth": 180, "minHeight": 70, "maxWidth": 700, "maxHeight": 300, "grow": 1 },
+  "permissions": ["audio"],
+  "settings": [
+    { "key": "step", "type": "select", "label": { "zh-TW": "滾動一格調多少", "zh-CN": "滚动一格调多少", "en": "Each scroll step" }, "default": 2,
+      "options": [
+        { "value": 1, "label": "1%" },
+        { "value": 2, "label": "2%" },
+        { "value": 5, "label": "5%" }
+      ] }
+  ]
+}

@@ -1,0 +1,43 @@
+body { container-type: size; display: flex; flex-direction: column; gap: 0.45rem; }
+[hidden] { display: none !important; }
+
+.amount { display: flex; align-items: center; gap: 0.5rem; }
+.amt { flex: 1; min-width: 0; font-family: var(--w-font-num); font-size: 1.05rem; text-align: right; padding: 4px 10px; }
+.amt::placeholder { font-family: var(--w-font); font-size: 0.86rem; }
+.amt.bad { outline: 1.5px solid var(--w-danger); outline-offset: 0; }
+.amt-hint { margin-top: -0.2rem; font-size: 0.75rem; color: var(--w-danger); text-align: right; }
+.base { font-family: var(--w-font-num); font-size: 1rem; color: var(--w-fg-muted); min-width: 2.6em; }
+
+.rows { list-style: none; margin: 0; padding: 0; flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; mask-image: linear-gradient(#000 calc(100% - 14px), transparent); }
+.row { display: grid; grid-template-columns: 2.9em minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 0.5rem; align-items: baseline; padding: 0.28rem 0; }
+.row + .row { border-top: 1px solid var(--w-rule); }
+.code { grid-row: 1 / 3; align-self: center; font-size: 0.86rem; font-weight: 600; color: var(--w-accent); }
+.name { font-size: 0.86rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.val { font-size: 1.05rem; text-align: right; white-space: nowrap; }
+.per { grid-column: 2 / -1; font-size: 0.72rem; color: var(--w-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chg { margin-left: 0.5em; }
+.chg.up { color: var(--w-warn); }
+.chg.down { color: var(--w-accent); }
+.none { padding: 1rem 0; text-align: center; color: var(--w-fg-muted); font-size: 0.86rem; }
+.msg { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.4rem; color: var(--w-fg-muted); font-size: 0.9rem; }
+.foot { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.7rem; white-space: nowrap; }
+.foot a { color: inherit; text-decoration: none; overflow: hidden; text-overflow: ellipsis; }
+.foot a:hover { text-decoration: underline; }
+@container (max-height: 170px) { .per { display: none; } .row { grid-template-rows: auto; } .code { grid-row: 1; } }
+/* short: the rates matter more than the converter */
+@container (max-height: 140px) { .amount { display: none; } }
+
+/* ── 玻璃上的字: big converted figures, codes as small caps ── */
+html[data-theme="type"] .amt { background: rgba(255, 255, 255, 0.12); border-color: transparent; }
+html[data-theme="type"] .code { color: var(--w-fg); }
+html[data-theme="type"] .val { font-family: var(--w-font-display); font-weight: var(--w-display-weight); font-size: 1.45rem; letter-spacing: -0.02em; }
+html[data-theme="type"] .row + .row { border-top: 0; }
+html[data-theme="type"] .name { font-weight: 600; }
+
+/* ── 書桌上的紙: a bank's rate board ── */
+html[data-theme="paper"] .amt { border-radius: 2px; background: transparent; border: 0; border-bottom: 1.5px solid var(--w-fg); font-size: 1.25rem; }
+html[data-theme="paper"] .code { color: var(--w-fg); font-family: var(--w-font-num); }
+html[data-theme="paper"] .name { font-family: var(--w-font-title); }
+html[data-theme="paper"] .row + .row { border-top-style: dotted; }
+html[data-theme="paper"] .chg.up { color: var(--w-accent); }
+html[data-theme="paper"] .chg.down { color: var(--w-fg); }

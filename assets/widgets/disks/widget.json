@@ -1,0 +1,16 @@
+{
+  "id": "winwidget.disks",
+  "name": { "zh-TW": "磁碟", "zh-CN": "磁盘", "en": "Drives" },
+  "description": { "zh-TW": "每個磁碟還剩多少空間", "zh-CN": "每个磁盘还剩多少空间", "en": "Free space on every drive" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "system",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 300, "height": 180, "minWidth": 190, "minHeight": 90, "maxWidth": 800, "maxHeight": 700, "grow": 1 },
+  "permissions": ["system"],
+  "settings": [
+    { "key": "removable", "type": "toggle", "label": { "zh-TW": "包括隨身碟和記憶卡", "zh-CN": "包括U盘和存储卡", "en": "Include USB drives and cards" }, "default": true }
+  ]
+}

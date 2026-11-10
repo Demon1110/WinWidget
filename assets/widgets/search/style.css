@@ -1,0 +1,53 @@
+body { container-type: size; display: flex; align-items: center; }
+[hidden] { display: none !important; }
+
+.bar {
+  width: 100%; height: min(100%, 48px); display: flex; align-items: center; gap: 0.5rem;
+  padding: 0 0.4rem 0 0.8rem; border-radius: calc(var(--w-radius) * 0.6);
+  background: var(--w-control-bg); box-shadow: inset 0 0 0 1px var(--w-border); transition: box-shadow 0.15s;
+}
+.bar:focus-within { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--w-accent) 75%, transparent); }
+.glass { width: 1.15rem; height: 1.15rem; flex: none; fill: none; stroke: var(--w-fg-muted); stroke-width: 1.8; stroke-linecap: round; }
+.q { flex: 1; min-width: 0; height: 100%; border: 0; outline: none; background: transparent; font-size: 1rem; text-shadow: none; }
+.q::placeholder { color: var(--w-fg-muted); }
+.q::-webkit-search-cancel-button { filter: grayscale(1); opacity: 0.6; cursor: pointer; }
+.engine {
+  flex: none; border: 0; border-radius: 6px; padding: 3px 9px; background: transparent; cursor: pointer;
+  font-size: 0.78rem; color: var(--w-fg-muted); white-space: nowrap; text-shadow: inherit;
+}
+.engine:hover { background: var(--w-hover); color: var(--w-fg); }
+/* narrow: the engine's name gives its room to the search words; the arrow stays */
+@container (max-width: 250px) { .engine { font-size: 0; padding-left: 6px; padding-right: 6px; } .engine::after { margin-left: 0; } }
+.engine::after { content: ""; display: inline-block; width: 5px; height: 5px; margin-left: 6px; border: solid currentColor; border-width: 0 1.3px 1.3px 0; transform: rotate(45deg) translateY(-2px); }
+
+/* the engines as a row in place of the box: a drop-down wouldn't fit in a widget this short */
+.menu {
+  position: absolute; left: var(--w-padding); right: var(--w-padding); top: 50%; transform: translateY(-50%); z-index: 4;
+  height: min(calc(100% - 2 * var(--w-padding)), 48px); list-style: none; margin: 0; padding: 0 6px;
+  display: flex; align-items: center; gap: 2px; overflow-x: auto; scrollbar-width: none;
+  /* more engines to the right: the row fades out there */
+  mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+  border-radius: calc(var(--w-radius) * 0.6); background: var(--w-bg-solid); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--w-accent) 75%, transparent);
+}
+.menu li { flex: none; }
+.menu button { border: 0; border-radius: 99px; padding: 4px 11px; background: transparent; cursor: pointer; font-size: 0.86rem; white-space: nowrap; }
+.menu button:hover { background: var(--w-hover); }
+.menu button.on { background: color-mix(in srgb, var(--w-accent) 18%, transparent); color: var(--w-accent); font-weight: 600; }
+
+/* ── 玻璃上的字: a frosted pill on the wallpaper ── */
+html[data-theme="type"] .bar { border-radius: 99px; background: rgba(255, 255, 255, 0.14); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18); backdrop-filter: blur(10px); }
+html[data-theme="type"] .glass { stroke: var(--w-fg); }
+html[data-theme="type"] .q { font-weight: 500; }
+html[data-theme="type"] .q::placeholder { color: rgba(255, 255, 255, 0.75); }
+html[data-theme="type"] .engine { color: var(--w-fg); }
+html[data-theme="type"] .menu { background: rgb(16, 22, 46); border-radius: 99px; }
+
+/* ── 書桌上的紙: a ruled line to write on ── */
+html[data-theme="paper"] .bar { background: transparent; box-shadow: none; border-radius: 0; border-bottom: 1.5px solid var(--w-fg); padding-left: 0.2rem; }
+html[data-theme="paper"] .bar:focus-within { box-shadow: none; border-bottom-color: var(--w-accent); }
+html[data-theme="paper"] .glass { stroke: var(--w-fg); }
+html[data-theme="paper"] .q { font-family: var(--w-font-title); font-size: 1.05rem; }
+html[data-theme="paper"] .engine { font-family: var(--w-font-title); color: var(--w-fg); }
+html[data-theme="paper"] .menu { border-radius: 2px; box-shadow: inset 0 0 0 1px var(--w-fg); }
+html[data-theme="paper"] .menu button { font-family: var(--w-font-title); }
+html[data-theme="paper"] .menu button.on { background: transparent; color: var(--w-accent); box-shadow: inset 0 0 0 1.2px var(--w-accent); }

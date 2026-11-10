@@ -1,0 +1,21 @@
+{
+  "id": "winwidget.media",
+  "name": { "zh-TW": "媒體控制", "zh-CN": "媒体控制", "en": "Now playing" },
+  "description": { "zh-TW": "正在播放的歌名、封面和歌詞，可以播放、暫停、切換曲目", "zh-CN": "正在播放的歌名、封面和歌词，可以播放、暂停、切换曲目", "en": "What's playing, with lyrics, play, pause and skip" },
+  "version": "1.2.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "media",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 340, "height": 136, "minWidth": 200, "minHeight": 64, "maxWidth": 700, "maxHeight": 520, "grow": 1 },
+  "permissions": ["media"],
+  "settings": [
+    { "key": "progress", "type": "toggle", "label": { "zh-TW": "顯示進度", "zh-CN": "显示进度", "en": "Show progress" }, "default": true },
+    { "key": "app", "type": "toggle", "label": { "zh-TW": "顯示是哪個程式在播放", "zh-CN": "显示是哪个程序在播放", "en": "Show which app is playing" }, "default": true },
+    { "key": "lyrics", "type": "toggle", "label": { "zh-TW": "顯示歌詞", "zh-CN": "显示歌词", "en": "Show lyrics" }, "default": true,
+      "description": { "zh-TW": "用歌名和歌手在網易雲音樂、QQ 音樂、酷狗上找歌詞。把卡片拉高可以看到更多行", "zh-CN": "用歌名和歌手在网易云音乐、QQ 音乐、酷狗上找歌词。把卡片拉高可以看到更多行", "en": "Looked up by title and artist on NetEase Cloud Music, QQ Music and Kugou. Make the card taller to see more lines" } },
+    { "key": "translation", "type": "toggle", "label": { "zh-TW": "顯示歌詞翻譯", "zh-CN": "显示歌词翻译", "en": "Show translated lyrics" }, "default": true,
+      "description": { "zh-TW": "有翻譯時，在卡片夠高時顯示在每行下面", "zh-CN": "有翻译时，在卡片够高时显示在每行下面", "en": "When there is one, under each line once the card is tall enough" } }
+  ]
+}

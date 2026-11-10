@@ -1,0 +1,17 @@
+{
+  "id": "winwidget.pcinfo",
+  "name": { "zh-TW": "電腦資訊", "zh-CN": "电脑信息", "en": "This PC" },
+  "description": { "zh-TW": "Windows 版本、處理器、記憶體、顯示卡、開機多久了", "zh-CN": "Windows 版本、处理器、内存、显卡、开机多久了", "en": "Windows version, processor, memory, graphics, and time since start-up" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "system",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 320, "height": 220, "minWidth": 200, "minHeight": 110, "maxWidth": 800, "maxHeight": 500, "grow": 1 },
+  "permissions": ["system"],
+  "settings": [
+    { "key": "showName", "type": "toggle", "label": { "zh-TW": "顯示電腦名稱", "zh-CN": "显示电脑名称", "en": "Show the PC's name" }, "default": true },
+    { "key": "showGpu", "type": "toggle", "label": { "zh-TW": "顯示顯示卡", "zh-CN": "显示显卡", "en": "Show graphics" }, "default": true }
+  ]
+}

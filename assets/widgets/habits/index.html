@@ -1,0 +1,20 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="head">
+    <span class="today w-title" id="today"></span>
+    <span class="sum w-label" id="sum"></span>
+    <button class="w-btn edit" id="edit" data-no-drag></button>
+  </div>
+  <ul class="list" id="list"></ul>
+  <form class="add" id="add" hidden>
+    <input class="w-input" id="new" maxlength="30" autocomplete="off" spellcheck="false">
+    <button class="w-btn is-primary" id="add-ok"></button>
+  </form>
+  <script src="main.js"></script>
+</body>
+</html>

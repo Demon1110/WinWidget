@@ -1,0 +1,22 @@
+{
+  "id": "winwidget.airquality",
+  "name": { "zh-TW": "空氣品質", "zh-CN": "空气质量", "en": "Air quality" },
+  "description": { "zh-TW": "AQI、PM2.5、PM10，按等級上色", "zh-CN": "AQI、PM2.5、PM10，按等级上色", "en": "AQI, PM2.5 and PM10, coloured by level" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "weather",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 300, "height": 190, "minWidth": 190, "minHeight": 110, "maxWidth": 800, "maxHeight": 500, "grow": 1 },
+  "permissions": ["network:air-quality-api.open-meteo.com", "network:geocoding-api.open-meteo.com", "network:get.geojs.io"],
+  "settings": [
+    { "key": "city", "type": "text", "label": { "zh-TW": "城市", "zh-CN": "城市", "en": "City" }, "default": "",
+      "placeholder": { "zh-TW": "留空：按網絡位置自動定位", "zh-CN": "留空：按网络位置自动定位", "en": "Empty: locate from your network" } },
+    { "key": "scale", "type": "select", "label": { "zh-TW": "指標", "zh-CN": "指标", "en": "Index" }, "default": "us",
+      "options": [
+        { "value": "us", "label": { "zh-TW": "AQI（美國標準，0–500）", "zh-CN": "AQI（美国标准，0–500）", "en": "US AQI (0–500)" } },
+        { "value": "eu", "label": { "zh-TW": "歐洲 AQI（0–100+）", "zh-CN": "欧洲 AQI（0–100+）", "en": "European AQI (0–100+)" } }
+      ] }
+  ]
+}

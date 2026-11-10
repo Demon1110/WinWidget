@@ -1,0 +1,18 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- the dial is drawn once; each hand is its own layer, so turning it never repaints the dial -->
+  <div class="clock" aria-hidden="true">
+    <svg class="dial" viewBox="-100 -100 200 200"><g id="face"></g></svg>
+    <svg class="hand hour" id="hour" viewBox="-100 -100 200 200"></svg>
+    <svg class="hand minute" id="minute" viewBox="-100 -100 200 200"></svg>
+    <svg class="hand second" id="second" viewBox="-100 -100 200 200"></svg>
+    <svg class="cap" viewBox="-100 -100 200 200"><g id="cap"></g></svg>
+  </div>
+  <script src="main.js"></script>
+</body>
+</html>

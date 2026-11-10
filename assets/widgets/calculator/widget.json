@@ -1,0 +1,16 @@
+{
+  "id": "winwidget.calculator",
+  "name": { "zh-TW": "計算機", "zh-CN": "计算器", "en": "Calculator" },
+  "description": { "zh-TW": "可直接用鍵盤輸入算式，保留算過的式子", "zh-CN": "可直接用键盘输入算式，保留算过的式子", "en": "Type a sum straight in; past sums are kept" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "productivity",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 260, "height": 340, "minWidth": 180, "minHeight": 100, "maxWidth": 600, "maxHeight": 800, "grow": 1 },
+  "permissions": [],
+  "settings": [
+    { "key": "grouping", "type": "toggle", "label": { "zh-TW": "千位分隔", "zh-CN": "千位分隔", "en": "Thousands separators" }, "default": true }
+  ]
+}

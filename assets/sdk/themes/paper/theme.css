@@ -1,0 +1,39 @@
+/* Theme "書桌上的紙" (paper): cream paper with a faint fibre, ink type, old-style figures,
+   a vermilion seal colour used only for the weekday seal and warnings. */
+:root {
+  color-scheme: light;
+  --w-font-fallback: "Microsoft JhengHei UI", "Microsoft YaHei UI", "Noto Sans TC", sans-serif;
+  --w-font-num: Georgia, "Noto Serif TC", serif;
+  --w-font-title: "Noto Serif TC", "Noto Serif SC", "Source Han Serif TC", PMingLiU, serif;
+  --w-num-weight: 400;
+  --w-display-weight: 400;
+  --w-display-tracking: -0.01em;
+  --w-fg-muted: color-mix(in srgb, var(--w-fg) 64%, transparent);
+  --w-fg-faint: color-mix(in srgb, var(--w-fg) 14%, transparent);
+  --w-border: rgba(31, 28, 24, 0.06);
+  --w-rule: rgba(31, 28, 24, 0.16);
+  --w-track: rgba(31, 28, 24, 0.10);
+  --w-control-bg: rgba(31, 28, 24, 0.04);
+  --w-hover: rgba(31, 28, 24, 0.06);
+  --w-warn: var(--w-accent);
+  --w-on-accent: #fff8ef;
+  --w-shadow: 0 calc(1px / var(--w-size-scale)) calc(2px / var(--w-size-scale)) rgba(0, 0, 0, 0.22), 0 calc(8px / var(--w-size-scale)) calc(16px / var(--w-size-scale)) rgba(0, 0, 0, 0.34);
+  --w-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.3  0 0 0 0 0.25  0 0 0 0 0.2  0 0 0 .07 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+:root:lang(zh-CN) {
+  --w-font-fallback: "Microsoft YaHei UI", "Microsoft JhengHei UI", "Noto Sans SC", sans-serif;
+  --w-font-title: "Noto Serif SC", "Noto Serif TC", "Source Han Serif SC", STSong, serif;
+}
+
+body { background: var(--w-grain), var(--w-bg); }
+
+/* square ink check boxes, like a printed form */
+.w-check { border-radius: 3px; border-color: color-mix(in srgb, var(--w-fg) 70%, transparent); }
+.w-check[aria-pressed="true"] { background: transparent; border-color: var(--w-fg); }
+.w-check[aria-pressed="true"]::after { border-color: var(--w-fg); }
+
+.w-bar { height: 3px; border-radius: 0; }
+.w-bar > i { background: var(--w-fg); }
+.w-bar.is-warn > i { background: var(--w-accent); }
+
+.w-input { border-radius: 3px; }

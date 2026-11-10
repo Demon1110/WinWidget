@@ -1,0 +1,23 @@
+/* <body> 就是卡片。用 --w-* 变量和 w-* 样式，组件就会跟着主题和用户的外观设置变化。 */
+body {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.time {
+  font-size: 2.6rem;
+  color: var(--w-fg);
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+#count {
+  margin-right: -8px;
+  font-size: 0.857rem;
+}

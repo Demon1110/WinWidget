@@ -1,0 +1,46 @@
+{
+  "id": "winwidget.label",
+  "name": { "zh-TW": "文字標籤", "zh-CN": "文字标签", "en": "Text label" },
+  "description": { "zh-TW": "一段大字，當桌面標題或座右銘；連按兩下就能改", "zh-CN": "一段大字，当桌面标题或座右铭；双击就能改", "en": "Big words for a desktop heading or a motto; double-click to edit" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "media",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 360, "height": 120, "minWidth": 100, "minHeight": 44, "maxWidth": 1800, "maxHeight": 900, "grow": 1 },
+  "permissions": [],
+  "settings": [
+    { "key": "text", "type": "textarea", "label": { "zh-TW": "文字", "zh-CN": "文字", "en": "Text" },
+      "default": { "zh-TW": "保持好奇", "zh-CN": "保持好奇", "en": "Stay curious" },
+      "description": { "zh-TW": "可以分行；字會自動放到最大。也可以在桌面上連按兩下直接改。", "zh-CN": "可以分行；字会自动放到最大。也可以在桌面上双击直接改。", "en": "Line breaks are kept; the text grows to fill the widget. You can also double-click it on the desktop." } },
+    { "key": "note", "type": "text", "label": { "zh-TW": "小字", "zh-CN": "小字", "en": "Small line" }, "default": "",
+      "description": { "zh-TW": "顯示在大字上面，可以留空", "zh-CN": "显示在大字上面，可以留空", "en": "Shown above the big words; can be empty" } },
+    { "key": "align", "type": "select", "label": { "zh-TW": "對齊", "zh-CN": "对齐", "en": "Align" }, "default": "start",
+      "options": [
+        { "value": "start", "label": { "zh-TW": "靠左", "zh-CN": "靠左", "en": "Left" } },
+        { "value": "center", "label": { "zh-TW": "置中", "zh-CN": "居中", "en": "Center" } },
+        { "value": "end", "label": { "zh-TW": "靠右", "zh-CN": "靠右", "en": "Right" } }
+      ] },
+    { "key": "font", "type": "select", "label": { "zh-TW": "字體", "zh-CN": "字体", "en": "Font" }, "default": "theme",
+      "options": [
+        { "value": "theme", "label": { "zh-TW": "跟隨主題", "zh-CN": "跟随主题", "en": "Theme's" } },
+        { "value": "sans", "label": { "zh-TW": "黑體", "zh-CN": "黑体", "en": "Sans serif" } },
+        { "value": "serif", "label": { "zh-TW": "明體", "zh-CN": "宋体", "en": "Serif" } },
+        { "value": "kai", "label": { "zh-TW": "楷體", "zh-CN": "楷体", "en": "Handwriting" } },
+        { "value": "mono", "label": { "zh-TW": "等寬", "zh-CN": "等宽", "en": "Monospace" } }
+      ] },
+    { "key": "weight", "type": "select", "label": { "zh-TW": "粗細", "zh-CN": "粗细", "en": "Weight" }, "default": "regular",
+      "options": [
+        { "value": "light", "label": { "zh-TW": "細", "zh-CN": "细", "en": "Light" } },
+        { "value": "regular", "label": { "zh-TW": "標準", "zh-CN": "标准", "en": "Regular" } },
+        { "value": "bold", "label": { "zh-TW": "粗", "zh-CN": "粗", "en": "Bold" } }
+      ] },
+    { "key": "color", "type": "select", "label": { "zh-TW": "顏色", "zh-CN": "颜色", "en": "Color" }, "default": "text",
+      "options": [
+        { "value": "text", "label": { "zh-TW": "文字顏色", "zh-CN": "文字颜色", "en": "Text color" } },
+        { "value": "accent", "label": { "zh-TW": "強調色", "zh-CN": "强调色", "en": "Accent" } },
+        { "value": "muted", "label": { "zh-TW": "淡一點", "zh-CN": "淡一点", "en": "Softer" } }
+      ] }
+  ]
+}

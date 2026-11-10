@@ -1,0 +1,35 @@
+{
+  "id": "winwidget.infocard",
+  "name": { "zh-TW": "自訂資訊卡", "zh-CN": "自定义信息卡", "en": "Custom card" },
+  "description": {
+    "zh-TW": "用一段模板拼出自己的卡片，例如 CPU {cpu}% · {time}",
+    "zh-CN": "用一段模板拼出自己的卡片，例如 CPU {cpu}% · {time}",
+    "en": "Build your own card from a template, e.g. CPU {cpu}% · {time}"
+  },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "info",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 280, "height": 170, "minWidth": 140, "minHeight": 70, "maxWidth": 900, "maxHeight": 900, "grow": 1 },
+  "permissions": ["system"],
+  "settings": [
+    { "key": "template", "type": "textarea", "label": { "zh-TW": "內容模板", "zh-CN": "内容模板", "en": "Template" },
+      "description": {
+        "zh-TW": "# 開頭是大標題，## 是小標題，--- 是分隔線。可用：{time} {seconds} {date} {weekday} {year} {month} {day} {cpu} {mem} {memUsed} {memTotal} {down} {up} {disk} {disk:D} {battery}",
+        "zh-CN": "# 开头是大标题，## 是小标题，--- 是分隔线。可用：{time} {seconds} {date} {weekday} {year} {month} {day} {cpu} {mem} {memUsed} {memTotal} {down} {up} {disk} {disk:D} {battery}",
+        "en": "# for a big line, ## for a heading, --- for a rule. Tokens: {time} {seconds} {date} {weekday} {year} {month} {day} {cpu} {mem} {memUsed} {memTotal} {down} {up} {disk} {disk:D} {battery}"
+      },
+      "default": {
+        "zh-TW": "# {time}\n{weekday} · {date}\n---\nCPU {cpu}%　記憶體 {mem}%\n↓ {down}　↑ {up}",
+        "zh-CN": "# {time}\n{weekday} · {date}\n---\nCPU {cpu}%　内存 {mem}%\n↓ {down}　↑ {up}",
+        "en": "# {time}\n{weekday}, {date}\n---\nCPU {cpu}%  Memory {mem}%\n↓ {down}  ↑ {up}"
+      } },
+    { "key": "align", "type": "select", "label": { "zh-TW": "對齊", "zh-CN": "对齐", "en": "Alignment" }, "default": "left",
+      "options": [
+        { "value": "left", "label": { "zh-TW": "靠左", "zh-CN": "靠左", "en": "Left" } },
+        { "value": "center", "label": { "zh-TW": "置中", "zh-CN": "居中", "en": "Center" } }
+      ] }
+  ]
+}

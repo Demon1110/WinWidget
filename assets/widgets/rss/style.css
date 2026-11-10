@@ -1,0 +1,36 @@
+body { container-type: size; display: flex; flex-direction: column; gap: 0.4rem; }
+[hidden] { display: none !important; }
+
+.head { display: flex; align-items: baseline; gap: 0.6rem; white-space: nowrap; }
+.src { font-size: 0.93rem; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.when { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+.items { list-style: none; margin: 0 -6px; padding: 0; flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; mask-image: linear-gradient(#000 calc(100% - 18px), transparent); }
+.item { display: flex; align-items: baseline; gap: 0.6rem; padding: 0.32rem 6px; border-radius: 6px; color: inherit; text-decoration: none; cursor: pointer; }
+.item:hover { background: var(--w-hover); }
+.tt { flex: 1; min-width: 0; font-size: 0.88rem; line-height: 1.4; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.tm { flex: none; font-size: 0.72rem; color: var(--w-fg-muted); font-variant-numeric: tabular-nums; }
+.item.seen .tt { color: var(--w-fg-muted); }
+.msg { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.4rem; text-align: center; color: var(--w-fg-muted); font-size: 0.9rem; }
+
+/* ── 量被畫出來: a timeline; each headline a tick on the left rule ── */
+.items li { position: relative; }
+html:not([data-theme="type"]):not([data-theme="paper"]) .items { margin-left: 0; padding-left: 12px; background: linear-gradient(var(--w-rule), var(--w-rule)) 3px 0 / 1px 100% no-repeat; }
+html:not([data-theme="type"]):not([data-theme="paper"]) .items li::before { content: ""; position: absolute; left: -11.5px; top: 0.78rem; width: 6px; height: 6px; border-radius: 50%; background: var(--w-fg-faint); box-shadow: 0 0 0 2px var(--w-bg-solid); }
+html:not([data-theme="type"]):not([data-theme="paper"]) .items li:first-child::before { background: var(--w-accent); }
+html:not([data-theme="type"]):not([data-theme="paper"]) .tm { font-family: var(--w-font-num); }
+
+/* ── 玻璃上的字: the top story large; the rest smaller ── */
+html[data-theme="type"] .items li:first-child .tt { font-size: 1.15rem; font-weight: 600; line-height: 1.3; -webkit-line-clamp: 3; }
+html[data-theme="type"] .tt { font-weight: 500; }
+html[data-theme="type"] .src { font-size: 0.8rem; color: var(--w-fg-muted); font-weight: 600; letter-spacing: 0.04em; }
+html[data-theme="type"] .items { mask-image: none; }
+
+/* ── 書桌上的紙: a newspaper column ── */
+html[data-theme="paper"] .head { border-bottom: 2px solid var(--w-fg); padding-bottom: 0.3rem; }
+html[data-theme="paper"] .src { font-family: var(--w-font-title); font-size: 1.05rem; }
+html[data-theme="paper"] .tt { font-family: var(--w-font-title); font-size: 0.92rem; }
+html[data-theme="paper"] .items li + li .item { border-top: 1px dotted var(--w-rule); border-radius: 0; }
+html[data-theme="paper"] .items li:first-child .tt { font-size: 1.05rem; font-weight: 600; }
+html[data-theme="paper"] .item:hover { background: transparent; }
+html[data-theme="paper"] .item:hover .tt { text-decoration: underline; text-decoration-color: var(--w-accent); text-underline-offset: 3px; }

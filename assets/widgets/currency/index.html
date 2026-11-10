@@ -1,0 +1,18 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <label class="amount" data-no-drag>
+    <input class="w-input amt" id="amt" inputmode="decimal" autocomplete="off" spellcheck="false">
+    <span class="base" id="base"></span>
+  </label>
+  <div class="amt-hint" id="amt-hint" role="alert" hidden></div>
+  <ul class="rows" id="rows"></ul>
+  <div class="msg" id="msg" hidden><span id="msg-text"></span><button class="w-btn" id="retry" data-no-drag></button></div>
+  <div class="foot w-label"><span id="date"></span><a href="#" id="credit" data-no-drag></a></div>
+  <script src="main.js"></script>
+</body>
+</html>

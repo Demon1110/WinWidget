@@ -1,0 +1,14 @@
+{
+  "id": "winwidget.recyclebin",
+  "name": { "zh-TW": "資源回收筒", "zh-CN": "回收站", "en": "Recycle Bin" },
+  "description": { "zh-TW": "裏面有幾個項目、多大，按兩次清空", "zh-CN": "里面有几个项目、多大，按两次清空", "en": "How many items and how big; click twice to empty" },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "system",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 240, "height": 150, "minWidth": 170, "minHeight": 100, "maxWidth": 600, "maxHeight": 400, "grow": 1 },
+  "permissions": [],
+  "settings": []
+}
