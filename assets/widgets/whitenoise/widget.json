@@ -10,5 +10,19 @@
   "preview": "preview/{theme}.{lang}.webp",
   "size": { "width": 300, "height": 230, "minWidth": 220, "minHeight": 170, "maxWidth": 600, "maxHeight": 500, "grow": 1 },
   "permissions": [],
-  "settings": []
+  "settings": [
+    { "key": "sound", "type": "select", "label": { "zh-TW": "預設聲音", "zh-CN": "默认声音", "en": "Default sound" },
+      "description": { "zh-TW": "第一次使用時，這個聲音會被推上來", "zh-CN": "第一次使用时，这个声音会被推上来", "en": "Raised the first time this card is used" },
+      "default": "rain",
+      "options": [
+        { "value": "rain", "label": { "zh-TW": "雨聲", "zh-CN": "雨声", "en": "Rain" } },
+        { "value": "waves", "label": { "zh-TW": "海浪", "zh-CN": "海浪", "en": "Waves" } },
+        { "value": "wind", "label": { "zh-TW": "風聲", "zh-CN": "风声", "en": "Wind" } },
+        { "value": "fire", "label": { "zh-TW": "爐火", "zh-CN": "炉火", "en": "Fire" } },
+        { "value": "noise", "label": { "zh-TW": "粉紅噪音", "zh-CN": "粉红噪音", "en": "Pink noise" } }
+      ] },
+    { "key": "volume", "type": "range", "label": { "zh-TW": "預設音量", "zh-CN": "默认音量", "en": "Default volume" },
+      "description": { "zh-TW": "上面那個聲音一開始的音量", "zh-CN": "上面那个声音一开始的音量", "en": "How loud that sound starts out" },
+      "default": 60, "min": 0, "max": 100, "step": 5 }
+  ]
 }

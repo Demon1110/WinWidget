@@ -339,7 +339,20 @@ fn friendly_app_name(aumid: &str) -> String {
     }
     let base = aumid.split('!').next_back().unwrap_or(aumid);
     let base = base.split('_').next().unwrap_or(base);
-    base.rsplit('.').next().unwrap_or(base).to_string()
+    let last = base.rsplit('.').next().unwrap_or(base);
+    // A desktop player reports the file it plays — "C:\…\foobar2000.exe" — and the last dot segment
+    // of that is "exe". The name the user recognizes is the file's own name.
+    if last.eq_ignore_ascii_case("exe")
+        || last.eq_ignore_ascii_case("com")
+        || last.eq_ignore_ascii_case("dll")
+        || last.eq_ignore_ascii_case("app")
+    {
+        let file = aumid.rsplit(['\\', '/']).next().unwrap_or(aumid);
+        let stem = file.rsplit_once('.').map(|(s, _)| s).unwrap_or(file);
+        let stem = stem.split('!').next_back().unwrap_or(stem);
+        return stem.rsplit('.').next().unwrap_or(stem).to_string();
+    }
+    last.to_string()
 }
 
 /// Reads the session thumbnail into `<local>\media\<key>.png` and returns the URL for it.

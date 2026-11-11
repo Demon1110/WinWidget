@@ -122,7 +122,6 @@ pub struct App {
     pub hotkeys_paused: bool,
     fullscreen_ticks: u32,
     fullscreen_area: Option<crate::platform::win32::RECT>,
-    caption_check: i64,
 }
 
 fn same_area(
@@ -185,7 +184,6 @@ impl App {
             hotkeys_paused: false,
             fullscreen_ticks: 0,
             fullscreen_area: None,
-            caption_check: 0,
         };
         app.boot_defaults();
         app.start_tray();
@@ -915,17 +913,11 @@ impl App {
         for note in fired {
             self.show_note(&note.title, &note.body);
         }
-        // A caption can come back on the top of a card after an activation, a compositing change or
-        // a frame update; state the policy again so the card never keeps that strip for long.
-        if now - self.caption_check >= 1000 {
-            self.caption_check = now;
-            for win in self.windows.values() {
-                if win.visible {
-                    let hwnd = win.hwnd();
-                    crate::platform::win32::disable_nc_rendering(hwnd);
-                }
-            }
-        }
+        // Reasserting the non-client policy on a timer used to look like cheap insurance, but every
+        // `DwmSetWindowAttribute` makes the compositor rebuild the frame: with a few transparent
+        // cards that is a visible flash once a second, and with nine of them it is a stall. The
+        // window procedure already states the policy at the only three moments the caption can come
+        // back (show, activate, non-client paint), so nothing here needs a clock.
     }
 
     // ── small operations shared by the control center, menus and hotkeys ──

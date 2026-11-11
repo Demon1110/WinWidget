@@ -72,8 +72,11 @@ function render() {
   const lost = pings.filter((v) => v == null).length;
   const rows = [];
   if (main) {
-    rows.push([t({ "zh-TW": "本機 IP", "zh-CN": "本机 IP", en: "Local IP" }), main.ipv4[0] || main.ipv6[0] || "—"]);
-    rows.push([t({ "zh-TW": "閘道", "zh-CN": "网关", en: "Gateway" }), main.gateways[0] || "—"]);
+    const v4 = (main.ipv4 || (main.ip ? [main.ip] : []))[0];
+    const v6 = (main.ipv6 || [])[0];
+    rows.push([t({ "zh-TW": "本機 IP", "zh-CN": "本机 IP", en: "Local IP" }), v4 || v6 || "—"]);
+    const gw = (main.gateways || (main.gateway ? [main.gateway] : []))[0];
+    if (gw) rows.push([t({ "zh-TW": "閘道", "zh-CN": "网关", en: "Gateway" }), gw]);
   }
   if (opts.showPublic) rows.push([t({ "zh-TW": "對外 IP", "zh-CN": "公网 IP", en: "Public IP" }), publicIp || "—"]);
   if (tried) rows.push([t({ "zh-TW": "掉包", "zh-CN": "丢包", en: "Loss" }), `${Math.round((lost / pings.length) * 100)}%`]);

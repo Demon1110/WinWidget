@@ -73,7 +73,7 @@
       const d = msg.d;
       switch (msg.ev) {
         case "settings":
-          state.settings = d || {};
+          state.settings = foldSettings(d || {});
           emit("settings", { ...state.settings });
           break;
         case "appearance":
@@ -162,6 +162,21 @@
     return dict[keys[0]];
   }
 
+  /** A setting that arrived as { "zh-TW": …, "zh-CN": …, en: … } → the user's own string. */
+  function foldValue(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+    const keys = Object.keys(value);
+    if (!keys.length || !keys.every((k) => /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,4})?$/.test(k))) return value;
+    const picked = t(value);
+    return picked == null ? "" : picked;
+  }
+  function foldSettings(values) {
+    const out = {};
+    for (const k of Object.keys(values || {})) out[k] = foldValue(values[k]);
+    return out;
+  }
+  state.settings = foldSettings(state.settings);
+
   // ── system stats ───────────────────────────────────────────
   const sysSubs = new Set();
 
@@ -237,13 +252,20 @@
     const o = options || {};
     let body = o.body;
     if (body != null && typeof body !== "string") body = JSON.stringify(body);
-    const r = await call("net.fetch", {
-      url: String(new URL(url, location.href)),
-      method: o.method || "GET",
-      headers: o.headers || {},
-      body: body == null ? undefined : body,
-      as: o.as === "base64" ? "base64" : "text",
-    });
+    const target = String(new URL(url, location.href));
+    let r;
+    try {
+      r = await call("net.fetch", {
+        url: target,
+        method: o.method || "GET",
+        headers: o.headers || {},
+        body: body == null ? undefined : body,
+        as: o.as === "base64" ? "base64" : "text",
+      });
+    } catch (e) {
+      // Say which address failed: "HTTP 404" alone leaves the card unhelpful to debug.
+      throw new Error(`${e.message} (${target})`);
+    }
     return {
       ok: r.ok,
       status: r.status,
@@ -274,7 +296,7 @@
 
   // ── dragging, resizing, context menu ───────────────────────
   // Dragging starts once the mouse moves a few pixels, so plain clicks still reach the page.
-  const NO_DRAG = "input, textarea, select, button, a[href], [contenteditable]:not([contenteditable='false']), [data-no-drag]";
+  const NO_DRAG = "input, textarea, select, button, a[href], [contenteditable]:not([contenteditable='false']), [data-no-drag], [role='slider']";
   let down = null;
 
   document.addEventListener("mousedown", (e) => {
@@ -283,7 +305,13 @@
       if (!state.locked) { e.preventDefault(); send("window.resize"); }
       return;
     }
-    if (state.locked || (e.target.closest && e.target.closest(NO_DRAG))) return;
+    if (state.locked) return;
+    if (e.target.closest && e.target.closest(NO_DRAG)) {
+      // A fader, a field or a slider: the page keeps this press. Saying so stops the host's own
+      // "the page must be dead" fallback from dragging the whole card when the pointer slides.
+      send("window.press");
+      return;
+    }
     down = { x: e.screenX, y: e.screenY };
   }, true);
 

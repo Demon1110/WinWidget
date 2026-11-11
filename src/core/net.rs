@@ -17,18 +17,28 @@ pub struct FetchRequest {
 }
 
 pub fn fetch(allowed: &[String], req: FetchRequest) -> Result<Value, String> {
-    let agent = ureq::AgentBuilder::new()
+    let mut builder = ureq::AgentBuilder::new()
         .timeout_connect(Duration::from_secs(20))
         .timeout(Duration::from_secs(20))
-        .redirects(0)
-        .build();
+        .redirects(0);
+    // Windows' own settings, the same ones a browser follows: without this every widget behind a
+    // proxy reports "connection failed" while Edge reaches the very same address.
+    if let Some(address) = system_proxy() {
+        match ureq::Proxy::new(&address) {
+            Ok(proxy) => builder = builder.proxy(proxy),
+            Err(e) => crate::core::logging::warn(&format!("ignoring proxy {address}: {e}")),
+        }
+    }
+    let agent = builder.build();
 
     let mut url = req.url.clone();
     let mut method = req.method.to_uppercase();
     let mut body = req.body.clone();
 
     for _hop in 0..=MAX_REDIRECTS {
-        let (host, scheme) = split_url(&url)?;
+        // split_url hands back (scheme, host) — reading them the other way round passed the scheme
+        // to the host check and refused every ordinary address.
+        let (scheme, host) = split_url(&url)?;
         if scheme != "http" && scheme != "https" {
             return Err("only http and https addresses can be fetched".into());
         }
@@ -100,6 +110,65 @@ pub fn fetch(allowed: &[String], req: FetchRequest) -> Result<Value, String> {
         }));
     }
     Err("too many redirects".into())
+}
+
+/// The proxy Windows itself uses, so a widget reaches what the user's browser reaches: `HTTPS_PROXY`
+/// and friends first (a shell that sets them means it), then the fixed server in Internet Settings.
+/// A PAC file is not resolved; the address of a running proxy is, and that is what a desktop uses.
+fn system_proxy() -> Option<String> {
+    for key in [
+        "HTTPS_PROXY",
+        "https_proxy",
+        "HTTP_PROXY",
+        "http_proxy",
+        "ALL_PROXY",
+        "all_proxy",
+    ] {
+        if let Ok(value) = std::env::var(key) {
+            let value = value.trim();
+            if !value.is_empty() {
+                return Some(with_scheme(value));
+            }
+        }
+    }
+    use winreg::enums::HKEY_CURRENT_USER;
+    use winreg::RegKey;
+    let key = RegKey::predef(HKEY_CURRENT_USER)
+        .open_subkey(r"Software\Microsoft\Windows\CurrentVersion\Internet Settings")
+        .ok()?;
+    if key.get_value::<u32, _>("ProxyEnable").unwrap_or(0) == 0 {
+        return None;
+    }
+    let server = key
+        .get_value::<String, _>("ProxyServer")
+        .unwrap_or_default();
+    // "http=host:port;https=host:port" or a single "host:port".
+    let address = server
+        .split(';')
+        .filter_map(|part| part.split_once('=').map(|(_, v)| v))
+        .next()
+        .or_else(|| {
+            if server.contains('=') {
+                None
+            } else {
+                Some(server.as_str())
+            }
+        })?
+        .trim()
+        .to_string();
+    if address.is_empty() {
+        None
+    } else {
+        Some(with_scheme(&address))
+    }
+}
+
+fn with_scheme(address: &str) -> String {
+    if address.contains("://") {
+        address.to_string()
+    } else {
+        format!("http://{address}")
+    }
 }
 
 fn split_url(url: &str) -> Result<(String, String), String> {

@@ -16,13 +16,14 @@ pub fn open(url: &str) -> Result<(), String> {
 }
 
 pub fn launch(path: &str) -> Result<(), String> {
+    let path = crate::core::paths::expand_env(path);
     if path.trim().is_empty() {
         return Err("missing path".into());
     }
-    if !Path::new(path).exists() {
+    if !Path::new(&path).exists() {
         return Err(format!("{path} does not exist"));
     }
-    shell_execute(path)
+    shell_execute(&path)
 }
 
 fn shell_execute(target: &str) -> Result<(), String> {
@@ -53,7 +54,8 @@ pub fn open_shell_folder(spec: &str) -> Result<(), String> {
 
 /// Shows a file in Explorer with it selected; falls back to opening the folder.
 pub fn reveal(path: &str) -> Result<(), String> {
-    if !Path::new(path).exists() {
+    let path = crate::core::paths::expand_env(path);
+    if !Path::new(&path).exists() {
         return Err(format!("{path} does not exist"));
     }
     use crate::platform::win32 as w;
@@ -73,7 +75,7 @@ pub fn reveal(path: &str) -> Result<(), String> {
     if result as usize > 32 {
         Ok(())
     } else {
-        match Path::new(path).parent() {
+        match Path::new(&path).parent() {
             Some(dir) => shell_execute(&dir.to_string_lossy()),
             None => Err(format!("Windows could not show \"{path}\"")),
         }
@@ -116,7 +118,8 @@ pub fn pick(kind: &str, filter: &str, title: &str) -> Option<String> {
 
 /// `{ path, exists, name, kind, icon }` — kind is "app", "folder", "file" or "missing".
 pub fn info(path: &str, icon_size: i32) -> Value {
-    let p = Path::new(path);
+    let path = crate::core::paths::expand_env(path);
+    let p = Path::new(&path);
     if path.trim().is_empty() || !p.exists() {
         let name = p
             .file_name()
@@ -143,7 +146,7 @@ pub fn info(path: &str, icon_size: i32) -> Value {
     } else {
         "file"
     };
-    let icon = crate::platform::win32::file_icon_data_url(path, icon_size.max(16))
+    let icon = crate::platform::win32::file_icon_data_url(&path, icon_size.max(16))
         .map(Value::String)
         .unwrap_or(Value::Null);
     json!({ "path": path, "exists": true, "name": name, "kind": kind, "icon": icon })

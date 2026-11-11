@@ -19,11 +19,18 @@ pub fn recycle_query() -> Value {
     })
 }
 
+/// Empties the bin and answers with the state it is left in, so the card can redraw without a
+/// second round trip. Deleting can take seconds on a full bin, so callers run this off the UI thread.
 pub fn recycle_empty() -> Result<Value, String> {
     let flags = 0x0000_0001 | 0x0000_0002; // NOCONFIRMATION | NOPROGRESSUI
     let code = unsafe { w::SHEmptyRecycleBinW(0, std::ptr::null(), flags) };
-    if code == 0 || code as u32 == 0x8000_FFFF {
-        Ok(json!({ "ok": true }))
+    let cleared = code == 0 || code as u32 == 0x8000_FFFF;
+    let mut state = recycle_query();
+    if let Some(obj) = state.as_object_mut() {
+        obj.insert("ok".into(), Value::Bool(cleared));
+    }
+    if cleared {
+        Ok(state)
     } else {
         Err("the recycle bin could not be emptied".into())
     }

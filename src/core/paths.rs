@@ -74,6 +74,41 @@ pub fn exe_dir() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
+/// `%USERPROFILE%\Downloads` → `C:\Users\me\Downloads`, so a setting written with an environment
+/// variable works the way it does in Explorer. Unknown names are left as they are.
+pub fn expand_env(input: &str) -> String {
+    let text = input.trim();
+    if !text.contains('%') {
+        return input.to_string();
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(start) = rest.find('%') {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + 1..];
+        match after.find('%') {
+            Some(end) => {
+                let name = &after[..end];
+                match std::env::var(name) {
+                    Ok(value) if !name.is_empty() => out.push_str(&value),
+                    _ => {
+                        out.push('%');
+                        out.push_str(name);
+                        out.push('%');
+                    }
+                }
+                rest = &after[end + 1..];
+            }
+            None => {
+                out.push_str(&rest[start..]);
+                rest = "";
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 /// Picks the folder that holds `sdk\base.css`: an explicit dev root, the exe's `assets`, or the
 /// source tree's `assets` next to the build folder (so `cargo run` needs no copying).
 fn resolve_resource_root() -> PathBuf {
@@ -163,5 +198,22 @@ pub fn resolve_inside(root: &Path, rel: &str) -> Option<PathBuf> {
         Some(full)
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::expand_env;
+
+    #[test]
+    fn expands_a_variable_that_exists() {
+        let root = std::env::var("SystemRoot").expect("SystemRoot is set on Windows");
+        assert_eq!(expand_env(r"%SystemRoot%\Fonts"), format!(r"{root}\Fonts"));
+    }
+
+    #[test]
+    fn keeps_an_unknown_name_and_plain_text() {
+        assert_eq!(expand_env(r"%NOPE%\x"), r"%NOPE%\x");
+        assert_eq!(expand_env(r"C:\Windows"), r"C:\Windows");
     }
 }

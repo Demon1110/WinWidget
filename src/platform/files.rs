@@ -28,7 +28,51 @@ pub fn folder_from_setting(value: Option<&Value>) -> PathBuf {
             _ => None,
         })
         .unwrap_or_default();
-    PathBuf::from(raw)
+    PathBuf::from(crate::core::paths::expand_env(&raw))
+}
+
+/// Fills in the address every listed picture is loaded from:
+/// `/__files/<instance>/<setting>/<relative path>`. `widget.files.url()` builds on it, so a listing
+/// without it leaves a photo frame with nothing to show.
+pub fn with_urls(value: &mut Value, instance: &str, key: &str, folder: &Path) {
+    let Some(files) = value.get_mut("files").and_then(|f| f.as_array_mut()) else {
+        return;
+    };
+    for entry in files.iter_mut() {
+        let Some(path) = entry.get("path").and_then(|p| p.as_str()) else {
+            continue;
+        };
+        let file = Path::new(path);
+        let rel = file.strip_prefix(folder).unwrap_or(file);
+        let rel: Vec<String> = rel
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        let url = format!(
+            "/__files/{}/{}/{}",
+            escape_path(instance),
+            escape_path(key),
+            escape_path(&rel.join("/"))
+        );
+        if let Some(obj) = entry.as_object_mut() {
+            obj.insert("url".into(), Value::String(url));
+        }
+    }
+}
+
+/// Percent-encodes what cannot appear in a URL path, keeping the separators.
+fn escape_path(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for byte in text.as_bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' => {
+                out.push(*byte as char)
+            }
+            _ => out.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    out
 }
 
 pub fn list(folder: &Path, recursive: bool) -> Value {
@@ -128,5 +172,24 @@ pub fn thumbnail(path: &Path, width: u32) -> Option<Vec<u8>> {
         crate::core::img::thumbnail(path, u32::MAX).ok()
     } else {
         crate::core::img::thumbnail(path, width).ok()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::with_urls;
+    use serde_json::json;
+    use std::path::Path;
+
+    #[test]
+    fn every_entry_gets_the_route_the_page_loads_it_from() {
+        let mut listing = json!({
+            "files": [{ "path": r"C:\Pics\a b\today.jpg", "name": "today.jpg" }]
+        });
+        with_urls(&mut listing, "inst", "folder", Path::new(r"C:\Pics"));
+        assert_eq!(
+            listing["files"][0]["url"],
+            "/__files/inst/folder/a%20b/today.jpg"
+        );
     }
 }

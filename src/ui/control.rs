@@ -98,11 +98,14 @@ pub fn state_json(app: &App) -> Value {
                 let mut merged = Map::new();
                 for spec in &m.settings {
                     if let Some(value) = &spec.default {
-                        merged.insert(spec.key.clone(), value.clone());
+                        // A default written per language ({ "zh-CN": …, "en": … }) has to be folded
+                        // here as well: the page would show "[object Object]" for a value the card
+                        // itself never sees in that shape.
+                        merged.insert(spec.key.clone(), crate::core::text::pick_value(value));
                     }
                 }
                 for (k, v) in &inst.settings {
-                    merged.insert(k.clone(), v.clone());
+                    merged.insert(k.clone(), crate::core::text::pick_value(v));
                 }
                 Value::Object(merged)
             }

@@ -7,6 +7,8 @@ use crate::model::manifest::Manifest;
 use crate::platform::win32 as w;
 use crate::runtime::app::Ev;
 use serde_json::Value;
+use std::collections::HashSet;
+use std::sync::Mutex;
 use tao::dpi::{PhysicalPosition, PhysicalSize};
 use tao::platform::windows::{WindowBuilderExtWindows, WindowExtWindows};
 use tao::window::{Window, WindowBuilder};
@@ -388,7 +390,8 @@ pub fn build(
 // ── dragging and resizing ───────────────────────────────────────────────────
 
 use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
+use std::sync::LazyLock;
+use std::sync::OnceLock;
 
 /// What a drag needs to know while the pointer moves. It sits beside the window handle rather than
 /// in the app, because the window procedure runs while the app is blocked inside the move loop.
@@ -481,6 +484,31 @@ fn is_dragging(hwnd: w::HWND) -> bool {
         .unwrap_or(false)
 }
 
+/// Windows whose page says it is using the press itself — a volume fader, a text field, a slider.
+static PRESS_CLAIMED: LazyLock<Mutex<HashSet<usize>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
+
+/// The page took the press: a control is being dragged inside the card, not the card itself. The
+/// watcher below must leave that window alone until the button comes up.
+pub fn claim_press(hwnd: w::HWND) {
+    if let Ok(mut set) = PRESS_CLAIMED.lock() {
+        set.insert(hwnd as usize);
+    }
+}
+
+fn press_claimed(hwnd: w::HWND) -> bool {
+    PRESS_CLAIMED
+        .lock()
+        .map(|set| set.contains(&(hwnd as usize)))
+        .unwrap_or(false)
+}
+
+fn clear_press_claims() {
+    if let Ok(mut set) = PRESS_CLAIMED.lock() {
+        set.clear();
+    }
+}
+
 /// Falls back to a card drag the window can do on its own.
 ///
 /// The page asks for the drag (`window.drag`), and that is the normal path: it knows where the
@@ -505,6 +533,7 @@ pub fn watch_presses(proxy: tao::event_loop::EventLoopProxy<Ev>) {
                 button = false;
                 armed = None;
                 claimed = false;
+                clear_press_claims();
                 continue;
             }
             if !button {
@@ -530,6 +559,11 @@ pub fn watch_presses(proxy: tao::event_loop::EventLoopProxy<Ev>) {
                 continue;
             }
             if since.elapsed() < std::time::Duration::from_millis(110) || is_dragging(hwnd) {
+                continue;
+            }
+            // The page is alive and using this press for its own control: dropping a fader or
+            // sweeping a slider must not turn into a card drag.
+            if press_claimed(hwnd) {
                 continue;
             }
             claimed = true;

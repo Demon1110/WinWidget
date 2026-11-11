@@ -60,6 +60,13 @@ fn notify(app: &mut App, instance: &str, method: &str, params: &Value) {
             }
         }
         "window.drag" => start_drag(app, instance, params),
+        "window.press" => {
+            // The page is using this press for a control inside the card; the watcher that would
+            // otherwise turn a long slide into a window drag has to stand down for it.
+            if let Some(win) = app.windows.get(instance) {
+                crate::runtime::window::claim_press(win.hwnd());
+            }
+        }
         "window.resize" => start_resize(app, instance),
         "window.menu" => crate::ui::menus::widget_menu(app, instance),
         "window.devtools" => {
@@ -201,9 +208,23 @@ fn call(app: &mut App, instance: &str, method: &str, p: &Value, id: i64) -> Brid
                 return Ok(Reply::Now(json!({})));
             }
             app.set_subscription(instance, topics.clone(), interval);
-            // Answering with a snapshot means the page has something to draw at once.
-            let mut sampler = crate::platform::sysinfo::Sampler::new();
-            Ok(Reply::Now(sampler.sample(&topics)))
+            // Answering with a snapshot means the page has something to draw at once. Building a
+            // sampler reads disks, adapters and CPU counters, and nine system cards doing that on the
+            // UI thread is a visible freeze, so the first reading comes from a worker.
+            let proxy = app.proxy.clone();
+            let target = instance.to_string();
+            std::thread::spawn(move || {
+                let mut sampler = crate::platform::sysinfo::Sampler::new();
+                let snapshot = sampler.sample(&topics);
+                crate::runtime::app::post(
+                    &proxy,
+                    crate::runtime::app::Ev::Reply {
+                        win: target,
+                        body: json!({ "id": id, "r": snapshot }).to_string(),
+                    },
+                );
+            });
+            Ok(Reply::Later)
         }
         "system.unsubscribe" => {
             app.clear_subscription(instance);
@@ -310,7 +331,9 @@ fn call(app: &mut App, instance: &str, method: &str, p: &Value, id: i64) -> Brid
             let key = req_str(p, "key")?;
             let recursive = jbool(p, "recursive").unwrap_or(false);
             let folder = folder_for(app, instance, &key);
-            Ok(Reply::Now(crate::platform::files::list(&folder, recursive)))
+            let mut listing = crate::platform::files::list(&folder, recursive);
+            crate::platform::files::with_urls(&mut listing, instance, &key, &folder);
+            Ok(Reply::Now(listing))
         }
         "files.info" => {
             let key = req_str(p, "key")?;
@@ -345,9 +368,24 @@ fn call(app: &mut App, instance: &str, method: &str, p: &Value, id: i64) -> Brid
         }
         "recycle.empty" => {
             builtin_only(app, &manifest)?;
-            crate::platform::power::recycle_empty()
-                .map(Reply::Now)
-                .map_err(BridgeError::new)
+            // Deleting a full bin takes as long as Explorer takes; on the UI thread that is a frozen
+            // card and a frozen control center, so it runs on its own thread.
+            let proxy = app.proxy.clone();
+            let target = instance.to_string();
+            std::thread::spawn(move || {
+                let result = match crate::platform::power::recycle_empty() {
+                    Ok(state) => json!({ "id": id, "r": state }),
+                    Err(e) => json!({ "id": id, "e": e }),
+                };
+                crate::runtime::app::post(
+                    &proxy,
+                    crate::runtime::app::Ev::Reply {
+                        win: target,
+                        body: result.to_string(),
+                    },
+                );
+            });
+            Ok(Reply::Later)
         }
         "recycle.open" => {
             builtin_only(app, &manifest)?;

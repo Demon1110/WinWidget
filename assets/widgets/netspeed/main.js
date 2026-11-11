@@ -37,7 +37,7 @@ function render(net) {
   $("down").textContent = dv; $("down-u").textContent = du;
   $("up").textContent = uv; $("up-u").textContent = uu;
   $("total").textContent = t({ "zh-TW": "開機以來", "zh-CN": "开机以来", en: "Since start-up" }) +
-    `  ↓ ${size(net.totalDown)}  ↑ ${size(net.totalUp)}`;
+    `  ↓ ${size(net.totalDown ?? 0)}  ↑ ${size(net.totalUp ?? 0)}`;
   const top = scaleTop();
   cols.forEach((c, i) => {
     const h = hist[i - (N - hist.length)];

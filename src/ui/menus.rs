@@ -343,9 +343,13 @@ pub fn run(app: &mut App, action: &str) {
                 }
             }
         }
-        // Where a drag or a resize left the card: read the window and persist it.
+        // Where a drag or a resize left the card: read the window and persist it. The cached card
+        // rectangle is refreshed first — a page-driven drag moves the window without the cached
+        // rectangle following, and the next appearance update would place the window back at the
+        // position the drag started from.
         "geometry" => {
             if let Some(id) = arg {
+                app.sync_bounds(id);
                 app.geometry_from_window(id);
                 app.publish_states();
             }

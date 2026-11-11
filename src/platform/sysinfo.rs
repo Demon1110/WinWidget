@@ -120,7 +120,13 @@ impl Sampler {
                 point[3] = up;
                 out.insert(
                     "network".into(),
-                    json!({ "down": down as u64, "up": up as u64 }),
+                    json!({
+                        "down": down as u64,
+                        "up": up as u64,
+                        // Since the machine started, which is what the net-speed card labels these.
+                        "totalDown": rx,
+                        "totalUp": tx,
+                    }),
                 );
             }
         }
@@ -132,15 +138,12 @@ impl Sampler {
 
         point[0] = point[0].max(0.0);
         self.history.push_back(point);
-        let now = crate::core::util::now_ms() as f64;
-        while let Some(front) = self.history.front() {
-            let _ = front;
-            if self.history.len() as i64 * 1000 < HISTORY_MINUTES * 60 {
-                break;
-            }
+        // Fifteen minutes at one reading a second is the longest history any card asks for; the real
+        // spacing is applied when the points are read back.
+        let keep = (HISTORY_MINUTES * 60) as usize;
+        while self.history.len() > keep {
             self.history.pop_front();
         }
-        let _ = now;
         out.into()
     }
 
@@ -308,40 +311,70 @@ fn gpus() -> Vec<String> {
     out
 }
 
-/// `{ online, adapters: [{ name, type, ip, speed, received, transmitted, up }] }`.
+/// `{ online, adapters: [{ name, type, ip, ipv4, ipv6, gateway, gateways, speed, received,
+/// transmitted, up }] }` — one entry per interface, the one carrying traffic first.
 pub fn adapters() -> Value {
     let Ok(mut nets) = Networks::new_with_refreshed_list() else {
         return json!({ "online": false, "adapters": Vec::<Value>::new() });
     };
     nets.refresh(true);
-    let mut list = Vec::new();
+    let mut list: Vec<(u8, Value)> = Vec::new();
     let mut online = false;
     for (name, data) in nets.iter() {
-        let mut ip = String::new();
+        // Both families are kept apart: the card shows the local address and the gateway, and a
+        // machines with IPv6 has one of each.
+        let mut ipv4: Vec<String> = Vec::new();
+        let mut ipv6: Vec<String> = Vec::new();
         for net in data.ip_networks() {
             let addr = net.addr;
-            if !addr.is_unspecified() && addr.to_string() != "0.0.0.0" {
-                ip = addr.to_string();
-                break;
+            if addr.is_loopback() || addr.is_unspecified() || addr.to_string() == "0.0.0.0" {
+                continue;
+            }
+            match addr {
+                std::net::IpAddr::V4(_) => ipv4.push(addr.to_string()),
+                std::net::IpAddr::V6(_) => ipv6.push(addr.to_string()),
             }
         }
+        let ip = ipv4
+            .first()
+            .or_else(|| ipv6.first())
+            .cloned()
+            .unwrap_or_default();
         let up = data.operational_state() != sysinfo::InterfaceOperationalState::Down;
-        if up && !ip.is_empty() && !ip.starts_with("127.") {
+        let usable = up && !ip.is_empty();
+        if usable {
             online = true;
         }
         let label = name.to_string_lossy().to_lowercase();
-        list.push(json!({
-            "name": name.to_string_lossy(),
-            "type": if label.contains("wi-fi") || label.contains("wlan") || label.contains("wireless") { "wifi" } else { "ethernet" },
-            "ip": ip,
-            "gateway": Value::Null,
-            "speed": data.receive_link_speed().unwrap_or(0),
-            "received": data.total_received(),
-            "transmitted": data.total_transmitted(),
-            "up": up,
-        }));
+        // 0: carrying an address and up, 1: up but blank, 2: down — the first entry is then the
+        // adapter the card is actually using.
+        let rank = if usable {
+            0
+        } else if up {
+            1
+        } else {
+            2
+        };
+        list.push((
+            rank,
+            json!({
+                "name": name.to_string_lossy(),
+                "type": if label.contains("wi-fi") || label.contains("wlan") || label.contains("wireless") { "wifi" } else { "ethernet" },
+                "ip": ip,
+                "ipv4": ipv4,
+                "ipv6": ipv6,
+                "gateway": Value::Null,
+                "gateways": Vec::<String>::new(),
+                "speed": data.receive_link_speed().unwrap_or(0),
+                "received": data.total_received(),
+                "transmitted": data.total_transmitted(),
+                "up": up,
+            }),
+        ));
     }
-    json!({ "online": online, "adapters": list })
+    list.sort_by_key(|(rank, _)| *rank);
+    let adapters: Vec<Value> = list.into_iter().map(|(_, value)| value).collect();
+    json!({ "online": online, "adapters": adapters })
 }
 
 /// A short TCP probe: the time it takes to open a socket to the host's web port.

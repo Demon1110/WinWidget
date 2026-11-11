@@ -1,5 +1,6 @@
 const $ = (id) => document.getElementById(id);
 const t = widget.t;
+let opts = widget.settings.get();
 
 // Every sound is made here from noise and filters: nothing is downloaded.
 const SOUNDS = [
@@ -170,7 +171,12 @@ function sync(ramp = 0.25) {
 }
 
 async function setPlaying(on) {
-  if (on && !SOUNDS.some((s) => levels[s.k] > 0)) { levels.rain = 50; save(); }
+  // Nothing raised yet: play the sound the settings name, at the volume they name.
+  if (on && !SOUNDS.some((s) => levels[s.k] > 0)) {
+    applyDefaults();
+    userMix = true;
+    save();
+  }
   ensureAudio();
   playing = on;
   const now = ctx.currentTime;
@@ -288,8 +294,25 @@ $("timer").onclick = () => {
   render();
 };
 
+/** The card's own defaults: which sound starts out raised, and how loud. */
+let userMix = false; // true once the mix came from the card itself, not from these two settings
+function applyDefaults() {
+  const key = SOUNDS.some((s) => s.k === opts.sound) ? String(opts.sound) : "rain";
+  const volume = Math.max(0, Math.min(100, Math.round(Number(opts.volume === undefined ? 60 : opts.volume))));
+  for (const s of SOUNDS) levels[s.k] = 0;
+  levels[key] = Number.isFinite(volume) ? volume : 60;
+}
+
 (async () => {
   const m = await widget.storage.get("mix");
-  if (m && m.levels) { levels = { ...levels, ...m.levels }; timerMin = m.timer || 0; }
+  if (m && m.levels) { levels = { ...levels, ...m.levels }; timerMin = m.timer || 0; userMix = true; }
+  else applyDefaults();
   render(); // it never starts by itself: sound out of nowhere at login would be unkind
 })();
+
+widget.settings.onChange((s) => {
+  opts = s;
+  if (userMix) return; // a mix the user made wins over the settings' starting point
+  applyDefaults();
+  render();
+});

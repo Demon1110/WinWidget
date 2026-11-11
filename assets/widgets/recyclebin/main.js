@@ -17,11 +17,12 @@ async function refresh() {
 }
 
 function render() {
-  const empty = !bin || bin.items === 0;
+  const known = bin && typeof bin.items === "number";
+  const empty = !known || bin.items === 0;
   document.body.classList.toggle("is-empty", empty);
-  $("count").textContent = bin ? bin.items.toLocaleString(widget.locale) : "—";
+  $("count").textContent = known ? bin.items.toLocaleString(widget.locale) : "—";
   $("unit").textContent = t({ "zh-TW": " 個項目", "zh-CN": " 个项目", en: bin && bin.items === 1 ? " item" : " items" });
-  $("size").textContent = !bin ? "" : empty ? t({ "zh-TW": "已經是空的", "zh-CN": "已经是空的", en: "Nothing in it" })
+  $("size").textContent = !known ? "" : empty ? t({ "zh-TW": "已經是空的", "zh-CN": "已经是空的", en: "Nothing in it" })
     : t({ "zh-TW": `共 ${size(bin.size)}`, "zh-CN": `共 ${size(bin.size)}`, en: `${size(bin.size)} in all` });
   // how full, on a log scale: 1 MB shows a little, 10 GB fills it
   const frac = bin && bin.size > 0 ? Math.min(1, Math.log10(bin.size / 1048576 + 1) / Math.log10(10241)) : 0;
@@ -48,7 +49,14 @@ $("empty").onclick = async () => {
   armed = 0;
   busy = true;
   render();
-  try { bin = await widget.recycleBin.empty(); } catch (e) { widget.log(`recyclebin: ${e.message}`); }
+  try {
+    // Emptying answers with the bin as it now stands; asking again covers an older host.
+    const after = await widget.recycleBin.empty();
+    bin = after && typeof after.items === "number" ? after : await widget.recycleBin.query();
+  } catch (e) {
+    widget.log(`recyclebin: ${e.message}`);
+    await refresh();
+  }
   busy = false;
   render();
 };
