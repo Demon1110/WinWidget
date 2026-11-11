@@ -539,8 +539,11 @@ namespace WinWidget {
     onPluginOut(fn: (isKill: boolean) => void): void;
     /** Registered but never called: every card is already its own window. */
     onPluginDetach(fn: () => void): void;
-    /** Not available: no scheduler. Throws code "utools.unsupported". */
-    onScheduleTrigger(fn: (action: { code: string }) => void): never;
+    /**
+     * A schedule this widget asked for has come due. The callback may return a Promise; a throw or a
+     * rejected Promise is counted as a failure in `getSchedules()`.
+     */
+    onScheduleTrigger(fn: (action: ScheduleTrigger) => void | Promise<void>): void;
     /** Not available: no search box. Throws code "utools.unsupported". */
     onMainPush(fn: (action: unknown) => unknown, onSelect?: (action: PluginEnterAction) => boolean | undefined): never;
     /** Not available: no cross-device sync. Throws code "utools.unsupported". */
@@ -564,18 +567,223 @@ namespace WinWidget {
     isLinux(): boolean;
     isDarkColors(): boolean;
     copyText(text: string): Promise<boolean>;
-    getCopyedFiles(): string[];
+    /** A data URL, a bare file path or a NativeImage. */
+    copyImage(image: string | NativeImage): Promise<boolean>;
+    /** Puts one or more paths on the clipboard as files (`CF_HDROP`). */
+    copyFile(path: string | string[]): Promise<boolean>;
+    /** The files on the clipboard, empty when there are none. Async here, sync in uTools. */
+    getCopyedFiles(): Promise<CopiedFile[]>;
+    /** Documents and attachments, stored in `data/db/<widget>.json`; every method is a Promise. */
+    db: DbApi;
     dbStorage: {
       getItem(key: string): unknown;
       setItem(key: string, value: unknown): unknown;
       removeItem(key: string): void;
       clear(): void;
     };
+    /** The virtual desktop as a PNG data URL; needs the "screen" permission. */
     captureScreen(): Promise<string | null>;
+    /** Displays, DIP conversion and screenshots; every method needs the "screen" permission. */
+    screen: ScreenApi;
+    /** The pixel under the cursor right now: `{ hex, rgb }`. */
+    screenColorPick(): Promise<{ hex: string; rgb: string }>;
+    hideMainWindowPasteText(text: string): Promise<boolean>;
+    hideMainWindowPasteFile(path: string | string[]): Promise<boolean>;
+    hideMainWindowPasteImage(image: string | NativeImage): Promise<boolean>;
+    hideMainWindowTypeString(text: string): Promise<boolean>;
+    requestSchedule(schedule: Schedule): Promise<void>;
+    getSchedules(): Promise<ScheduleInfo[]>;
+    removeSchedule(code: string): Promise<void>;
+    simulateKeyboardTap(key: string, ...modifiers: Array<"shift" | "ctrl" | "alt" | "command">): Promise<void>;
+    simulateMouseMove(x: number, y: number): Promise<void>;
+    simulateMouseClick(x: number, y: number): Promise<void>;
+    simulateMouseDoubleClick(x: number, y: number): Promise<void>;
+    simulateMouseRightClick(x: number, y: number): Promise<void>;
+    getFeatures(codes?: string[]): Promise<Feature[]>;
+    setFeature(feature: Feature): Promise<void>;
+    removeFeature(code: string): Promise<boolean>;
+    /** Shows the widget that owns this command; false when nothing owns it. */
+    redirect(label: string | [pluginName: string, label: string], payload?: MatchPayload): Promise<boolean>;
+    redirectHotKeySetting(cmdLabel: string, autocopy?: boolean): Promise<void>;
+    getCmdHotKey(cmdLabel: string): Promise<string | null>;
+    /** A chain of picture operations; only what the `image` crate can do is implemented. */
+    sharp(input?: SharpInput, options?: unknown): SharpImage;
+    /** Page fetching only: there is no embedded browser behind this. */
+    ubrowser: UBrowser;
     getPluginLocalDataPath(): string;
     getPluginTempPath(): string;
     /** Anything else throws an Error whose code is "utools.unsupported". */
     [api: string]: unknown;
+  }
+
+  /** A picture in memory. Decoding happens asynchronously here, so the methods return Promises. */
+  interface NativeImage {
+    isEmpty(): boolean;
+    getSize(): Promise<{ width: number; height: number }>;
+    toDataURL(): Promise<string>;
+    toPNG(): Promise<Uint8Array>;
+    toJPEG(quality?: number): Promise<Uint8Array>;
+    crop(rect: RectLike): Promise<NativeImage>;
+    resize(options: { width?: number; height?: number; quality?: number }): Promise<NativeImage>;
+    readonly __dataUrl: string;
+  }
+
+  interface RectLike {
+    x?: number;
+    y?: number;
+    left?: number;
+    top?: number;
+    width: number;
+    height: number;
+  }
+
+  interface Display {
+    id: number;
+    label: string;
+    primary: boolean;
+    /** In DIP: divide the Win32 pixel rectangle by `scaleFactor`. */
+    bounds: RectLike;
+    workArea: RectLike;
+    workAreaSize: { width: number; height: number };
+    scaleFactor: number;
+    rotation: 0;
+    size: { width: number; height: number };
+  }
+
+  interface ScreenApi {
+    getCursorScreenPoint(): Promise<{ x: number; y: number }>;
+    getPrimaryDisplay(): Promise<Display>;
+    getAllDisplays(): Promise<Display[]>;
+    getDisplayNearestPoint(point: { x: number; y: number }): Promise<Display>;
+    getDisplayMatching(rect: RectLike): Promise<Display>;
+    screenToDipPoint(point: { x: number; y: number }): Promise<{ x: number; y: number }>;
+    dipToScreenPoint(point: { x: number; y: number }): Promise<{ x: number; y: number }>;
+    screenToDipRect(rect: RectLike): Promise<RectLike>;
+    dipToScreenRect(rect: RectLike): Promise<RectLike>;
+    capture(display?: unknown): Promise<NativeImage>;
+    captureDisplay(display: number): Promise<NativeImage>;
+  }
+
+  interface CopiedFile {
+    path: string;
+    isDirectory: boolean;
+    isFile: boolean;
+    name: string;
+  }
+
+  interface DbDoc {
+    _id: string;
+    _rev?: string;
+    [field: string]: unknown;
+  }
+
+  interface DbResult {
+    id: string;
+    rev?: string;
+    ok?: boolean;
+    error?: string;
+    name?: string;
+    message?: string;
+  }
+
+  interface DbApi {
+    put(doc: DbDoc & { _id?: string }): Promise<DbResult>;
+    get(id: string): Promise<DbDoc | null>;
+    remove(doc: { _id: string; _rev?: string } | string): Promise<DbResult>;
+    bulkDocs(docs: Array<DbDoc & { _id?: string }>): Promise<DbResult[]>;
+    allDocs(options?: { idStartsWith?: string; ids?: string[] }): Promise<DbDoc[]>;
+    postAttachment(id: string, data: string, type: string): Promise<DbResult>;
+    getAttachment(id: string): Promise<NativeImage>;
+    getAttachmentType(id: string): Promise<string | null>;
+    replicateStateFromCloud(): Promise<null>;
+    readonly promises: DbApi;
+  }
+
+  interface Schedule {
+    code: string;
+    label?: string;
+    /** A timestamp (one-shot) or a standard 5-field cron with an optional window. */
+    trigger: number | { cron?: string; startTime?: number; endTime?: number };
+  }
+
+  interface ScheduleInfo extends Schedule {
+    successCount: number;
+    failureCount: number;
+    lastExecuteAt?: number;
+    lastStatus?: "success" | "failure";
+  }
+
+  interface ScheduleTrigger {
+    code: string;
+    label: string;
+    /** Minute the task fired, in milliseconds. */
+    at: number;
+  }
+
+  interface FeatureCmd {
+    type: "regex" | "over" | "img" | "files" | "window";
+    label: string;
+    match?: string;
+    exclude?: string;
+    extensions?: string[];
+    minLength?: number;
+    maxLength?: number;
+  }
+
+  interface Feature {
+    code: string;
+    description?: string;
+    icon?: string;
+    platform?: string;
+    mainHide?: boolean;
+    mainPush?: boolean;
+    cmds: Array<string | FeatureCmd>;
+  }
+
+  interface MatchPayload {
+    type: "img" | "files";
+    data: string | string[];
+  }
+
+  type SharpInput = string | { data: string } | { path: string } | { create: { width: number; height: number; background?: string } };
+
+  interface SharpImage {
+    resize(width?: number, height?: number): SharpImage;
+    rotate(angle?: number): SharpImage;
+    flip(): SharpImage;
+    flop(): SharpImage;
+    extract(rect: RectLike): SharpImage;
+    extend(edges: { top?: number; bottom?: number; left?: number; right?: number; background?: string }): SharpImage;
+    grayscale(): SharpImage;
+    negate(): SharpImage;
+    blur(sigma?: number): SharpImage;
+    sharpen(sigma?: number, flat?: number, jagged?: number): SharpImage;
+    threshold(level?: number): SharpImage;
+    gamma(value?: number): SharpImage;
+    flatten(background?: string): SharpImage;
+    jpeg(options?: { quality?: number }): SharpImage;
+    png(): SharpImage;
+    webp(): SharpImage;
+    tiff(): SharpImage;
+    clone(): SharpImage;
+    toBuffer(): Promise<Uint8Array>;
+    toUint8Array(): Promise<Uint8Array>;
+    toFile(path: string): Promise<{ path: string; width: number; height: number; format: string }>;
+    metadata(): Promise<{ width: number; height: number; format: string }>;
+  }
+
+  interface UBrowserPage {
+    url: string;
+    title: string;
+    text: string;
+    html: string;
+    /** Interaction steps that were refused because there is no embedded browser. */
+    skipped: string[];
+  }
+
+  interface UBrowser {
+    goto(url: string): { goto(url: string): unknown; run(): Promise<UBrowserPage> };
+    run(): Promise<UBrowserPage>;
   }
 
   /**

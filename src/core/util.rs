@@ -169,3 +169,25 @@ pub fn css_safe(s: &str) -> String {
 pub fn json_ok() -> Value {
     json!(true)
 }
+
+
+/// A short random-looking hex tail, used for document revisions. Uniqueness within a run is all it
+/// needs, so the clock plus a counter is enough and no random crate is pulled in.
+pub fn random_hex(len: usize) -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    const DIGITS: [u8; 16] = *b"0123456789abcdef";
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let seed = now_ms() as u128 ^ (u128::from(n) << 32) ^ u128::from(std::process::id());
+    let mut out = String::with_capacity(len);
+    let mut value = seed;
+    while out.len() < len {
+        // A cheap xorshift keeps successive calls from sharing a prefix.
+        value ^= value << 13;
+        value ^= value >> 7;
+        value ^= value << 17;
+        out.push(DIGITS[(value % 16) as usize] as char);
+        value /= 16;
+    }
+    out
+}

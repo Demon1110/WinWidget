@@ -1212,6 +1212,8 @@ impl App {
     }
 
     pub fn tick(&mut self) {
+        // Widget-requested schedules (`utools.requestSchedule`) ride the same one-second clock.
+        crate::core::schedule::tick(self);
         let now = crate::core::util::now_ms();
         let mut fired = Vec::new();
         let mut keep = Vec::new();

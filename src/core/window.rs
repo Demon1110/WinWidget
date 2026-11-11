@@ -1,4 +1,4 @@
-//! The window layer, one module per uTools API category (`window` today, more to come).
+//! The window layer: cards, the main-window window family and custom windows.
 //!
 //! Two kinds of window live here:
 //!
@@ -13,16 +13,76 @@
 //! method still exists and answers `{"unsupported": "…"}` instead of lying — see
 //! [`unsupported_reason`].
 
+use crate::core::api::{Ctx, Reply};
 use crate::core::util::{jbool, jnum, jstr, req_str, BridgeError, BridgeResult};
 use crate::platform::win32 as w;
 use crate::runtime::app::{post, App, Ev};
-use crate::runtime::bridge::Reply;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use tao::dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize};
 use tao::platform::windows::{WindowBuilderExtWindows, WindowExtWindows};
 use tao::window::{Fullscreen, Window, WindowBuilder};
 use wry::{Rect, WebView, WebViewBuilder};
+
+/// The dispatcher's entry for the window category. `win.*` talks about a custom window; `window.*`
+/// means the card, except inside a custom window, where it means that window itself.
+pub fn call(ctx: &mut Ctx, method: &str, p: &Value) -> Option<BridgeResult<Reply>> {
+    if method.starts_with("win.") {
+        return Some(custom_call(ctx.app, ctx.win, ctx.instance, method, p));
+    }
+    let rest = method.strip_prefix("window.")?;
+    if ctx.win.is_some() {
+        let as_win = format!("win.{rest}");
+        return Some(custom_call(ctx.app, ctx.win, ctx.instance, &as_win, p));
+    }
+    Some(match card_call(ctx.app, ctx.instance, method, p) {
+        Ok(Some(reply)) => Ok(reply),
+        Ok(None) => Err(BridgeError::new(format!("unknown method '{method}'"))),
+        Err(e) => Err(e),
+    })
+}
+
+/// Hides this card and gives the keyboard back to the window below it — the step every uTools
+/// `hideMainWindowPaste*` and `hideMainWindowTypeString` starts with.
+pub fn hide_for_input(app: &mut App, instance: &str) {
+    let hwnd = app.windows.get(instance).map(|win| win.hwnd());
+    app.set_visible(instance, false, "api");
+    if let Some(hwnd) = hwnd {
+        unsafe {
+            let next = w::GetWindow(hwnd, w::GW_HWNDNEXT);
+            if next != 0 {
+                w::SetForegroundWindow(next);
+            }
+        }
+    }
+    app.refresh_tray_menu();
+}
+
+/// `ready` and `log` sent by a custom window's page, with no `id`: the first is what fires
+/// `createBrowserWindow`'s callback once the page has actually loaded.
+pub fn custom_notify(app: &mut App, win: u32, method: &str, p: &Value) -> bool {
+    match method {
+        "ready" => {
+            app.mark_custom_loaded(win);
+            true
+        }
+        "log" => {
+            let level = jstr(p, "level").unwrap_or_else(|| "info".into());
+            let text = jstr(p, "msg").unwrap_or_default();
+            let line = format!("[win {win}] {text}");
+            match level.as_str() {
+                "error" => crate::core::logging::error(&line),
+                "warn" => crate::core::logging::warn(&line),
+                _ => crate::core::logging::info(&line),
+            }
+            true
+        }
+        // A custom window has no card behind it: `window.*` notifications (press, drag, resize) are
+        // meaningless there, not a mistake worth a warning.
+        other if other.starts_with("window.") => true,
+        _ => false,
+    }
+}
 
 /// Default size of a custom window, the same numbers Electron uses.
 const DEFAULT_WIDTH: f64 = 800.0;

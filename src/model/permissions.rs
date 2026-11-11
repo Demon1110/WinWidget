@@ -5,13 +5,17 @@
 use crate::core::config::AppConfig;
 use crate::model::manifest::Manifest;
 
-pub const KNOWN: [&str; 8] = [
+pub const KNOWN: [&str; 12] = [
     "system",
     "notify",
     "audio",
     "media",
     "clipboard",
     "screen",
+    "input",
+    "schedule",
+    "sharp",
+    "ubrowser",
     "shell.open",
     "shell.launch",
 ];

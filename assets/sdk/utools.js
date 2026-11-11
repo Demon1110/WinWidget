@@ -32,18 +32,43 @@
     "getUser", "isDev", "isWindows", "isMacOS", "isLinux", "isDarkColors",
     "showOpenDialog", "showSaveDialog",
     // 复制
-    "copyText",
-    // 数据库（本地同步库，落在本组件的 WebView2 local storage）
-    "dbStorage",
+    "copyText", "copyImage", "copyFile", "getCopyedFiles",
+    // 数据库（本组件自己的文档库 + 同步小库）
+    "db", "db.promises", "dbStorage",
     // 屏幕
-    "captureScreen",
+    "captureScreen", "screen", "screen.capture", "screen.captureDisplay", "screen.getCursorScreenPoint",
+    "screen.getPrimaryDisplay", "screen.getAllDisplays", "screen.getDisplayNearestPoint",
+    "screen.getDisplayMatching", "screen.screenToDipPoint", "screen.dipToScreenPoint",
+    "screen.screenToDipRect", "screen.dipToScreenRect", "screenColorPick",
+    // 输入
+    "hideMainWindowPasteText", "hideMainWindowPasteFile", "hideMainWindowPasteImage",
+    "hideMainWindowTypeString",
+    // 定时任务
+    "onScheduleTrigger", "requestSchedule", "getSchedules", "removeSchedule",
+    // 模拟操作
+    "simulateKeyboardTap", "simulateMouseMove", "simulateMouseClick",
+    "simulateMouseDoubleClick", "simulateMouseRightClick",
+    // 动态功能
+    "getFeatures", "setFeature", "removeFeature",
+    // 快捷入口
+    "redirect", "redirectHotKeySetting", "getCmdHotKey",
+    // Sharp / uBrowser
+    "sharp", "ubrowser",
   ];
   const DEGRADED = {
     getFileIcon: "uTools 里是同步返回；这里只能异步，用 getFileIconAsync",
     showOpenDialog: "uTools 里是同步弹窗；这里是 Promise，等 await",
     showSaveDialog: "uTools 里是同步弹窗；这里是 Promise，等 await",
-    copyImage: "剪贴板只支持文字",
-    getCopyedFiles: "剪贴板里读不到文件路径列表，返回空数组",
+    copyImage: "图片改从 data URL / 路径读，写入走宿主的 DIB 通道",
+    getCopyedFiles: "uTools 同步返回；这里返回 Promise，等 await",
+    screen: "NativeImage 的 getSize/toPNG/toJPEG/crop/resize 返回 Promise（宿主抓完图才能解码）",
+    "screen.capture": "uTools 同步返回 NativeImage；这里返回 Promise<NativeImage>",
+    screenColorPick: "uTools 弹放大镜等点击；这里直接取光标下的像素",
+    "db": "文档库落在宿主 data/db 下，不是 CouchDB HTTP 服务；dbStorage 仍是 localStorage",
+    onScheduleTrigger: "回调里必须自己调 schedule.result？不必：抛错/reject 会被记成失败",
+    sharp: "只实现 image 能覆盖的算子，tint/median/composite/trim/normalize 会按名抛错",
+    ubrowser: "只有页面抓取，没有内嵌浏览器：click/input 之类会抛 utools.unsupported",
+    requestSchedule: "Promise 完成只代表登记成功那一刻，任务真正跑起来要看 onScheduleTrigger",
     getPluginLocalDataPath: "没有 Node 文件系统；用 widget.storage 存数据",
     getPluginTempPath: "没有 Node 文件系统；用 widget.storage 存数据",
     setExpendHeight: "uTools 里同步改窗口高度；这里是异步的，宽度不变",
@@ -55,10 +80,9 @@
     onPluginDetach: "每张卡片本身就是独立窗口，没有「从主窗口分离」这一步；回调会登记但永不触发",
   };
   const UNSUPPORTED = [
-    "AI 能力（utools.ai 等）", "定时任务（onScheduleTrigger / requestSchedule）",
+    "AI 能力（utools.ai 等）", "FFmpeg 音视频处理", "支付",
     "搜索框推送（onMainPush）", "跨设备同步（onDbPull）",
-    "模拟操作（键盘/鼠标注入）", "动态功能", "快捷入口",
-    "uBrowser 内嵌浏览器", "Sharp 图片处理", "FFmpeg 音视频处理", "支付",
+    "内嵌浏览器交互（ubrowser 的 click/input 等）",
   ];
 
   const listeners = { ready: [], enter: [], out: [], detach: [] };
@@ -697,7 +721,321 @@
     readCurrentBrowserUrl: () => Promise.reject(unsupportedError("readCurrentBrowserUrl")),
   };
 
-  // 未知成员（AI、ubrowser、simulate、dynamicFeature、快捷入口……）不要返回 undefined：
+  // ── 其余分类：屏幕 / 输入 / 复制 / 数据库 / 定时任务 / 模拟 / 动态功能 / 快捷入口 / Sharp / uBrowser ──
+  // 这一段只做「uTools 名字 → 宿主方法」的映射，能力本身在 core/ 下同名分类文件里，
+  // 这里不重复实现一遍判断逻辑。
+
+  const round = (v) => Math.round(Number(v) || 0);
+  const pointOf = (p) => ({ x: round(p && p.x), y: round(p && p.y) });
+  const rectOf = (r) => ({
+    left: round(r && (r.left ?? r.x)),
+    top: round(r && (r.top ?? r.y)),
+    width: round(r && r.width),
+    height: round(r && r.height),
+  });
+
+  function dataUrlBytes(url) {
+    return fetch(url)
+      .then((r) => r.arrayBuffer())
+      .then((b) => new Uint8Array(b));
+  }
+
+  /** uTools 的 NativeImage。宿主给的是 PNG data URL，解码与裁剪走 canvas，方法因此都是 Promise。 */
+  function nativeImage(dataUrl) {
+    const state = { url: typeof dataUrl === "string" ? dataUrl : "", bitmap: null };
+    const whenReady = () =>
+      state.bitmap
+        ? Promise.resolve(state.bitmap)
+        : new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+              state.bitmap = img;
+              resolve(img);
+            };
+            img.onerror = () => reject(new Error("nativeImage: cannot decode the picture"));
+            img.src = state.url || "data:,";
+          });
+    const canvasOf = (source, w, h, sx, sy, sw, sh) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(w));
+      canvas.height = Math.max(1, Math.round(h));
+      canvas.getContext("2d").drawImage(source, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/png");
+    };
+    const image = {
+      isEmpty: () => !state.url,
+      get __dataUrl() {
+        return state.url;
+      },
+      getSize: () => whenReady().then((b) => ({ width: b.width, height: b.height })),
+      toDataURL: () => whenReady().then(() => state.url),
+      toPNG: () => whenReady().then(() => dataUrlBytes(state.url)),
+      toJPEG: (quality) =>
+        whenReady()
+          .then((b) => {
+            const canvas = document.createElement("canvas");
+            canvas.width = b.width;
+            canvas.height = b.height;
+            canvas.getContext("2d").drawImage(b, 0, 0);
+            return canvas.toDataURL("image/jpeg", Number(quality) > 1 ? Number(quality) / 100 : Number(quality) || 0.85);
+          })
+          .then(dataUrlBytes),
+      crop: (rect) =>
+        whenReady().then((b) => {
+          const r = rectOf(rect);
+          return nativeImage(canvasOf(b, r.width, r.height, r.left, r.top, r.width, r.height));
+        }),
+      resize: (options) =>
+        whenReady().then((b) => {
+          const opts = options || {};
+          const width = round(opts.width) || b.width;
+          const height = round(opts.height) || round((b.height * width) / b.width);
+          return nativeImage(canvasOf(b, width, height, 0, 0, b.width, b.height));
+        }),
+    };
+    return image;
+  }
+
+  const screenApi = {
+    getCursorScreenPoint: () => widget.call("screen.cursor"),
+    getPrimaryDisplay: () => widget.call("screen.primary"),
+    getAllDisplays: () => widget.call("screen.displays"),
+    getDisplayNearestPoint: (point) => widget.call("screen.nearest", pointOf(point)),
+    getDisplayMatching: (rect) => widget.call("screen.matching", rectOf(rect)),
+    screenToDipPoint: (point) => widget.call("screen.toDip", pointOf(point)),
+    dipToScreenPoint: (point) => widget.call("screen.toScreen", pointOf(point)),
+    screenToDipRect: (rect) => widget.call("screen.toDip", rectOf(rect)),
+    dipToScreenRect: (rect) => widget.call("screen.toScreen", rectOf(rect)),
+    capture: (display) => widget.call("screen.capture").then(nativeImage),
+    captureDisplay: (display) =>
+      widget.call("screen.captureDisplay", { display: round(display) }).then(nativeImage),
+  };
+
+  /** 光标下的颜色：{ hex: "#RRGGBB", rgb: "rgb(r, g, b)" }。 */
+  const screenColorPick = () => widget.call("screen.colorPick");
+
+  // ── 复制 ────────────────────────────────────────────────────────────────
+  function copyImage(source) {
+    const url = typeof source === "string" ? source : source && source.__dataUrl;
+    return widget.call("clipboard.writeImage", { image: String(url || "") });
+  }
+
+  function getCopyedFiles() {
+    return widget.call("clipboard.readFiles");
+  }
+
+  // ── 输入：先把卡片藏起来，再在原来的窗口里粘贴/打字 ──────────────────────
+  const inputApi = {
+    hideMainWindowPasteText: (text) => widget.call("input.pasteText", { text: String(text ?? "") }),
+    hideMainWindowPasteFile: (path) =>
+      widget.call("input.pasteFile", { paths: [].concat(path || []).map(String) }),
+    hideMainWindowPasteImage: (image) => {
+      const url = typeof image === "string" ? image : image && image.__dataUrl;
+      return widget.call("input.pasteImage", { image: String(url || "") });
+    },
+    hideMainWindowTypeString: (text) => widget.call("input.typeString", { text: String(text ?? "") }),
+  };
+
+  // ── 数据库：宿主侧文档库（data/db/<widget>.json） ───────────────────────
+  const dbApi = {
+    put: (doc) => widget.call("db.put", { doc }),
+    get: (id) => widget.call("db.get", { id: String(id) }),
+    // uTools takes a doc (or an id); the host takes either, so keep the shape the caller used.
+    remove: (doc) =>
+      widget.call("db.remove", typeof doc === "string" ? { id: String(doc) } : { doc }),
+    bulkDocs: (docs) => widget.call("db.bulkDocs", { docs: docs || [] }),
+    allDocs: (key) => widget.call("db.allDocs", key || {}),
+    postAttachment: (id, data, type) =>
+      widget.call("db.postAttachment", {
+        id: String(id),
+        type: String(type || "application/octet-stream"),
+        // uTools 收 Buffer/Uint8Array；这里转 base64 传过去。
+        data: String(data == null ? "" : data),
+      }),
+    getAttachment: (id) => widget.call("db.getAttachment", { id: String(id) }).then(nativeImage),
+    getAttachmentType: (id) => widget.call("db.getAttachmentType", { id: String(id) }),
+    replicateStateFromCloud: () => widget.call("db.replicateStateFromCloud"),
+  };
+
+  // ── 定时任务 ────────────────────────────────────────────────────────────
+  function requestSchedule(schedule) {
+    return widget.call("schedule.request", { schedule });
+  }
+
+  function getSchedules() {
+    return widget.call("schedule.list");
+  }
+
+  function removeSchedule(code) {
+    return widget.call("schedule.remove", { code: String(code) });
+  }
+
+  /** 到点了就跑回调；抛错/reject 会回报给宿主记成失败，与 uTools 的统计口径一致。 */
+  function onScheduleTrigger(fn) {
+    if (typeof fn !== "function") return;
+    widget.on("schedule", (d) => {
+      const payload = d || {};
+      let settled;
+      try {
+        settled = Promise.resolve(fn(payload));
+      } catch (e) {
+        widget.call("schedule.result", { code: payload.code, ok: false, message: String(e && e.message || e) }).catch(() => {});
+        return;
+      }
+      settled.then(
+        () => widget.call("schedule.result", { code: payload.code, ok: true }).catch(() => {}),
+        (e) => widget.call("schedule.result", { code: payload.code, ok: false, message: String(e && e.message || e) }).catch(() => {})
+      );
+    });
+  }
+
+  // ── 模拟操作（坐标单位是物理像素，与 uTools 一致，不缩放） ────────────────
+  const simulateApi = {
+    simulateKeyboardTap: (key, ...modifiers) =>
+      widget.call("simulate.keyboardTap", { key: String(key), modifiers: modifiers.map(String) }),
+    simulateMouseMove: (x, y) => widget.call("simulate.mouseMove", { x: Number(x), y: Number(y) }),
+    simulateMouseClick: (x, y) => widget.call("simulate.mouseClick", { x: Number(x), y: Number(y) }),
+    simulateMouseDoubleClick: (x, y) =>
+      widget.call("simulate.mouseDoubleClick", { x: Number(x), y: Number(y) }),
+    simulateMouseRightClick: (x, y) =>
+      widget.call("simulate.mouseRightClick", { x: Number(x), y: Number(y) }),
+  };
+
+  // ── 动态功能 ────────────────────────────────────────────────────────────
+  const featureApi = {
+    getFeatures: (codes) => widget.call("features.get", { codes: codes || null }),
+    setFeature: (feature) => widget.call("features.set", { feature }),
+    removeFeature: (code) => widget.call("features.remove", { code: String(code) }),
+  };
+
+  // ── 快捷入口 ────────────────────────────────────────────────────────────
+  const redirectApi = {
+    redirect: (label, payload) => widget.call("redirect.to", { label, payload }),
+    redirectHotKeySetting: (cmdLabel, autocopy) =>
+      widget.call("redirect.hotkey", { cmdLabel: String(cmdLabel || ""), autocopy: !!autocopy }),
+    getCmdHotKey: (cmdLabel) => widget.call("redirect.hotkeyGet", { cmdLabel: String(cmdLabel || "") }),
+  };
+
+  // ── Sharp：把链式调用收进 ops 数组，最后一次 sharp.run ───────────────────
+  const SHARP_REFUSED = ["tint", "median", "composite", "trim", "normalize"];
+
+  function sharpFactory(input, options) {
+    const ops = [];
+    let format = "png";
+    let quality = 0;
+    const source = (() => {
+      if (input == null) return { create: { width: 1, height: 1 } };
+      if (typeof input === "string") {
+        return /^data:/i.test(input) ? { data: input } : { path: input };
+      }
+      if (input && typeof input === "object" && (input.width || input.height || input.create)) {
+        return input.create ? { create: input.create } : { create: input };
+      }
+      if (input && input.__dataUrl) return { data: input.__dataUrl };
+      return { data: String(input) };
+    })();
+
+    const api = {
+      resize: (width, height) => {
+        ops.push({ op: "resize", width: width == null ? undefined : Number(width), height: height == null ? undefined : Number(height) });
+        return api;
+      },
+      rotate: (angle) => {
+        ops.push({ op: "rotate", angle: Number(angle) || 0 });
+        return api;
+      },
+      flip: () => { ops.push({ op: "flip" }); return api; },
+      flop: () => { ops.push({ op: "flop" }); return api; },
+      extract: (rect) => { ops.push({ op: "extract", ...rectOf(rect) }); return api; },
+      extend: (edges) => { ops.push({ op: "extend", ...(edges || {}) }); return api; },
+      grayscale: () => { ops.push({ op: "grayscale" }); return api; },
+      negate: () => { ops.push({ op: "negate" }); return api; },
+      blur: (sigma) => { ops.push({ op: "blur", sigma: Number(sigma) || 1 }); return api; },
+      sharpen: (sigma, flat, jagged) => {
+        ops.push({ op: "sharpen", sigma: Number(sigma) || 1, threshold: Number(flat) || 0, jagged: Number(jagged) || 0 });
+        return api;
+      },
+      threshold: (level) => { ops.push({ op: "threshold", threshold: Number(level) || 128 }); return api; },
+      gamma: (value) => { ops.push({ op: "gamma", gamma: Number(value) || 1 }); return api; },
+      flatten: (background) => { ops.push({ op: "flatten", background: background && String(background) }); return api; },
+      jpeg: (options) => {
+        format = "jpeg";
+        if (options && options.quality) quality = Number(options.quality);
+        return api;
+      },
+      png: () => { format = "png"; return api; },
+      webp: () => { format = "webp"; return api; },
+      tiff: () => { format = "tiff"; return api; },
+      clone: () => sharpFactory(input, options),
+      toBuffer: () =>
+        widget
+          .call("sharp.run", { input: source, ops, output: { format, target: "buffer", quality: quality || undefined } })
+          .then((r) => dataUrlBytes("data:image/" + (format === "jpeg" ? "jpeg" : format) + ";base64," + r.data)),
+      toUint8Array: () => api.toBuffer(),
+      toFile: (path) =>
+        widget.call("sharp.run", {
+          input: source,
+          ops,
+          output: { format, target: "file", path: String(path), quality: quality || undefined },
+        }),
+      metadata: () =>
+        widget.call("sharp.run", { input: source, ops, output: { format, target: "metadata" } }),
+    };
+    for (const name of SHARP_REFUSED) {
+      api[name] = () => {
+        throw unsupportedError("sharp." + name);
+      };
+    }
+    return api;
+  }
+
+  // ── uBrowser：只有页面抓取 ──────────────────────────────────────────────
+  function ubrowserFactory(url) {
+    const api = {
+      goto: (target) => ubrowserFactory(String(target)),
+      run: () =>
+        widget.call("ubrowser.fetch", { url: String(url), timeout: 20000 }).then((r) => {
+          if (r && r.skipped && r.skipped.length) {
+            console.warn("utools.ubrowser: 以下交互步骤没有执行（没有内嵌浏览器）：" + r.skipped.join("、"));
+          }
+          return r;
+        }),
+    };
+    for (const name of ["click", "input", "press", "select", "wait", "screenshot", "evaluate", "download", "scroll"]) {
+      api[name] = () => {
+        throw unsupportedError("ubrowser." + name);
+      };
+    }
+    return api;
+  }
+
+  Object.assign(utools, {
+    screen: screenApi,
+    screenColorPick,
+    copyImage,
+    copyFile: (path) => widget.call("clipboard.writeFiles", { paths: [].concat(path || []).map(String) }),
+    getCopyedFiles,
+    ...inputApi,
+    db: dbApi,
+    requestSchedule,
+    getSchedules,
+    removeSchedule,
+    onScheduleTrigger,
+    ...simulateApi,
+    ...featureApi,
+    ...redirectApi,
+    sharp: (input, options) => sharpFactory(input, options),
+    ubrowser: {
+      goto: (url) => ubrowserFactory(String(url)),
+      run: () => {
+        throw unsupportedError("ubrowser.run");
+      },
+    },
+  });
+  // uTools 的 db.promises 就是异步版本身；这里所有方法本来就是 Promise。
+  dbApi.promises = dbApi;
+
+  // 未知成员（AI、FFmpeg、支付……）不要返回 undefined：
   // 返回一个「怎么点都抛错」的对象，比「TypeError: utools.ai.chat is not a function」好查。
   // 所以这里给的不只是一个抛错函数，而是能继续链式取属性的 Proxy，
   // 这样 utools.ai.chat(...) 抛的是 utools.unsupported，而不是 TypeError。

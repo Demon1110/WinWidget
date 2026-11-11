@@ -807,8 +807,12 @@ By default a widget can only show its own content: it can't go online, can't rea
 | `notify` | `widget.notify`: showing Windows notifications |
 | `audio` | `widget.audio`: reading and changing the system volume and mute |
 | `media` | `widget.media`: what's playing (title, cover) and play, pause, skip |
-| `clipboard` | `widget.clipboard`: reading and writing the clipboard's text (users see a clear warning when allowing it) |
-| `screen` | `widget.screen.capture`: taking the whole screen as a picture (users see a clear warning when allowing it) |
+| `clipboard` | `widget.clipboard`, `utools.copyText` / `copyImage` / `copyFile` / `getCopyedFiles`: reading and writing the clipboard's text, files and pictures (users see a clear warning when allowing it) |
+| `screen` | `widget.screen.capture`, `utools.screen.*`, `utools.captureScreen`, `utools.screenColorPick`: displays, coordinate conversion, screenshots, picking a pixel's colour (users see a clear warning when allowing it) |
+| `input` | `utools.hideMainWindowTypeString`: typing into the window in front (users see a clear warning when allowing it) |
+| `schedule` | `utools.requestSchedule` / `getSchedules` / `removeSchedule`: registering scheduled tasks (users see a clear warning when allowing it) |
+| `sharp` | `utools.sharp`: processing pictures in the host (users see a clear warning when allowing it) |
+| `ubrowser` | `utools.ubrowser`: fetching pages (users see a clear warning when allowing it) |
 | `shell.launch` | `widget.shell.launch`, `pick`, `save`, `reveal`, `trash`, `info`, `paths`, `fileIcon`: opening programs and files, choosing files, choosing where to save, showing a file in Explorer, moving it to the recycle bin, reading names and icons (users see a clear warning when allowing it) |
 
 Reading a folder needs no permission: the widget can read only the pictures in the folder the user chose in its settings. See [`widget.files`](#a-folder-the-user-chose-widgetfiles).
@@ -860,6 +864,142 @@ A `.fwz` file is a widget folder zipped up with another extension.
 
 ---
 
+## The sixteen categories
+
+WinWidget's capabilities are split the way the uTools reference is, and the page sees the `utools.*` names. One minimal example per category; the types live in `widget.d.ts` under `WinWidget.Utools`.
+
+### Screen
+
+```js
+const displays = await utools.screen.getAllDisplays();   // Display[], in DIP
+const primary = await utools.screen.getPrimaryDisplay();  // { scaleFactor: 1.5, bounds, workArea, … }
+const win = await utools.screen.captureDisplay(0);        // NativeImage
+const size = await win.getSize();                         // { width, height } in pixels
+const png = await win.toPNG();                            // Uint8Array
+const dip = await utools.screen.screenToDipPoint({ x: 400, y: 300 });
+```
+
+`NativeImage`'s `getSize` / `toPNG` / `toJPEG` / `crop` / `resize` / `toDataURL` all return Promises: the host fetches the PNG first, then the page decodes it. `utools.screenColorPick()` answers `{ hex, rgb }` for the pixel under the cursor instead of opening uTools' magnifier.
+
+### Input
+
+```js
+// The card hides itself first, then pastes into the window in front
+await utools.hideMainWindowPasteText("Hello");
+await utools.hideMainWindowPasteFile(["D:\\a.pdf"]);
+await utools.hideMainWindowPasteImage("data:image/png;base64,…");
+await utools.hideMainWindowTypeString("typed character by character");
+```
+
+Pasting goes through the clipboard and Ctrl+V, so it needs `clipboard`; typing needs `input`.
+
+### Copy
+
+```js
+await utools.copyText("some text");
+await utools.copyFile(["D:\\a.pdf", "D:\\b.zip"]);     // CF_HDROP
+await utools.copyImage("data:image/png;base64,…");
+const files = await utools.getCopyedFiles();            // [{ path, isDirectory, isFile, name }]
+```
+
+### Database
+
+```js
+const res = await utools.db.put({ _id: "note-1", text: "hi" });
+const doc = await utools.db.get("note-1");               // with its _rev
+await utools.db.remove(doc);
+await utools.db.postAttachment("note-1", base64, "image/png");
+const image = await utools.db.getAttachment("note-1");   // NativeImage
+```
+
+Documents live in `data/db/<widget id>.json`, attachments in `<widget id>.attachments/`; 1 MB per document, 10 MB per attachment. `dbStorage` is still this widget's local storage (synchronous, good for small settings).
+
+### Scheduled tasks
+
+```js
+await utools.requestSchedule({
+  code: "morning",
+  label: "Nine o'clock reminder",
+  trigger: { cron: "0 9 * * *" },       // minute hour day month weekday
+});
+
+utools.onScheduleTrigger(async (action) => {
+  // action = { code, label, at }
+  await utools.showNotification("Time to get up");
+});
+
+const list = await utools.getSchedules();  // with successCount / failureCount / lastStatus
+await utools.removeSchedule("morning");
+```
+
+`trigger` can also be a timestamp (a one-shot that is still caught up once if a minute was missed). `trigger.startTime` / `endTime` bound when the task is live, and a task past `endTime` disappears. A throwing or rejecting callback is recorded as a failure.
+
+### Simulation
+
+```js
+await utools.simulateKeyboardTap("v", "ctrl");
+await utools.simulateMouseMove(300, 200);
+await utools.simulateMouseClick(300, 200);
+await utools.simulateMouseDoubleClick(300, 200);
+await utools.simulateMouseRightClick(300, 200);
+```
+
+Coordinates are **physical pixels**, not scaled — same definition as uTools. To convert to and from `screen`'s DIP values use `dipToScreenPoint`. Needs `input`.
+
+### Dynamic features
+
+```js
+await utools.setFeature({
+  code: "site",
+  cmds: ["Open the site", { type: "regex", label: "Search", match: "^find (.+)$" }],
+});
+const features = await utools.getFeatures(["site"]);
+await utools.removeFeature("site");   // boolean
+```
+
+Kept in `data/features.json`; the control center reads the same file.
+
+### Quick entries
+
+```js
+await utools.redirect("Open the site");                 // a bare label
+await utools.redirect(["Another widget", "Open the site"]);  // [pluginName, label]
+await utools.redirectHotKeySetting("Open the site");     // opens the shortcut page
+const keys = await utools.getCmdHotKey("Open the site"); // "Ctrl+Shift+A" or null
+```
+
+If the widget is already on the desktop it is shown, otherwise a card is added; nothing found answers `false`.
+
+### uBrowser
+
+```js
+const page = await utools.ubrowser.goto("https://example.com").run();
+// { url, title, text, html, skipped }
+```
+
+Fetching only: there is no embedded browser, so `click` / `input` / `wait` throw `utools.unsupported`, and `skipped` lists what was left out. Needs `ubrowser`.
+
+### Sharp
+
+```js
+const out = await utools
+  .sharp("D:\\photo.jpg")
+  .resize(800)
+  .rotate(90)
+  .grayscale()
+  .jpeg({ quality: 85 })
+  .toBuffer();       // Uint8Array
+
+await utools.sharp("D:\\photo.png").resize(240, 240).toFile("D:\\thumb.png");
+const meta = await utools.sharp("D:\\photo.png").metadata();
+```
+
+Only what the `image` crate can do is implemented; `tint` / `median` / `composite` / `trim` / `normalize` are refused by name. Needs `sharp`.
+
+### AI, FFmpeg, payments
+
+These three have reserved category files and are **not implemented**. A call reports `reserved in the ai category — …` instead of pretending to succeed.
+
 ## Where uTools plugins stand (how far compatibility goes)
 
 A uTools plugin is an Electron app: `plugin.json`, a `preload.js` that runs with Node (`require("fs")`, Sharp and FFmpeg installed there), and a page. WinWidget is Rust + WebView2 — **no Electron, no Node** — so a uTools plugin cannot be dropped in unchanged. What can be carried over is the page plus the `utools.*` calls it makes: every widget page gets a `utools` compatibility layer (`/__fw/utools.js`) wired to WinWidget's own capabilities.
@@ -886,26 +1026,30 @@ console.log(utools.__compat.unsupported); // not there at all
 
 ### Category by category, as the uTools docs list them
 
+WinWidget now splits its capabilities the way the uTools reference does, with one file per category under `src/core/` (`window.rs`, `screen.rs`, `input.rs`, …), and the page sees the uTools names.
+
 | uTools category | What WinWidget gives you |
 |---|---|
-| Events | `onPluginReady`, `onPluginEnter`, `onPluginOut(isKill)` all exist, in uTools' order (ready finishes, then enter; hidden is `false`, removed/quit is `true`); `onPluginDetach` registers but never fires, and `onScheduleTrigger` / `onMainPush` / `onDbPull` throw `utools.unsupported` on registration. The host's own lifecycle events are in the Lifecycle chapter |
+| Events | `onPluginReady`, `onPluginEnter`, `onPluginOut(isKill)` all exist, in uTools' order (ready finishes, then enter; hidden is `false`, removed/quit is `true`); `onPluginDetach` registers but never fires (every card already is its own window); `onScheduleTrigger` now really fires. `onMainPush` / `onDbPull` throw `utools.unsupported` on registration |
 | Window | `createBrowserWindow` (windows of your own, see that chapter), `hideMainWindow`, `showMainWindow`, `outPlugin`, `getWindowType` (`"main"` / `"custom"`), `sendToParent`, `setExpendHeight` (height only, and asynchronous), `findInPage` / `stopFindInPage` (through `window.find`) |
 | System | `showNotification`, `shellOpenPath`, `shellOpenExternal`, `shellShowItemInFolder`, `shellTrashItem`, `shellBeep`, `getPath`, `getFileIconAsync`, `showOpenDialog`, `showSaveDialog`, `isDev`, `isWindows` and friends; `getPluginLocalDataPath` returns an empty string (there is no filesystem) |
-| Screen | `captureScreen()` grabs the whole virtual desktop as a PNG data URL (needs the `screen` permission); uTools' interactive snipping is not reproduced |
-| Input | Absent: uTools' `simulate` family (keyboard and mouse injection) is not in the layer |
-| Copy | `copyText` works (`clipboard` permission); `copyImage` and `getCopyedFiles` do not — the clipboard is text only |
-| Database | `dbStorage.getItem` / `setItem` / `removeItem` / `clear`, synchronous, kept in this widget's local storage; **no cloud sync**, and uTools' document store `db` (with `_id`) is absent |
-| AI | Absent: no uTools account, no cloud models, no Node to reach a local one |
-| Scheduled tasks | No uTools scheduler; use `widget.notify({ at })` or the page's own timers |
-| Automation / simulation | Absent |
-| Dynamic features | Absent |
-| Quick entries | Absent: WinWidget is a desktop widget host; its entries are the tray and the control center |
-| uBrowser | No embedded browser window; open links with `utools.shellOpenExternal` or `widget.shell.open` |
-| Sharp image processing | Absent: native modules cannot be loaded; use Canvas, or let the host do it |
-| FFmpeg audio/video | Absent |
-| Payments | Absent |
+| Screen | `utools.screen`: `getAllDisplays` / `getPrimaryDisplay` / `getDisplayNearestPoint` / `getDisplayMatching` (uTools `Display`, in DIP), `screenToDipPoint` / `dipToScreenPoint` / `screenToDipRect` / `dipToScreenRect`, `capture()` / `captureDisplay(n)` returning a `NativeImage`, and `utools.screenColorPick()` for the pixel under the cursor. Interactive snipping is not reproduced |
+| Input | `hideMainWindowPasteText` / `…PasteFile` / `…PasteImage` / `…TypeString`: hide the card, give the keyboard back to the previous window, then paste or type. Coordinate injection lives under Simulation |
+| Copy | `copyText`, `copyImage` (data URL / path / `NativeImage`), `copyFile` (one or more paths, written as `CF_HDROP`), `getCopyedFiles()` returning `{ path, isDirectory, isFile, name }` (a Promise here) |
+| Database | The whole `utools.db` family: `put` / `get` / `remove` / `bulkDocs` / `allDocs` / `postAttachment` / `getAttachment` / `getAttachmentType` / `replicateStateFromCloud`, stored in `data/db/<widget>.json` plus an attachments folder; `dbStorage` stays this widget's local storage. **No cloud sync** — `replicateStateFromCloud()` answers `null` |
+| AI | A reserved category file, **not implemented**: calls report `reserved in the ai category` |
+| Scheduled tasks | `requestSchedule(schedule)` / `getSchedules()` / `removeSchedule(code)` / `onScheduleTrigger(fn)`: standard 5-field cron (`minute hour day month weekday`) or a one-shot timestamp, with `startTime` / `endTime` windows; tasks past `endTime` remove themselves. A throwing or rejecting callback counts as a failure, visible as `successCount` / `failureCount` / `lastStatus` |
+| Simulation | `simulateKeyboardTap(key, ...modifiers)`, `simulateMouseMove` / `Click` / `DoubleClick` / `RightClick(x, y)`. Coordinates are **physical pixels**, exactly as uTools defines them |
+| Dynamic features | `getFeatures(codes?)` / `setFeature(feature)` / `removeFeature(code)`, kept in `data/features.json`, the same file the control center reads |
+| Quick entries | `utools.redirect(label, payload)` (a `[pluginName, label]` pair, or a bare label looked up in display names and runtime features), `redirectHotKeySetting(cmdLabel, autocopy)` (opens the control center's shortcut page), `getCmdHotKey(cmdLabel)` |
+| uBrowser | Fetching only: `utools.ubrowser.goto(url).run()` returns `{ url, title, text, html, skipped }`; there is no embedded browser, so `click` / `input` throw `utools.unsupported` |
+| Sharp | `utools.sharp(input)` chains: `resize` / `rotate` / `flip` / `flop` / `extract` / `extend` / `grayscale` / `negate` / `blur` / `sharpen` / `threshold` / `gamma` / `flatten`, output `png` / `jpeg` / `webp` / `tiff` through `toBuffer` / `toUint8Array` / `toFile` / `metadata`. `tint` / `median` / `composite` / `trim` / `normalize` are refused by name |
+| FFmpeg | A reserved category file, **not implemented** |
+| Payments | A reserved category file, **not implemented** |
 
-Nothing missing fails quietly: calling it throws an error whose `code` is `"utools.unsupported"` and whose message names the API and the reason — far easier to chase than `TypeError: utools.xxx is not a function`.
+Four permissions come with these: `input` (typing into the previous window), `schedule`, `sharp`, `ubrowser` — see the Permissions chapter.
+
+Nothing missing fails quietly: calling it throws an error whose `code` is `"utools.unsupported"` and whose message names the API and the reason — far easier to chase than `TypeError: utools.xxx is not a function`. Where the semantics changed (sync became async), the note is listed in `utools.__compat.degraded`.
 
 ### New widgets should not go through uTools
 
@@ -985,9 +1129,18 @@ The SDK wraps all of these. The table shows the underlying names so you can matc
 | `notify.show` / `cancel` | `widget.notify(...)` |
 | `shell.open` / `launch` / `info` / `pick` / `save` / `reveal` / `trash` / `paths` | `widget.shell.*` |
 | `file.icon` | `widget.fileIcon(spec, { size })`: `spec` is a path, an extension such as `.pdf`, or `"folder"` |
-| `clipboard.readText` / `writeText` | `widget.clipboard.*` (needs the `clipboard` permission) |
+| `clipboard.readText` / `writeText` / `readImage` / `writeImage` / `readFiles` / `writeFiles` | `widget.clipboard.*` (needs the `clipboard` permission) |
+| `screen.capture` / `captureDisplay` / `displays` / `primary` / `nearest` / `matching` / `cursor` / `toDip` / `toScreen` / `colorPick` | `widget.screen.*`, `utools.screen.*` (needs the `screen` permission) |
+| `input.pasteText` / `pasteFile` / `pasteImage` / `typeString` | `utools.hideMainWindowPaste*` / `hideMainWindowTypeString` (`typeString` needs `input`) |
+| `db.put` / `get` / `remove` / `bulkDocs` / `allDocs` / `postAttachment` / `getAttachment` / `getAttachmentType` / `replicateStateFromCloud` | `utools.db.*`, stored in `data/db/<widget>.json` |
+| `schedule.request` / `list` / `remove` / `result` | `utools.requestSchedule` / `getSchedules` / `removeSchedule` (needs `schedule`), event `schedule` |
+| `simulate.keyboardTap` / `mouseMove` / `mouseClick` / `mouseDoubleClick` / `mouseRightClick` | `utools.simulate*` (needs `input`, coordinates in physical pixels) |
+| `features.get` / `set` / `remove` | `utools.getFeatures` / `setFeature` / `removeFeature` |
+| `redirect.to` / `hotkey` / `hotkeyGet` | `utools.redirect` / `redirectHotKeySetting` / `getCmdHotKey` |
+| `ubrowser.fetch` | `utools.ubrowser.goto(url).run()` (needs `ubrowser`) |
+| `sharp.run` | `utools.sharp(input)…toBuffer()` (needs `sharp`) |
+| `ai.*` / `ffmpeg.*` / `payment.*` | Reserved: every call answers a reserved error |
 | `paths.named` | `widget.paths.named(name)`: `home` / `desktop` / `documents` / `downloads` / `music` / `pictures` / `videos` / `temp` / `appData` |
-| `screen.capture` | `widget.screen.capture()`: the whole virtual desktop as a PNG data URL (needs the `screen` permission) |
 | `text.chinese` | `widget.convertChinese(text, to)` |
 | `window.getSize` / `setSize` / `drag` / `resize` / `press` / `menu` / `devtools` / `hide` / `show` | `widget.window.*`; `drag`, `resize`, `press`, `menu` and `devtools` are sent by the SDK itself |
 | `log` | `widget.log(...)` |

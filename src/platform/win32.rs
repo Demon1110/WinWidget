@@ -1522,3 +1522,507 @@ pub fn base64(bytes: &[u8]) -> String {
     }
     out
 }
+
+// ── clipboard pictures and files ────────────────────────────────────────────
+// Windows keeps a picture as a DIB and a set of paths as CF_HDROP; both are handed over as one
+// moveable block, which is why they are built and parsed by hand here.
+
+const CF_DIB_FORMAT: u32 = 8;
+const CF_HDROP_FORMAT: u32 = 15;
+
+#[link(name = "shell32")]
+extern "system" {
+    fn DragQueryFileW(drop: HANDLE, index: u32, file: *mut u16, size: u32) -> u32;
+}
+
+/// The clipboard's picture, re-encoded as PNG. Only 24/32-bit uncompressed DIBs are read: that is
+/// what Explorer, browsers and every screenshot tool put there.
+pub fn clipboard_png() -> Option<Vec<u8>> {
+    unsafe {
+        if IsClipboardFormatAvailable(CF_DIB_FORMAT) == 0 {
+            return None;
+        }
+        for _ in 0..10 {
+            if OpenClipboard(0) == 0 {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+                continue;
+            }
+            let handle = GetClipboardData(CF_DIB_FORMAT);
+            if handle == 0 {
+                CloseClipboard();
+                return None;
+            }
+            let base = GlobalLock(handle) as *const u8;
+            let result = if base.is_null() {
+                None
+            } else {
+                dib_to_png(base)
+            };
+            GlobalUnlock(handle);
+            CloseClipboard();
+            return result;
+        }
+        None
+    }
+}
+
+unsafe fn dib_to_png(base: *const u8) -> Option<Vec<u8>> {
+    let header = std::slice::from_raw_parts(base, 40);
+    let header_size = u32::from_le_bytes([header[0], header[1], header[2], header[3]]) as usize;
+    let width = i32::from_le_bytes([header[4], header[5], header[6], header[7]]);
+    let height = i32::from_le_bytes([header[8], header[9], header[10], header[11]]);
+    let bits = u16::from_le_bytes([header[14], header[15]]);
+    let compression = u32::from_le_bytes([header[16], header[17], header[18], header[19]]);
+    if width <= 0 || height == 0 || compression != 0 || (bits != 24 && bits != 32) {
+        return None;
+    }
+    let w = width as usize;
+    let h = height.unsigned_abs() as usize;
+    let stride = (w * (bits as usize) / 8 + 3) & !3;
+    let pixels = base.add(header_size);
+    let mut rgba = vec![0u8; w * h * 4];
+    for y in 0..h {
+        // A positive height means bottom-up, which is the usual case.
+        let src_row = if height > 0 { h - 1 - y } else { y };
+        let row = pixels.add(src_row * stride);
+        for x in 0..w {
+            let px = row.add(x * (bits as usize) / 8);
+            let (b, g, r) = (*px, *px.add(1), *px.add(2));
+            let a = if bits == 32 { *px.add(3) } else { 255 };
+            let out = &mut rgba[(y * w + x) * 4..(y * w + x) * 4 + 4];
+            out[0] = r;
+            out[1] = g;
+            out[2] = b;
+            out[3] = a;
+        }
+    }
+    crate::core::img::encode_png(w as u32, h as u32, &rgba).ok()
+}
+
+/// Puts a PNG/JPEG on the clipboard as a 32-bit DIB, which is what every Windows app reads.
+pub fn set_clipboard_png(bytes: &[u8]) -> bool {
+    let Ok(image) = ::image::load_from_memory(bytes) else {
+        return false;
+    };
+    let rgba = image.to_rgba8();
+    let (w, h) = (rgba.width() as usize, rgba.height() as usize);
+    let pixels = w * h * 4;
+    unsafe {
+        let mem = GlobalAlloc(GMEM_MOVEABLE, 40 + pixels);
+        if mem == 0 {
+            return false;
+        }
+        let base = GlobalLock(mem) as *mut u8;
+        if base.is_null() {
+            GlobalFree(mem);
+            return false;
+        }
+        let header = std::slice::from_raw_parts_mut(base, 40);
+        header[0..4].copy_from_slice(&40u32.to_le_bytes());
+        header[4..8].copy_from_slice(&(w as i32).to_le_bytes());
+        // Negative height: top-down rows, so no flipping is needed.
+        header[8..12].copy_from_slice(&(-(h as i32)).to_le_bytes());
+        header[12..14].copy_from_slice(&1u16.to_le_bytes());
+        header[14..16].copy_from_slice(&32u16.to_le_bytes());
+        header[16..20].copy_from_slice(&0u32.to_le_bytes());
+        header[20..24].copy_from_slice(&(pixels as u32).to_le_bytes());
+        let data = base.add(40);
+        for (i, px) in rgba.pixels().enumerate() {
+            let out = data.add(i * 4);
+            *out = px.0[2];
+            *out.add(1) = px.0[1];
+            *out.add(2) = px.0[0];
+            *out.add(3) = px.0[3];
+        }
+        GlobalUnlock(mem);
+        let mut ok = false;
+        for _ in 0..10 {
+            if OpenClipboard(0) != 0 {
+                EmptyClipboard();
+                ok = SetClipboardData(CF_DIB_FORMAT, mem) != 0;
+                CloseClipboard();
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        if !ok {
+            GlobalFree(mem);
+        }
+        ok
+    }
+}
+
+/// The paths currently on the clipboard, empty when it holds no files.
+pub fn clipboard_files() -> Vec<String> {
+    unsafe {
+        if IsClipboardFormatAvailable(CF_HDROP_FORMAT) == 0 {
+            return Vec::new();
+        }
+        for _ in 0..10 {
+            if OpenClipboard(0) == 0 {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+                continue;
+            }
+            let handle = GetClipboardData(CF_HDROP_FORMAT);
+            let mut out = Vec::new();
+            if handle != 0 {
+                let count = DragQueryFileW(handle, u32::MAX, std::ptr::null_mut(), 0);
+                for index in 0..count {
+                    let len = DragQueryFileW(handle, index, std::ptr::null_mut(), 0);
+                    let mut buf = vec![0u16; len as usize + 1];
+                    if DragQueryFileW(handle, index, buf.as_mut_ptr(), len + 1) > 0 {
+                        let text = String::from_utf16_lossy(&buf[..len as usize]);
+                        out.push(text);
+                    }
+                }
+            }
+            CloseClipboard();
+            return out;
+        }
+        Vec::new()
+    }
+}
+
+/// Replaces the clipboard with a set of paths (uTools' copyFile: paths only, not the contents).
+pub fn set_clipboard_files(paths: &[String]) -> bool {
+    if paths.is_empty() {
+        return false;
+    }
+    // DROPFILES (20 bytes) + UTF-16 paths, each NUL terminated, then one more NUL for the list.
+    let list_bytes = 2 + paths.iter().map(|p| p.encode_utf16().count() + 1).sum::<usize>() * 2;
+    let total = 20 + list_bytes;
+    unsafe {
+        let mem = GlobalAlloc(GMEM_MOVEABLE, total);
+        if mem == 0 {
+            return false;
+        }
+        let base = GlobalLock(mem) as *mut u8;
+        if base.is_null() {
+            GlobalFree(mem);
+            return false;
+        }
+        std::ptr::write_bytes(base, 0, total);
+        let header = std::slice::from_raw_parts_mut(base, 20);
+        header[0..4].copy_from_slice(&20u32.to_le_bytes());
+        header[16..20].copy_from_slice(&1i32.to_le_bytes());
+        let mut cursor = base.add(20) as *mut u16;
+        for path in paths {
+            for unit in path.encode_utf16() {
+                *cursor = unit;
+                cursor = cursor.add(1);
+            }
+            *cursor = 0;
+            cursor = cursor.add(1);
+        }
+        GlobalUnlock(mem);
+        let mut ok = false;
+        for _ in 0..10 {
+            if OpenClipboard(0) != 0 {
+                EmptyClipboard();
+                ok = SetClipboardData(CF_HDROP_FORMAT, mem) != 0;
+                CloseClipboard();
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        if !ok {
+            GlobalFree(mem);
+        }
+        ok
+    }
+}
+
+// ── per-monitor DPI, screen regions, one pixel ──────────────────────────────
+
+#[link(name = "shcore")]
+extern "system" {
+    fn GetDpiForMonitor(monitor: isize, kind: i32, x: *mut u32, y: *mut u32) -> i32;
+}
+
+/// The effective scale of the display a rectangle sits on: 1.0 for 96 DPI, 1.5 for 144.
+pub fn monitor_dpi(rect: &RECT) -> f64 {
+    let monitor = unsafe { MonitorFromRect(rect, 2) };
+    let (mut x, mut y) = (0u32, 0u32);
+    // MDT_EFFECTIVE_DPI = 0: what Windows actually renders the desktop at.
+    let ok = unsafe { GetDpiForMonitor(monitor, 0, &mut x, &mut y) };
+    if ok == 0 && x > 0 {
+        f64::from(x) / 96.0
+    } else {
+        1.0
+    }
+}
+
+/// A rectangle of the desktop as PNG, for screen.captureDisplay.
+pub fn capture_rect_png(rect: &RECT) -> Option<Vec<u8>> {
+    let (x, y) = (rect.left, rect.top);
+    let (w, h) = (rect.width(), rect.height());
+    if w <= 0 || h <= 0 {
+        return None;
+    }
+    unsafe {
+        let screen = GetDC(0);
+        if screen == 0 {
+            return None;
+        }
+        let dc = CreateCompatibleDC(screen);
+        let bitmap = CreateCompatibleBitmap(screen, w, h);
+        if dc == 0 || bitmap == 0 {
+            if bitmap != 0 {
+                DeleteObject(bitmap);
+            }
+            if dc != 0 {
+                DeleteDC(dc);
+            }
+            ReleaseDC(0, screen);
+            return None;
+        }
+        let old = SelectObject(dc, bitmap);
+        let copied = BitBlt(dc, 0, 0, w, h, screen, x, y, SRCCOPY);
+        let mut info = BITMAPINFO {
+            bmiHeader: BITMAPINFOHEADER {
+                biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                biWidth: w,
+                biHeight: -h,
+                biPlanes: 1,
+                biBitCount: 32,
+                biCompression: 0,
+                ..Default::default()
+            },
+            bmiColors: [0; 3],
+        };
+        let mut bits = vec![0u8; (w * h * 4) as usize];
+        let lines = GetDIBits(
+            dc,
+            bitmap,
+            0,
+            h as u32,
+            bits.as_mut_ptr() as *mut c_void,
+            &mut info,
+            0,
+        );
+        SelectObject(dc, old);
+        DeleteObject(bitmap);
+        DeleteDC(dc);
+        ReleaseDC(0, screen);
+        if copied == 0 || lines == 0 {
+            return None;
+        }
+        for px in bits.as_chunks_mut::<4>().0 {
+            px.swap(0, 2);
+        }
+        crate::core::img::encode_png(w as u32, h as u32, &bits).ok()
+    }
+}
+
+/// #RRGGBB of a screen pixel, or None when GDI cannot read the desktop (a locked session, say).
+pub fn pixel_hex(x: i32, y: i32) -> Option<String> {
+    unsafe {
+        let dc = GetDC(0);
+        if dc == 0 {
+            return None;
+        }
+        let color = GetPixel(dc, x, y);
+        ReleaseDC(0, dc);
+        if color == u32::MAX {
+            return None;
+        }
+        Some(format!(
+            "#{:02X}{:02X}{:02X}",
+            color & 0xFF,
+            (color >> 8) & 0xFF,
+            (color >> 16) & 0xFF
+        ))
+    }
+}
+
+#[link(name = "gdi32")]
+extern "system" {
+    fn GetPixel(dc: isize, x: i32, y: i32) -> u32;
+}
+
+// ── simulated keyboard and mouse (utools.simulate*) ─────────────────────────
+
+#[link(name = "user32")]
+extern "system" {
+    fn keybd_event(key: u8, scan: u8, flags: u32, extra: usize);
+    fn mouse_event(flags: u32, dx: i32, dy: i32, data: u32, extra: usize);
+}
+
+const KEYEVENTF_KEYUP: u32 = 0x0002;
+const KEYEVENTF_UNICODE: u32 = 0x0004;
+const MOUSEEVENTF_LEFTDOWN: u32 = 0x0002;
+const MOUSEEVENTF_LEFTUP: u32 = 0x0004;
+const MOUSEEVENTF_RIGHTDOWN: u32 = 0x0008;
+const MOUSEEVENTF_RIGHTUP: u32 = 0x0010;
+
+/// Virtual-key code for a key name, as uTools spells them (nter, 5, , ,).
+fn vk_of(name: &str) -> Option<u8> {
+    let lower = name.to_lowercase();
+    let named = match lower.as_str() {
+        "enter" | "return" => 0x0D,
+        "tab" => 0x09,
+        "space" => 0x20,
+        "esc" | "escape" => 0x1B,
+        "backspace" => 0x08,
+        "delete" | "del" => 0x2E,
+        "insert" | "ins" => 0x2D,
+        "up" => 0x26,
+        "down" => 0x28,
+        "left" => 0x25,
+        "right" => 0x27,
+        "home" => 0x24,
+        "end" => 0x23,
+        "pageup" | "pgup" => 0x21,
+        "pagedown" | "pgdn" => 0x22,
+        "capslock" => 0x14,
+        "shift" => 0x10,
+        "ctrl" | "control" => 0x11,
+        "alt" => 0x12,
+        "command" | "cmd" | "win" | "meta" => 0x5B,
+        "printscreen" => 0x2C,
+        "pause" => 0x13,
+        "apps" | "contextmenu" => 0x5D,
+        "" => return None,
+        other => {
+            if let Some(rest) = other.strip_prefix('f') {
+                if let Ok(n) = rest.parse::<u8>() {
+                    if (1..=24).contains(&n) {
+                        return Some(0x70 + n - 1);
+                    }
+                }
+            }
+            let bytes = other.as_bytes();
+            if bytes.len() == 1 {
+                let ch = bytes[0];
+                return match ch {
+                    b'a'..=b'z' => Some(ch.to_ascii_uppercase()),
+                    b'0'..=b'9' => Some(ch),
+                    b',' => Some(0xBC),
+                    b'.' => Some(0xBE),
+                    b'/' => Some(0xBF),
+                    b';' => Some(0xBA),
+                    b':' => Some(0xBA),
+                    b'-' => Some(0xBD),
+                    b'=' => Some(0xBB),
+                    b'[' => Some(0xDB),
+                    b']' => Some(0xDD),
+                    b'\\' => Some(0xDC),
+                    _ => return None,
+                };
+            }
+            return None;
+        }
+    };
+    Some(named)
+}
+
+fn modifier_vk(name: &str) -> Option<u8> {
+    match name.to_lowercase().as_str() {
+        "shift" => Some(0x10),
+        "ctrl" | "control" => Some(0x11),
+        "alt" => Some(0x12),
+        "command" | "cmd" | "win" | "meta" => Some(0x5B),
+        _ => None,
+    }
+}
+
+/// One key with optional modifiers held down, like uTools' simulateKeyboardTap(key, ...mods).
+pub fn key_tap(key: &str, modifiers: &[String]) -> Result<(), String> {
+    let vk = vk_of(key).ok_or_else(|| format!("unknown key '{key}'"))?;
+    let mods: Vec<u8> = modifiers.iter().filter_map(|m| modifier_vk(m)).collect();
+    unsafe {
+        for m in &mods {
+            keybd_event(*m, 0, 0, 0);
+        }
+        keybd_event(vk, 0, 0, 0);
+        keybd_event(vk, 0, KEYEVENTF_KEYUP, 0);
+        for m in mods.iter().rev() {
+            keybd_event(*m, 0, KEYEVENTF_KEYUP, 0);
+        }
+    }
+    Ok(())
+}
+
+/// A chord such as Ctrl+V, used by the paste APIs.
+pub fn key_combo(vk: u8, ctrl: bool, shift: bool, alt: bool) {
+    let mut mods = Vec::new();
+    if ctrl {
+        mods.push(0x11u8);
+    }
+    if shift {
+        mods.push(0x10);
+    }
+    if alt {
+        mods.push(0x12);
+    }
+    unsafe {
+        for m in &mods {
+            keybd_event(*m, 0, 0, 0);
+        }
+        keybd_event(vk, 0, 0, 0);
+        keybd_event(vk, 0, KEYEVENTF_KEYUP, 0);
+        for m in mods.iter().rev() {
+            keybd_event(*m, 0, KEYEVENTF_KEYUP, 0);
+        }
+    }
+}
+
+/// Types text with KEYEVENTF_UNICODE, so any character works without an IME.
+pub fn type_unicode(text: &str) {
+    unsafe {
+        for unit in text.encode_utf16() {
+            keybd_event(0, unit as u8, KEYEVENTF_UNICODE, 0);
+            keybd_event(0, unit as u8, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP, 0);
+        }
+    }
+}
+
+pub fn mouse_move((x, y): (i32, i32)) {
+    set_cursor_pos(x, y);
+}
+
+/// utton 1 = left, 2 = right; clicks 2 makes a double click with the usual interval.
+pub fn mouse_button(button: u8, clicks: u32) {
+    let (down, up) = if button == 2 {
+        (MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP)
+    } else {
+        (MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP)
+    };
+    for i in 0..clicks.max(1) {
+        if i > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(60));
+        }
+        unsafe {
+            mouse_event(down, 0, 0, 0, 0);
+            mouse_event(up, 0, 0, 0, 0);
+        }
+    }
+}
+
+/// Base64 back to bytes, for the data URLs a page sends (copyImage, postAttachment).
+pub fn base64_decode(input: &str) -> Option<Vec<u8>> {
+    let clean: String = input
+        .chars()
+        .filter(|c| !c.is_whitespace() && *c != '=')
+        .collect();
+    let mut out = Vec::with_capacity(clean.len() / 4 * 3 + 3);
+    let mut acc = 0u32;
+    let mut bits = 0u32;
+    for ch in clean.chars() {
+        let value = match ch {
+            'A'..='Z' => ch as u32 - 'A' as u32,
+            'a'..='z' => ch as u32 - 'a' as u32 + 26,
+            '0'..='9' => ch as u32 - '0' as u32 + 52,
+            '+' => 62,
+            '/' | '-' | '_' => 63,
+            _ => return None,
+        };
+        acc = (acc << 6) | value;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((acc >> bits) as u8);
+        }
+    }
+    Some(out)
+}
