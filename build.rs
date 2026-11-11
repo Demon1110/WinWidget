@@ -34,8 +34,9 @@ fn main() {
 /// Writes `assets_embed.rs` into `OUT_DIR`: one entry per file under `assets/`, each >= 256 bytes
 /// deflated so the binary stays around one download's worth instead of five.
 ///
-/// `docs/m<N>` (the milestone screenshots, ~13 MB of repository material) is skipped — nothing at
-/// runtime reads it, and the developer guide is a single self-contained HTML file.
+/// Everything else in the repository lives outside `assets/` on purpose: the Markdown guide
+/// sources and the milestone screenshots are in `docs/`, so they are repository material and
+/// never end up in the binary. `assets/docs` keeps only the generated HTML the app serves.
 fn embed_assets() {
     let root =
         Path::new(&std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR")).join("assets");
@@ -87,22 +88,11 @@ fn collect(root: &Path, rel: &str, out: &mut Vec<String>) {
             format!("{rel}/{name}")
         };
         if entry.path().is_dir() {
-            if !skip(&child) {
-                collect(root, &child, out);
-            }
-        } else if !skip(&child) {
+            collect(root, &child, out);
+        } else {
             out.push(child);
         }
     }
-}
-
-/// True for `docs/m0` … `docs/m9` and the files inside them.
-fn skip(rel: &str) -> bool {
-    let Some(rest) = rel.strip_prefix("docs/") else {
-        return false;
-    };
-    let last = rest.rsplit('/').next().unwrap_or("");
-    last.len() > 1 && last.starts_with('m') && last[1..].chars().all(|c| c.is_ascii_digit())
 }
 
 fn deflate(bytes: &[u8]) -> Vec<u8> {

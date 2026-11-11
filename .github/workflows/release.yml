@@ -209,13 +209,14 @@ jobs:
       - name: Install zhconv
         run: python -m pip install --disable-pip-version-check zhconv
 
-      # 三语 Markdown → 单文件自包含 HTML（洗掉运行时依赖，双击就能看）
+      # 三语 Markdown（docs/）→ 单文件自包含 HTML（assets/docs/，洗掉运行时依赖，双击就能看）
       - name: Build the guide
         run: python scripts/build-docs.py
 
       # 改了 Markdown 却忘了重新生成 → 这一步失败，别把过期的文档发出去
+      # 生成物有两处：assets/docs 的两个 HTML，以及 docs 里由繁體转出的简体 Markdown
       - name: Docs are in sync
-        run: git diff --exit-code -- assets/docs
+        run: git diff --exit-code -- assets/docs "docs/組件開發指南.zh-CN.md"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

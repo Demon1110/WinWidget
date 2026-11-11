@@ -54,7 +54,7 @@ WinWidget/
 │  ├─ ui/control-center/      # 控制中心页面（index.html / style.css / app.js / i18n.js）
 │  ├─ ui/docs/                # 内置文档页
 │  ├─ templates/              # "新建组件"用的模板
-│  └─ docs/                   # 组件开发指南、市场说明、里程碑说明（m* 截图不进二进制）
+│  └─ docs/                   # 只有生成的开发文档 HTML（app 会读；源文件在仓库根的 docs/）
 ├─ src/
 │  ├─ main.rs                 # 纯入口：单实例、事件循环、CLI、--apply-update；逻辑都在 lib.rs 里
 │  ├─ lib.rs                  # 库入口，把下面几层按依赖顺序曝光
@@ -65,7 +65,8 @@ WinWidget/
 │  ├─ runtime/                # 唯一持有窗口与事件循环的一层：app / window / bridge / snap / shim / monitor
 │  ├─ ui/                     # 用户动作的入口面：control(控制中心 API) / menus / server(本地 HTTP)
 │  └─ platform/               # 与 Windows 打交道：win32 / tray / shell / update(自我替换) / sysinfo / audio / media / files / power
-└─ docs/screenshots/          # 本文用到的实机截图
+└─ docs/                      # 仓库素材：开发指南与里程碑说明的 Markdown、m* 实机截图、README 用的截图
+   └─ screenshots/            # 本文用到的实机截图
 ```
 
 ## 构建与运行
@@ -91,7 +92,7 @@ winwidget remove <instance-id>
 
 ### 资源从哪来（一个 exe 怎么装下全部组件）
 
-`build.rs` 在编译时把 `assets/` 整棵扫一遍（跳过 `docs/m*` 截图），大于 256 字节的文件 deflate 压缩，落到 `OUT_DIR/asset-blobs/`，再生成一张「路径 / 是否压缩 / 字节」表；`src/core/assets.rs` 用 `include!` 把这张表和 `include_bytes!` 的压缩块一起收进二进制。发布版因此只有一个 exe，运行时直接从内存读，不落盘、不解压到临时目录。
+`build.rs` 在编译时把 `assets/` 整棵扫一遍，大于 256 字节的文件 deflate 压缩，落到 `OUT_DIR/asset-blobs/`，再生成一张「路径 / 是否压缩 / 字节」表；`src/core/assets.rs` 用 `include!` 把这张表和 `include_bytes!` 的压缩块一起收进二进制。发布版因此只有一个 exe，运行时直接从内存读，不落盘、不解压到临时目录。仓库根的 `docs/`（Markdown 源、里程碑截图）不在 `assets/` 里，所以根本不会被扫到。
 
 读取顺序（`src/core/paths.rs::resolve_resource_root`）：`WINWIDGET_DEV_ROOT` → exe 旁边的 `assets\` → **调试版**再往上找三级祖先里的 `assets\`（`cargo run` 落到的就是仓库那份）→ 都没有就用二进制里那份。祖先那一档只在 `debug` 构建里生效：不然把发布版 exe 丢进 `dist\` 跑，它会悄悄用仓库的 `assets\`，文档也会以 `file://` 打开。要从仓库里跑**发布版**又想吃源码里的 `assets\`，用 `WINWIDGET_DEV_ROOT`（`scripts/run.ps1` 会替你设）。用二进制里那份时 `paths::get().resource_root()` 是虚拟路径 `embedded:/assets`，`paths::get().embedded()` 为真，所有读文件的地方（本地 HTTP 服务、组件清单、主题、图标、预览图、`.fwz` 导出、新建组件模板）都会自动改从资源表取。启动日志第一行 `Assets: …` 会直接告诉你走的是哪一路。
 
@@ -110,10 +111,10 @@ pwsh -File scripts/run.ps1                    # 构建（调试）并启动；-K
 pwsh -File scripts/package-windows.ps1        # 构建并产出一个自带 assets 的 exe（+ .sha256）
 pwsh -File scripts/package-windows.ps1 -Upx   # 打包后用 UPX 再压一遍
 pwsh -File scripts/package-windows.ps1 -SkipBuild -Version 1.2.0   # 不重编、指定版本号
-python scripts/build-docs.py                  # 三语开发指南 → assets/docs/developer-guide.html（+ index.html）
+python scripts/build-docs.py                  # 三语开发指南：docs/*.md → assets/docs/developer-guide.html（+ index.html）
 ```
 
-**发布件只有一个文件**：`dist\WinWidget-<版本>-windows-x64.exe`（约 7.5 MB），旁边一份 `.sha256`。没有 zip，也没有安装包——`assets\` 整棵（38 个组件、SDK、主题、控制中心、开发文档）在编译时就被 `build.rs` 压进二进制，运行时从内存读，不落盘、不解压。只有 `assets\docs\m*`（里程碑截图，约 13 MB，纯仓库素材）被排除。
+**发布件只有一个文件**：`dist\WinWidget-<版本>-windows-x64.exe`（约 5 MB），旁边一份 `.sha256`。没有 zip，也没有安装包——`assets\` 整棵（38 个组件、SDK、主题、控制中心、开发文档）在编译时就被 `build.rs` 压进二进制，运行时从内存读，不落盘、不解压。`assets\` 里只有运行时真要的东西：Markdown 源文件（`docs\組件開發指南.md`、各里程碑说明）和里程碑截图都放在仓库根目录的 `docs\`，不进二进制。
 
 脚本末尾有一道自检：把产物拷到一个**没有 `assets\`** 的临时目录里跑 `winwidget list`，能列出 30+ 个内置组件才算出包成功——否则说明资源没编进去，只是从仓库的 `assets\` 里捡到的。
 
@@ -176,7 +177,7 @@ widget.call("shell.open", { target: "https://example.com" });  // 需在 permiss
 - 样式基线由主题提供：`w-label`、`w-num`、`w-btn`、`w-display` 等类名直接用，背景/圆角/字色会跟着主题走。
 - 完整 API（`widget.call` / `widget.on` / `widget.settings` / `widget.storage` / 权限清单 / 调试 / 打包）见
   **`assets/docs/developer-guide.html`**（三语单文件，双击就能读，不联网）——它由
-  [`assets/docs/組件開發指南.md`](assets/docs/組件開發指南.md) 经 `python scripts/build-docs.py` 生成；
+  [`docs/組件開發指南.md`](docs/組件開發指南.md) 经 `python scripts/build-docs.py` 生成；
   也可以从控制中心「設定 → 開發文檔 → 打開」直接打开，或走宿主的 `/__docs/`。
 - 编辑期把 `widget.d.ts` 放到同一目录，VS Code 里 `widget.` 会有完整补全与注释。
 
@@ -222,7 +223,7 @@ WebView2 的 `chrome.webview.postMessage` 在 wry 下**只能传字符串**（�
 
 ## 已知限制
 
-- **内置组件没有磁盘目录**：发布版里它们在 exe 里，「打开组件目录」对内置组件会提示先导出 `.fwz`；`assets\docs\m*`（里程碑截图，约 13 MB）没有编进二进制，需要看图请从仓库取。
+- **内置组件没有磁盘目录**：发布版里它们在 exe 里，「打开组件目录」对内置组件会提示先导出 `.fwz`；开发指南的 Markdown 和 `docs\m*`（里程碑截图，约 13 MB）是仓库素材、不编进二进制，需要看图请从仓库取。
 - **音频设备友好名**未取到：`windows` 0.61 里没有 `PROPVARIANT → String` 的现成辅助，`audio.state()` 的 `device` 固定为 `null`（音量数值本身正常）。
 - **`shell.paths` 与 `callWithFiles` 降级**：wry 没有 `postMessageWithAdditionalObjects`，页面无法把文件对象一并交给宿主，文件清单以 `p.files`（纯文件名数组）传递、宿主侧返回空数组。
 - **卡片右键菜单**用原生 `TrackPopupMenu`（Win32 手写），没有接 `assets/ui/menu` 的自绘菜单，视觉上是系统菜单。

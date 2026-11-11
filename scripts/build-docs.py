@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Build the widget developer guide into one self-contained HTML file.
 
-The source of truth is Markdown:
+The source of truth is Markdown in the repository's `docs/` folder — repository
+material that never ships, so it stays out of `assets/` (everything under
+`assets/` is compressed into the exe by build.rs):
 
-    assets/docs/組件開發指南.md   (Traditional Chinese, written by hand)
-    assets/docs/widget-guide.en.md (English, written by hand)
+    docs/組件開發指南.md     (Traditional Chinese, written by hand)
+    docs/widget-guide.en.md  (English, written by hand)
 
 This script converts the Traditional text to Simplified Chinese (zhconv plus a
 term table, because a character-by-character conversion turns 資料夾 into 资料夹),
@@ -12,6 +14,10 @@ renders all three languages to HTML, and writes
 
     assets/docs/developer-guide.html   the guide you double-click
     assets/docs/index.html             the same file, so /__docs/ works in the app
+
+The two generated files stay under `assets/` because the app serves them; the
+Markdown sources and milestone screenshots do not, so the binary keeps only what
+it actually shows.
 
 Everything is inlined: no images to fetch, no CSS to load, no markdown parser at
 runtime, so it opens with a plain file:// double-click and with no network.
@@ -32,10 +38,11 @@ import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-DOCS = ROOT / "assets" / "docs"
-ZH_TW = DOCS / "組件開發指南.md"
-EN = DOCS / "widget-guide.en.md"
-ZH_CN = DOCS / "組件開發指南.zh-CN.md"
+SRC = ROOT / "docs"                       # hand-written sources, not shipped
+DOCS = ROOT / "assets" / "docs"           # generated pages the app serves
+ZH_TW = SRC / "組件開發指南.md"
+EN = SRC / "widget-guide.en.md"
+ZH_CN = SRC / "組件開發指南.zh-CN.md"
 OUT_HTML = DOCS / "developer-guide.html"
 OUT_INDEX = DOCS / "index.html"
 
