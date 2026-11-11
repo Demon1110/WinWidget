@@ -71,6 +71,11 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
             crate::core::window::hide_for_input(ctx.app, &instance);
             ctx.spawn_reply(move || {
                 std::thread::sleep(std::time::Duration::from_millis(120));
+                crate::core::logging::info(&format!(
+                    "input.typeString: foreground is {} ({} chars)",
+                    w::foreground_label(),
+                    text.chars().count()
+                ));
                 w::type_unicode(&text);
                 Ok(json!(true))
             });
@@ -92,6 +97,11 @@ fn paste_after_hiding(ctx: &mut Ctx) {
     crate::core::window::hide_for_input(ctx.app, &instance);
     ctx.spawn_reply(|| {
         std::thread::sleep(std::time::Duration::from_millis(140));
+        // Where the keystroke actually lands decides whether the paste worked, so say it.
+        crate::core::logging::info(&format!(
+            "input.paste: foreground is {}",
+            w::foreground_label()
+        ));
         w::key_combo(0x56, true, false, false);
         Ok(json!(true))
     });

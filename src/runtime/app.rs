@@ -136,6 +136,9 @@ pub struct App {
     /// Set by `finish_quit`, so the loop's second call (from `LoopDestroyed`) does not save twice.
     quit_done: bool,
     pub hotkeys_paused: bool,
+    /// The last window of another program that had the foreground. Hiding a card to paste or type
+    /// hands the keyboard back to it — z-order alone picks our own windows or a background terminal.
+    pub last_foreign_focus: isize,
     /// What Windows said last time we asked, so a change can be noticed without a notification.
     /// Only "auto" needs it; a pinned light/dark never reads it.
     pub system_light: bool,
@@ -207,6 +210,7 @@ impl App {
             quit_at: None,
             quit_done: false,
             hotkeys_paused: false,
+            last_foreign_focus: 0,
             system_light: crate::platform::system_light(),
             theme_check_ms: 0,
             fullscreen_ticks: 0,
@@ -1214,6 +1218,11 @@ impl App {
     pub fn tick(&mut self) {
         // Widget-requested schedules (`utools.requestSchedule`) ride the same one-second clock.
         crate::core::schedule::tick(self);
+        // Remember where the user was before a card took the foreground, for paste/type to return to.
+        let foreign = crate::platform::win32::foreign_foreground();
+        if foreign != 0 {
+            self.last_foreign_focus = foreign as isize;
+        }
         let now = crate::core::util::now_ms();
         let mut fired = Vec::new();
         let mut keep = Vec::new();

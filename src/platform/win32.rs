@@ -252,6 +252,7 @@ extern "system" {
         data: isize,
     ) -> i32;
     pub fn GetClassNameW(hwnd: HWND, buffer: *mut u16, len: i32) -> i32;
+    pub fn GetWindowTextW(hwnd: HWND, buffer: *mut u16, len: i32) -> i32;
     pub fn GetWindow(hwnd: HWND, cmd: u32) -> HWND;
     pub fn GetParent(hwnd: HWND) -> HWND;
     pub fn SetParent(hwnd: HWND, parent: HWND) -> HWND;
@@ -272,6 +273,7 @@ extern "system" {
     pub fn GetSystemMetrics(index: i32) -> i32;
     pub fn GetForegroundWindow() -> HWND;
     pub fn SetForegroundWindow(hwnd: HWND) -> i32;
+    pub fn AttachThreadInput(id_attach: u32, id_attach_to: u32, attach: i32) -> i32;
     pub fn IsWindow(hwnd: HWND) -> i32;
     pub fn IsWindowVisible(hwnd: HWND) -> i32;
     pub fn IsIconic(hwnd: HWND) -> i32;
@@ -1012,6 +1014,23 @@ pub fn window_size(hwnd: HWND) -> (i32, i32) {
 
 pub fn foreground_window() -> HWND {
     unsafe { GetForegroundWindow() }
+}
+
+/// "class|title" of the foreground window — for log lines that must say where a keystroke went.
+pub fn foreground_label() -> String {
+    let hwnd = foreground_window();
+    if hwnd == 0 {
+        return "(none)".into();
+    }
+    let class = class_name(hwnd);
+    let mut buf = [0u16; 256];
+    let n = unsafe { GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32) };
+    let title = if n > 0 {
+        String::from_utf16_lossy(&buf[..n as usize])
+    } else {
+        String::new()
+    };
+    format!("{class}|{title}")
 }
 
 /// True when the window is in the maximized state — a maximized window is not "full screen".
@@ -1848,6 +1867,11 @@ extern "system" {
     fn mouse_event(flags: u32, dx: i32, dy: i32, data: u32, extra: usize);
 }
 
+#[link(name = "kernel32")]
+extern "system" {
+    fn GetCurrentThreadId() -> u32;
+}
+
 const KEYEVENTF_KEYUP: u32 = 0x0002;
 const KEYEVENTF_UNICODE: u32 = 0x0004;
 const MOUSEEVENTF_LEFTDOWN: u32 = 0x0002;
@@ -1974,6 +1998,88 @@ pub fn type_unicode(text: &str) {
             keybd_event(0, unit as u8, KEYEVENTF_UNICODE, 0);
             keybd_event(0, unit as u8, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP, 0);
         }
+    }
+}
+
+/// The foreground window, if it belongs to another program. A card holding the focus is exactly
+/// what must not be remembered as "where the user was".
+pub fn foreign_foreground() -> HWND {
+    let hwnd = foreground_window();
+    if hwnd == 0 {
+        return 0;
+    }
+    let mut pid: u32 = 0;
+    unsafe { GetWindowThreadProcessId(hwnd, &mut pid) };
+    if pid == std::process::id() {
+        return 0;
+    }
+    hwnd
+}
+
+/// Whether `hwnd` can still take the keyboard back: alive, visible, not minimized, not ours.
+pub fn can_take_focus(hwnd: HWND) -> bool {
+    if hwnd == 0 || unsafe { IsWindow(hwnd) } == 0 || unsafe { IsWindowVisible(hwnd) } == 0 {
+        return false;
+    }
+    if unsafe { IsIconic(hwnd) } != 0 {
+        return false;
+    }
+    let mut pid: u32 = 0;
+    unsafe { GetWindowThreadProcessId(hwnd, &mut pid) };
+    pid != std::process::id()
+}
+
+/// `SetForegroundWindow` with the thread-input dance: Windows refuses a plain call from a process
+/// that is not already in front, and a card that has just hidden itself is exactly that case.
+pub fn force_foreground(hwnd: HWND) {
+    if hwnd == 0 {
+        return;
+    }
+    unsafe {
+        let fg = GetForegroundWindow();
+        if fg == hwnd {
+            return;
+        }
+        let mut fg_pid: u32 = 0;
+        let fg_thread = if fg != 0 {
+            GetWindowThreadProcessId(fg, &mut fg_pid)
+        } else {
+            0
+        };
+        let this = GetCurrentThreadId();
+        if fg_thread != 0 && fg_thread != this {
+            AttachThreadInput(fg_thread, this, 1);
+            SetForegroundWindow(hwnd);
+            AttachThreadInput(fg_thread, this, 0);
+        } else {
+            SetForegroundWindow(hwnd);
+        }
+    }
+}
+
+/// Gives the foreground back to the window behind `hwnd`, skipping our own windows.
+///
+/// Hiding a card so it can paste into the app underneath must land on another process: the plain
+/// "next in z-order" window is often the control center or an invisible helper, and the keystroke
+/// then goes nowhere.
+pub fn activate_behind(hwnd: HWND) {
+    let own = std::process::id();
+    let mut next = unsafe { GetWindow(hwnd, GW_HWNDNEXT) };
+    while next != 0 {
+        let visible = unsafe { IsWindowVisible(next) } != 0;
+        let iconic = unsafe { IsIconic(next) } != 0;
+        let mut pid: u32 = 0;
+        unsafe { GetWindowThreadProcessId(next, &mut pid) };
+        let class = class_name(next);
+        let shell = matches!(
+            class.as_str(),
+            "Progman" | "WorkerW" | "Shell_TrayWnd" | "Shell_SecondaryTrayWnd"
+        );
+        if visible && !iconic && pid != own && !shell {
+            force_foreground(next);
+            return;
+        }
+        next = unsafe { GetWindow(next, GW_HWNDNEXT) };
     }
 }
 

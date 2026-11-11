@@ -46,14 +46,14 @@ pub fn call(ctx: &mut Ctx, method: &str, p: &Value) -> Option<BridgeResult<Reply
 /// `hideMainWindowPaste*` and `hideMainWindowTypeString` starts with.
 pub fn hide_for_input(app: &mut App, instance: &str) {
     let hwnd = app.windows.get(instance).map(|win| win.hwnd());
+    let remembered = app.last_foreign_focus as crate::platform::win32::HWND;
     app.set_visible(instance, false, "api");
-    if let Some(hwnd) = hwnd {
-        unsafe {
-            let next = w::GetWindow(hwnd, w::GW_HWNDNEXT);
-            if next != 0 {
-                w::SetForegroundWindow(next);
-            }
-        }
+    // The remembered window is where the user actually was; z-order behind the card is only a
+    // fallback, and it happily lands on the terminal that launched us.
+    if crate::platform::win32::can_take_focus(remembered) {
+        crate::platform::win32::force_foreground(remembered);
+    } else if let Some(hwnd) = hwnd {
+        crate::platform::win32::activate_behind(hwnd);
     }
     app.refresh_tray_menu();
 }
