@@ -96,6 +96,8 @@ pub enum Ev {
     Media(Value),
     Command(String),
     Tick,
+    /// A page queued something that has to be built on the loop (a custom window, today).
+    Wake,
 }
 
 pub struct App {
@@ -106,6 +108,12 @@ pub struct App {
     pub serve: ServeState,
     pub port: u16,
     pub windows: HashMap<String, WidgetWin>,
+    /// The custom windows widgets opened (`utools.createBrowserWindow`), by their id.
+    pub customs: crate::core::window::Registry,
+    /// Windows asked for by a page and still owed to the event loop, which is the only place a
+    /// window may be created.
+    pub pending_customs: Vec<(u32, crate::core::window::CustomSpec)>,
+    next_custom: u32,
     pub control: Option<ControlWin>,
     pub control_pending: bool,
     pub want_control: bool,
@@ -177,6 +185,9 @@ impl App {
             serve,
             port,
             windows: HashMap::new(),
+            customs: HashMap::new(),
+            pending_customs: Vec::new(),
+            next_custom: 1,
             control: None,
             control_pending: false,
             want_control: true,
@@ -410,6 +421,18 @@ impl App {
         let mut st = self.serve.lock();
         st.hosts = hosts;
         st.instances = instances;
+        // Custom windows are pages of their instance: the server only needs to know which window
+        // belongs where, so it can hand that page its own boot data (`windowType: "custom"`).
+        st.wins.clear();
+        for (id, win) in &self.customs {
+            st.wins.insert(
+                *id,
+                server::WinPage {
+                    instance: win.instance.clone(),
+                    visible: win.shown,
+                },
+            );
+        }
     }
 
     pub fn page_url(&self, manifest: &Manifest, instance_id: &str) -> String {
@@ -442,6 +465,10 @@ impl App {
             }
         } else if let Some(w) = self.windows.get(win) {
             w.send(body);
+        } else if let Some(id) = win.strip_prefix("win:").and_then(|v| v.parse::<u32>().ok()) {
+            if let Some(c) = self.customs.get(&id) {
+                c.deliver(body);
+            }
         }
     }
 
@@ -666,7 +693,201 @@ impl App {
                 Err(e) => crate::core::logging::error(&format!("Card {id}: {e}")),
             }
         }
+        self.build_customs(target);
         end_build(&proxy);
+    }
+
+    /// Records a window a page asked for. It cannot be built here (only the loop thread may create a
+    /// window), so it is queued and the loop is woken up for it.
+    pub fn create_custom(
+        &mut self,
+        spec: crate::core::window::CustomSpec,
+    ) -> crate::core::util::BridgeResult<u32> {
+        use crate::core::util::BridgeError;
+        if self.manifest_for(&spec.instance).is_none() {
+            return Err(BridgeError::new("this widget is no longer installed"));
+        }
+        let file = spec
+            .file
+            .trim_start_matches(['/', '\\'])
+            .replace('\\', "/");
+        if file.is_empty() || file.contains("..") || file.contains(':') {
+            return Err(BridgeError::new(
+                "the page must be a path inside the widget folder",
+            ));
+        }
+        if self.customs.len() >= 24 {
+            return Err(BridgeError::new("too many windows are already open"));
+        }
+        let id = self.next_custom;
+        self.next_custom += 1;
+        self.pending_customs.push((
+            id,
+            crate::core::window::CustomSpec {
+                file,
+                ..spec
+            },
+        ));
+        let _ = self.proxy.send_event(Ev::Wake);
+        Ok(id)
+    }
+
+    /// The URL a custom window loads: the widget's own origin, plus the `win` marker the server
+    /// turns into this window's boot data.
+    fn custom_url(
+        &self,
+        manifest: &Manifest,
+        spec: &crate::core::window::CustomSpec,
+        id: u32,
+    ) -> String {
+        // `test.html?name=1` keeps its own query; the window markers are appended after it.
+        let (path, extra) = match spec.file.split_once('?') {
+            Some((path, rest)) => (path, format!("&{rest}")),
+            None => (spec.file.as_str(), String::new()),
+        };
+        // The markers sit in the URL itself: the page starts loading as soon as the window exists,
+        // which can be before the serve state is refreshed, so the server cannot rely on its table
+        // alone to know this is a custom window.
+        let visible = spec.options.get("show").and_then(|v| v.as_bool()).unwrap_or(true);
+        format!(
+            "http://{}:{}/{}?w={}&win={}&wt=custom&vis={}{}",
+            manifest.host_name(),
+            self.port,
+            path,
+            spec.instance,
+            id,
+            if visible { 1 } else { 0 },
+            extra
+        )
+    }
+
+    /// The windows still owed to the loop are built after the cards, on the same pass, so a page
+    /// that opens one during `ready` does not have to wait for the next heartbeat.
+    fn build_customs(&mut self, target: &tao::event_loop::EventLoopWindowTarget<Ev>) {
+        let wanted: Vec<(u32, crate::core::window::CustomSpec)> =
+            std::mem::take(&mut self.pending_customs);
+        for (id, spec) in wanted {
+            let Some(manifest) = self.manifest_for(&spec.instance) else {
+                crate::core::logging::warn(&format!(
+                    "{}: custom window for a widget that is no longer installed",
+                    spec.instance
+                ));
+                continue;
+            };
+            let url = self.custom_url(&manifest, &spec, id);
+            match crate::core::window::build_custom(
+                target,
+                &spec,
+                url,
+                id,
+                self.store.data.developer_mode,
+                self.proxy.clone(),
+            ) {
+                Ok(win) => {
+                    crate::core::logging::info(&format!(
+                        "win {id}: opened {} for {}",
+                        spec.file, spec.instance
+                    ));
+                    self.customs.insert(id, win);
+                }
+                Err(e) => crate::core::logging::error(&format!("win {id}: {e}")),
+            }
+        }
+    }
+
+    pub fn close_custom(&mut self, id: u32) {
+        // Children first: a chain of windows closes from the outside in, so a page never sees its
+        // parent disappear before it does.
+        let kids: Vec<u32> = self
+            .customs
+            .iter()
+            .filter(|(_, win)| win.parent == format!("win:{id}"))
+            .map(|(key, _)| *key)
+            .collect();
+        for kid in kids {
+            self.close_custom(kid);
+        }
+        let parent = self.customs.get(&id).map(|win| win.parent.clone());
+        if self.customs.remove(&id).is_some() {
+            crate::core::logging::info(&format!("win {id}: closed"));
+            // Electron's `closed` event: the page that opened this window hears about it, so a
+            // plugin that keeps a registry of windows can drop the entry.
+            if let Some(parent) = parent {
+                let payload = json!({ "id": id });
+                if let Some(pid) = parent
+                    .strip_prefix("win:")
+                    .and_then(|v| v.parse::<u32>().ok())
+                {
+                    if let Some(win) = self.customs.get(&pid) {
+                        win.send_ipc("win.closed", payload);
+                    }
+                } else if let Some(instance) = parent.strip_prefix("card:") {
+                    self.event_to(instance, "win.closed", payload);
+                }
+            }
+        }
+    }
+    /// One window's state, as the JS `BrowserWindow` getters read it.
+    pub fn custom_state(&self, id: u32) -> Value {
+        crate::core::window::state_json(self, id)
+    }
+
+    /// The page inside a custom window said `ready`: that is what `createBrowserWindow`'s callback
+    /// waits for, so the creator hears about it now.
+    pub fn mark_custom_loaded(&mut self, id: u32) {
+        if let Some(win) = self.customs.get_mut(&id) {
+            if win.loaded {
+                return;
+            }
+            win.loaded = true;
+        }
+        let Some(parent) = self.customs.get(&id).map(|win| win.parent.clone()) else {
+            return;
+        };
+        let state = crate::core::window::state_json(self, id);
+        let payload = json!({ "id": id, "state": state });
+        if let Some(pid) = parent
+            .strip_prefix("win:")
+            .and_then(|v| v.parse::<u32>().ok())
+        {
+            if let Some(win) = self.customs.get(&pid) {
+                win.send_ipc("win.loaded", payload);
+            }
+        } else if let Some(instance) = parent.strip_prefix("card:") {
+            self.event_to(instance, "win.loaded", payload);
+        }
+    }
+
+    /// A window was destroyed by the system: drop the handle instead of keeping a dead window.
+    pub fn forget_custom(&mut self, window_id: tao::window::WindowId) {
+        let hit = self
+            .customs
+            .iter()
+            .find(|(_, win)| win.window.id() == window_id)
+            .map(|(key, _)| *key);
+        if let Some(id) = hit {
+            crate::core::logging::warn(&format!("win {id}: destroyed by the system"));
+            self.customs.remove(&id);
+        }
+    }
+
+    pub fn close_customs_of(&mut self, instance: &str) {
+        let ids: Vec<u32> = self
+            .customs
+            .iter()
+            .filter(|(_, win)| win.instance == instance)
+            .map(|(key, _)| *key)
+            .collect();
+        for id in ids {
+            self.close_custom(id);
+        }
+    }
+
+    pub fn close_all_customs(&mut self) {
+        let ids: Vec<u32> = self.customs.keys().copied().collect();
+        for id in ids {
+            self.close_custom(id);
+        }
     }
 
     fn build_control(
@@ -814,6 +1035,8 @@ impl App {
         // The page is about to lose its window: say so first, while it can still hear it. It cannot
         // answer (no reply is waited for), so this is "flush what you can", not a transaction.
         self.unload_instance(id, true);
+        // A widget's custom windows are part of the widget: they go with it.
+        self.close_customs_of(id);
         if let Some(mut w) = self.windows.remove(id) {
             w.hide();
             w.webview.focus().ok();
@@ -1227,6 +1450,9 @@ impl App {
         for id in ids {
             self.unload_instance(&id, true);
         }
+        // Custom windows go first: they belong to the cards and there is nothing left to talk to
+        // once the cards are gone.
+        self.close_all_customs();
         self.quit_at = Some(std::time::Instant::now() + std::time::Duration::from_millis(150));
     }
 
@@ -1249,6 +1475,14 @@ impl App {
 
     /// A window was destroyed by the system (display change, WebView2 crash): drop the handle.
     pub fn forget_window(&mut self, window_id: tao::window::WindowId) {
+        if self
+            .customs
+            .values()
+            .any(|win| win.window.id() == window_id)
+        {
+            self.forget_custom(window_id);
+            return;
+        }
         let hit: Vec<String> = self
             .windows
             .iter()

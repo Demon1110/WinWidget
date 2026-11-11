@@ -1,8 +1,9 @@
-//! Foundation: everything the rest of the crate may rely on, with no knowledge of widgets,
-//! windows or the shell.
+//! Foundation: everything the rest of the crate may rely on.
 //!
-//! Keep this layer dependency-free (only `platform` may be reached for OS facts such as the
-//! data directory). Anything that knows about a widget, a theme or a window belongs elsewhere.
+//! Two kinds of module live here: plumbing (assets, config, paths, storage, net, text) and the
+//! **uTools API categories** — one file per category, so the compatibility surface has a home of
+//! its own instead of being spread over the runtime. `window` is the first of them; system,
+//! clipboard, screen, db and the rest follow the same shape.
 
 pub mod assets;
 pub mod config;
@@ -13,3 +14,4 @@ pub mod paths;
 pub mod storage;
 pub mod text;
 pub mod util;
+pub mod window;

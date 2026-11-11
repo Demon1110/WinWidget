@@ -18,11 +18,14 @@
 
   const HOST = "WinWidget";
   const VERSION = widget.hostVersion || "1.0.0";
+  /** "main" on a card, "custom" inside a window a widget opened with createBrowserWindow. */
+  const WINDOW_TYPE = widget.windowType || "main";
   const SUPPORTED = [
     // 事件
     "onPluginReady", "onPluginEnter", "onPluginOut",
     // 窗口
-    "hideMainWindow", "showMainWindow", "outPlugin", "setExpendHeight", "getWindowType",
+    "createBrowserWindow", "hideMainWindow", "showMainWindow", "outPlugin", "setExpendHeight",
+    "getWindowType", "sendToParent", "findInPage", "stopFindInPage",
     // 系统
     "showNotification", "shellOpenPath", "shellShowItemInFolder", "shellOpenExternal",
     "shellTrashItem", "shellBeep", "getPath", "getFileIconAsync", "getAppVersion", "getNativeId",
@@ -44,6 +47,9 @@
     getPluginLocalDataPath: "没有 Node 文件系统；用 widget.storage 存数据",
     getPluginTempPath: "没有 Node 文件系统；用 widget.storage 存数据",
     setExpendHeight: "uTools 里同步改窗口高度；这里是异步的，宽度不变",
+    preload: "webPreferences.preload 不会执行：WinWidget 没有 Node / Electron，页面侧用 ipcRenderer 兼容层代替",
+    sendToParent: "只在本组件自己的窗口之间传递；没有 Electron 主进程",
+    createBrowserWindow: "窗口异步建出来，id 要等返回的 Promise；尺寸/位置先用本地镜像值应答",
     readCurrentFolderPath: "读不到前台资源管理器路径",
     readCurrentBrowserUrl: "读不到前台浏览器地址",
     onPluginDetach: "每张卡片本身就是独立窗口，没有「从主窗口分离」这一步；回调会登记但永不触发",
@@ -177,6 +183,368 @@
     reason: (name) => DEGRADED[name] || null,
   });
 
+  // ── 自定义窗口（utools.createBrowserWindow） ─────────────────────────────
+  // uTools 那边是 Electron 的 BrowserWindow：方法同步、webContents.send 单向、页面里 ipcRenderer.on。
+  // 这里是宿主开窗口 + WebView2：建窗、改尺寸都要过一次异步桥，所以窗口对象自带一份本地镜像
+  // （id/尺寸/位置/可见/标题），getter 直接读镜像，setter 先改镜像再通知宿主，语义尽量一致。
+  const windowsById = new Map();
+
+  function windowFile(url) {
+    return String(url == null ? "" : url)
+      .replace(/^\.?\//, "")
+      .replace(/^\.\//, "");
+  }
+
+  /** uTools 的 ipcRenderer 兼容层：页面里 on(channel) 收窗口消息，send 走 sendToParent。 */
+  const ipcHandlers = new Map();
+  function ipcDispatch(channel, args) {
+    const list = ipcHandlers.get(channel);
+    if (!list) return;
+    for (const fn of [...list]) {
+      try {
+        fn({}, ...[].concat(args || []));
+      } catch (e) {
+        console.error("ipcRenderer.on(" + channel + "):", e);
+      }
+    }
+  }
+  const ipcRenderer = {
+    on(channel, fn) {
+      if (typeof fn !== "function") return ipcRenderer;
+      let list = ipcHandlers.get(channel);
+      if (!list) ipcHandlers.set(channel, (list = []));
+      list.push(fn);
+      return ipcRenderer;
+    },
+    once(channel, fn) {
+      const wrapped = function () {
+        ipcRenderer.removeListener(channel, wrapped);
+        return fn.apply(null, arguments);
+      };
+      return ipcRenderer.on(channel, wrapped);
+    },
+    removeListener(channel, fn) {
+      const list = ipcHandlers.get(channel);
+      if (!list) return ipcRenderer;
+      const at = list.indexOf(fn);
+      if (at >= 0) list.splice(at, 1);
+      return ipcRenderer;
+    },
+    removeAllListeners(channel) {
+      if (channel === undefined) ipcHandlers.clear();
+      else ipcHandlers.delete(channel);
+      return ipcRenderer;
+    },
+    /** Electron 的 send 是发给主进程；这里没有主进程，按 uTools 的约定转给父窗口。 */
+    send(channel, ...args) {
+      return widget.call("win.parent", { channel: String(channel), args: args });
+    },
+    sendSync() {
+      throw unsupportedError("ipcRenderer.sendSync");
+    },
+  };
+
+  function makeBrowserWindow(url, options, callback) {
+    const opts = options || {};
+    const mirror = {
+      id: 0,
+      title: opts.title || "",
+      x: Number(opts.x) || 0,
+      y: Number(opts.y) || 0,
+      width: Number(opts.width) || 800,
+      height: Number(opts.height) || 600,
+      visible: opts.show !== false,
+      destroyed: false,
+      resizable: opts.resizable !== false,
+      closable: opts.closable !== false,
+      alwaysOnTop: !!opts.alwaysOnTop,
+      minimized: false,
+      maximized: false,
+      fullScreen: false,
+      background: opts.backgroundColor || "rgba(0,0,0,0)",
+    };
+    const hooks = { closed: [], loaded: [] };
+    let created = null;
+
+    function apply(state) {
+      if (!state || typeof state !== "object") return;
+      if (state.id) mirror.id = state.id;
+      for (const key of ["title", "x", "y", "width", "height", "visible", "destroyed", "resizable", "closable", "alwaysOnTop"]) {
+        if (state[key] !== undefined) mirror[key] = state[key];
+      }
+      if (state.background !== undefined) mirror.background = state.background;
+    }
+
+    /** Builds the window on first use; every later call waits on the same promise. */
+    function ensure() {
+      if (created) return created;
+      created = widget
+        .call("win.create", {
+          file: windowFile(url),
+          options: opts,
+          callback: typeof callback === "function",
+        })
+        .then((reply) => {
+          mirror.id = (reply && reply.id) || 0;
+          apply(reply && reply.state);
+          if (mirror.id) windowsById.set(mirror.id, api);
+          return mirror.id;
+        });
+      return created;
+    }
+
+    const warned = Object.create(null);
+    function invoke(method, params) {
+      return ensure().then((id) =>
+        widget.call("win." + method, Object.assign({ win: id }, params || {})).then((reply) => {
+          if (reply && reply.unsupported) {
+            if (!warned[method]) {
+              warned[method] = true;
+              console.warn("BrowserWindow." + method + "：", reply.unsupported);
+            }
+            return undefined;
+          }
+          apply(reply);
+          return reply;
+        })
+      );
+    }
+
+    function emit(hook, arg) {
+      for (const fn of hooks[hook].slice()) {
+        try {
+          fn(arg);
+        } catch (e) {
+          console.error("BrowserWindow.on(" + hook + "):", e);
+        }
+      }
+    }
+
+    const devtools = { open: false };
+    const wc = {
+      get id() {
+        return mirror.id;
+      },
+      send(channel, ...args) {
+        return ensure().then((id) =>
+          widget.call("win.send", { win: id, channel: String(channel), args: args })
+        );
+      },
+      openDevTools() {
+        devtools.open = true;
+        return invoke("openDevTools");
+      },
+      closeDevTools() {
+        devtools.open = false;
+        return invoke("closeDevTools");
+      },
+      /** DevTools open state as this object last set it (the host cannot push it back). */
+      isDevToolsOpened() {
+        return devtools.open;
+      },
+      executeJavaScript(code) {
+        return invoke("executeJavaScript", { code: String(code == null ? "" : code) });
+      },
+      reload() {
+        return invoke("reload");
+      },
+    };
+
+    const api = {
+      get id() {
+        return mirror.id;
+      },
+      get webContents() {
+        return wc;
+      },
+      // ── 显示与销毁 ───────────────────────────────────────────────
+      show() {
+        mirror.visible = true;
+        return invoke("show");
+      },
+      showInactive() {
+        mirror.visible = true;
+        return invoke("showInactive");
+      },
+      hide() {
+        mirror.visible = false;
+        return invoke("hide");
+      },
+      close() {
+        mirror.destroyed = true;
+        mirror.visible = false;
+        return invoke("close");
+      },
+      destroy() {
+        mirror.destroyed = true;
+        mirror.visible = false;
+        return invoke("destroy");
+      },
+      isVisible: () => mirror.visible,
+      isDestroyed: () => mirror.destroyed,
+      isFocused: () => false,
+      focus() {
+        return invoke("focus");
+      },
+      blur() {
+        return invoke("blur");
+      },
+      // ── 几何 ─────────────────────────────────────────────────────
+      setSize(width, height) {
+        mirror.width = Math.round(Number(width) || 0);
+        mirror.height = Math.round(Number(height) || 0);
+        return invoke("setSize", { width: mirror.width, height: mirror.height });
+      },
+      getSize: () => [mirror.width, mirror.height],
+      setContentSize(width, height) {
+        return api.setSize(width, height);
+      },
+      getContentSize: () => [mirror.width, mirror.height],
+      setPosition(x, y) {
+        mirror.x = Math.round(Number(x) || 0);
+        mirror.y = Math.round(Number(y) || 0);
+        return invoke("setPosition", { x: mirror.x, y: mirror.y });
+      },
+      getPosition: () => [mirror.x, mirror.y],
+      setBounds(bounds) {
+        const b = bounds || {};
+        if (b.x !== undefined) mirror.x = Math.round(Number(b.x) || 0);
+        if (b.y !== undefined) mirror.y = Math.round(Number(b.y) || 0);
+        if (b.width !== undefined) mirror.width = Math.round(Number(b.width) || 0);
+        if (b.height !== undefined) mirror.height = Math.round(Number(b.height) || 0);
+        return invoke("setBounds", { x: mirror.x, y: mirror.y, width: mirror.width, height: mirror.height });
+      },
+      getBounds: () => ({ x: mirror.x, y: mirror.y, width: mirror.width, height: mirror.height }),
+      getNormalBounds: () => api.getBounds(),
+      setContentBounds: (bounds) => api.setBounds(bounds),
+      getContentBounds: () => api.getBounds(),
+      setMinimumSize(width, height) {
+        return invoke("setMinimumSize", { width: Number(width) || 0, height: Number(height) || 0 });
+      },
+      getMinimumSize: () => [Number(opts.minWidth) || 0, Number(opts.minHeight) || 0],
+      setMaximumSize(width, height) {
+        return invoke("setMaximumSize", { width: Number(width) || 0, height: Number(height) || 0 });
+      },
+      getMaximumSize: () => [Number(opts.maxWidth) || 0, Number(opts.maxHeight) || 0],
+      center() {
+        return invoke("center");
+      },
+      setResizable(on) {
+        mirror.resizable = on !== false;
+        return invoke("setResizable", { resizable: mirror.resizable });
+      },
+      isResizable: () => mirror.resizable,
+      // ── 状态 ─────────────────────────────────────────────────────
+      maximize() {
+        mirror.maximized = true;
+        return invoke("maximize");
+      },
+      unmaximize() {
+        mirror.maximized = false;
+        return invoke("unmaximize");
+      },
+      isMaximized: () => mirror.maximized,
+      minimize() {
+        mirror.minimized = true;
+        return invoke("minimize");
+      },
+      restore() {
+        mirror.minimized = false;
+        return invoke("restore");
+      },
+      isMinimized: () => mirror.minimized,
+      isNormal: () => !mirror.minimized && !mirror.maximized && !mirror.fullScreen,
+      setFullScreen(on) {
+        mirror.fullScreen = !!on;
+        return invoke("setFullScreen", { flag: !!on });
+      },
+      isFullScreen: () => mirror.fullScreen,
+      setClosable(on) {
+        mirror.closable = on !== false;
+        return invoke("setClosable", { closable: mirror.closable });
+      },
+      isClosable: () => mirror.closable,
+      setAlwaysOnTop(flag) {
+        mirror.alwaysOnTop = !!flag;
+        return invoke("setAlwaysOnTop", { flag: mirror.alwaysOnTop });
+      },
+      isAlwaysOnTop: () => mirror.alwaysOnTop,
+      moveTop() {
+        return invoke("moveTop");
+      },
+      setTitle(title) {
+        mirror.title = String(title == null ? "" : title);
+        return invoke("setTitle", { title: mirror.title });
+      },
+      getTitle: () => mirror.title,
+      setBackgroundColor(color) {
+        mirror.background = String(color == null ? "" : color);
+        return invoke("setBackgroundColor", { backgroundColor: mirror.background });
+      },
+      getBackgroundColor: () => mirror.background,
+      setOpacity(opacity) {
+        return invoke("setOpacity", { opacity: Number(opacity) });
+      },
+      setSkipTaskbar(skip) {
+        return invoke("setSkipTaskbar", { skip: !!skip });
+      },
+      setIgnoreMouseEvents(ignore) {
+        return invoke("setIgnoreMouseEvents", { ignore: !!ignore });
+      },
+      setHasShadow() {
+        console.warn("BrowserWindow.setHasShadow：阴影跟随系统设置，不能单独控制");
+      },
+      hasShadow: () => false,
+      setProgressBar() {
+        console.warn("BrowserWindow.setProgressBar：任务栏进度条没有接入");
+      },
+      setKiosk() {
+        console.warn("BrowserWindow.setKiosk：kiosk 模式没有接入");
+      },
+      flashFrame() {
+        console.warn("BrowserWindow.flashFrame：闪烁窗口没有接入");
+      },
+      loadURL() {
+        console.warn("BrowserWindow.loadURL：窗口建好后不能换地址，请新开一个窗口");
+      },
+      loadFile() {
+        console.warn("BrowserWindow.loadFile：窗口建好后不能换地址，请新开一个窗口");
+      },
+      reload() {
+        return invoke("reload");
+      },
+      /** Electron 的 BrowserWindow.on：这里只有 "closed" 和 "loaded"（页面 ready）两件真事。 */
+      on(event, fn) {
+        if (typeof fn !== "function") return api;
+        if (event === "closed") hooks.closed.push(fn);
+        else if (event === "ready-to-show" || event === "loaded") hooks.loaded.push(fn);
+        return api;
+      },
+      /** 内部：宿主说这个窗口的页面就绪/关掉了。 */
+      __loaded(state) {
+        apply(state);
+        emit("loaded");
+        if (typeof callback === "function") {
+          try {
+            callback(api);
+          } catch (e) {
+            console.error("createBrowserWindow callback:", e);
+          }
+        }
+      },
+      __closed() {
+        mirror.destroyed = true;
+        mirror.visible = false;
+        if (mirror.id) windowsById.delete(mirror.id);
+        emit("closed");
+      },
+    };
+
+    // uTools 的调用方式就是先拿对象后建窗：这里立刻返回，建窗在第一次用的时候完成。
+    ensure().catch((e) => console.error("createBrowserWindow:", e));
+    return api;
+  }
+
   const utools = {
     __compat: compat,
 
@@ -227,17 +595,34 @@
     },
 
     // ── 窗口 ────────────────────────────────────────────────────────────
-    hideMainWindow: () => widget.window.hide(),
-    showMainWindow: () => widget.window.show(),
-    outPlugin: () => widget.window.hide(),
-    getWindowType: () => "main",
-    /** 只改高度，宽度保持；uTools 同步、这里异步，所以返回 Promise。 */
-    setExpendHeight: (height) =>
-      widget.window.getSize().then((size) => {
-        const w = Array.isArray(size) ? size[0] : (size && size.width) || 0;
-        const h = Math.max(80, Math.round(Number(height) || 0));
-        return widget.window.setSize(w, h);
+    /**
+     * 开一个自定义窗口，返回 BrowserWindow 兼容对象。
+     * url 是组件目录里的 HTML（可带 query）；options 见 BrowserWindowConstructorOptions；
+     * callback 在页面 ready 后执行——`show:false` 的写法就是在这里 `win.show()`。
+     */
+    createBrowserWindow: (url, options, callback) => makeBrowserWindow(url, options, callback),
+    /** 隐藏卡片；isFocusPrevWindow 为 true 时把焦点交还给之前的窗口。 */
+    hideMainWindow: (isFocusPrevWindow) =>
+      widget.call("window.main.hide", { isFocusPrevWindow: isFocusPrevWindow !== false }),
+    showMainWindow: () => widget.call("window.main.show"),
+    outPlugin: (isKill) => widget.call("window.main.out", { isKill: !!isKill }),
+    /** "main"（卡片）或 "custom"（自己开的窗口）。 */
+    getWindowType: () => WINDOW_TYPE,
+    /** 自定义窗口里把消息发回父窗口（卡片，或开它的那个窗口）。 */
+    sendToParent: (channel, ...args) =>
+      widget.call("win.parent", { channel: String(channel), args: args }),
+    /** 卡片页面内查找（WebView2 用浏览器的 window.find 实现，近似 Electron 的 findInPage）。 */
+    findInPage: (text, options) =>
+      widget.call("window.main.find", {
+        text: String(text == null ? "" : text),
+        forward: !(options && options.forward === false),
+        matchCase: !!(options && options.matchCase),
       }),
+    stopFindInPage: (action) =>
+      widget.call("window.main.stopFind", { action: String(action || "clearSelection") }),
+    /** 只改高度，宽度保持。 */
+    setExpendHeight: (height) =>
+      widget.call("window.main.expand", { height: Math.max(80, Math.round(Number(height) || 0)) }),
 
     // ── 系统 ────────────────────────────────────────────────────────────
     showNotification: (body) => widget.notify({ title: HOST, body: String(body == null ? "" : body) }),
@@ -421,6 +806,45 @@
     widget.on("show", (d) => fireEnter((d && d.from) || "startup"));
     widget.on("hide", () => fireOut(false));
     widget.on("unload", () => fireOut(true));
+    // ── 自定义窗口的两条消息通道 ──────────────────────────────────
+    // 宿主说某个窗口的页面起来了（createBrowserWindow 的 callback 等这个）。
+    widget.on("win.loaded", (d) => {
+      const win = d && windowsById.get(d.id);
+      if (win) win.__loaded(d.state);
+    });
+    widget.on("win.closed", (d) => {
+      const win = d && windowsById.get(d.id);
+      if (win) win.__closed();
+    });
+    // 父/子窗口发来的消息，交给页面里的 ipcRenderer.on(channel, …)。
+    widget.on("ipc", (d) => ipcDispatch(d && d.channel, d && d.args));
+  }
+
+  // 页面侧 IPC 兼容层：uTools 插件在自定义窗口里用 ipcRenderer.on 收消息，
+  // 这里给一个同名对象，不必改插件代码（它背后是本组件的窗口消息，不是 Electron）。
+  if (typeof window !== "undefined" && !window.ipcRenderer) {
+    Object.defineProperty(window, "ipcRenderer", {
+      value: ipcRenderer,
+      writable: false,
+      configurable: false,
+      enumerable: true,
+    });
+  }
+
+  // 自定义窗口里 window.close() 关不掉（没有 Electron 的窗口宿主），改成请宿主关这个窗口。
+  if (WINDOW_TYPE === "custom") {
+    try {
+      const closeWin = () => {
+        widget.call("win.close", { win: widget.windowId }).catch(() => {});
+      };
+      Object.defineProperty(window, "close", {
+        value: closeWin,
+        writable: true,
+        configurable: true,
+      });
+    } catch (e) {
+      /* 页面自己定义了 close，就不动它 */
+    }
   }
   // 页面卸载兜底：宿主没来得及发 unload（窗口被系统销毁）时，仍按「进程结束」算一次。
   window.addEventListener("beforeunload", () => fireOut(true), { once: true });

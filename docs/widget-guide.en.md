@@ -6,6 +6,7 @@ A widget is a folder: a `widget.json` file plus ordinary HTML, CSS and JavaScrip
 - [What's in the folder](#whats-in-the-folder)
 - [widget.json](#widgetjson)
 - [JavaScript API](#javascript-api)
+- [Windows of your own: createBrowserWindow](#windows-of-your-own-createbrowserwindow)
 - [Looks: follow the theme](#looks-follow-the-theme)
 - [Dragging, menus and clicks](#dragging-menus-and-clicks)
 - [Permissions](#permissions)
@@ -564,6 +565,135 @@ uTools' events are a "plugin vs main window" model; a WinWidget card is its own 
 
 ---
 
+## Windows of your own: createBrowserWindow
+
+The card itself is what uTools calls the **main window** (`utools.getWindowType()` → `"main"`). For a settings panel, a preview or a full-screen presentation — a second window — call `utools.createBrowserWindow(url, options, callback)`. The definition follows uTools / Electron's `BrowserWindow`, and the same page reports `getWindowType()` → `"custom"` when it runs in one of these.
+
+```js
+const win = utools.createBrowserWindow(
+  "panel.html?mode=edit",            // an HTML file inside the widget, query allowed
+  {
+    width: 520, height: 380,         // page area, title bar not included
+    title: "Settings",
+    show: false,                     // stay hidden until the callback, so there is no white flash
+    resizable: true,
+    alwaysOnTop: true,
+    backgroundColor: "#0f1a24",
+  },
+  (w) => {
+    w.show();                                   // only show once the page is up
+    w.webContents.send("hello", "from-card");    // card → window
+  }
+);
+win.on("closed", () => widget.log("window closed"));
+```
+
+### What this window is
+
+- It is the same widget's page: same origin (`<widget id>.widgets.localhost`), same `localStorage`, same theme and SDK. `widget.storage`, `widget.settings` and `utools.dbStorage` see one set of data on both sides.
+- In the page, `widget.windowType === "custom"` and `widget.windowId` is this window's number; `utools.getWindowType()` returns `"custom"`. On the card it is `"main"` with `windowId` `0`.
+- Numbers start at 1; one widget may have at most 24 windows open at once.
+- Removing the card, or quitting the app, closes the windows it opened (children first, then the parent).
+
+### options (BrowserWindowConstructorOptions)
+
+| Field | Default | Meaning |
+|---|---|---|
+| `width` / `height` | 800 × 600 | Page area size (DIP, scaled by display settings) |
+| `minWidth` / `minHeight`, `maxWidth` / `maxHeight` | none | Resize limits |
+| `x` / `y` | centred | Top-left position |
+| `center` | — | `true` opens on the current monitor's centre |
+| `show` | `true` | Prefer `false` plus `show()` in the callback |
+| `title` | empty | Title bar text (`getTitle()` returns it) |
+| `resizable` | `true` | Can the edges be dragged |
+| `closable` | `true` | With `false` it cannot be closed, not even by `window.close()` |
+| `frame` | `true` | `false` removes the frame; corners follow `roundedCorners` |
+| `alwaysOnTop` | `false` | Stay above other windows |
+| `skipTaskbar` | `false` | Keep out of the taskbar |
+| `opacity` | 1 | 0–1, whole window |
+| `backgroundColor` | white | `"#0f1a24"` or `"rgba(15,26,36,0.9)"`, for example |
+| `transparent` | `false` | Only for a real transparent background, with `frame:false` |
+| `fullscreen` | `false` | Open full screen |
+| `webPreferences.preload` | — | **Does not run** (no Node); use `ipcRenderer` below instead |
+
+`movable`, `maximizable`, `minimizable`, `focusable`, `hasShadow`, `titleBarStyle`, `acceptFirstMouse`, `enableLargerThanScreen` and `fullscreenable` are accepted, but Windows may have nothing to map them to; passing them does not fail.
+
+### BrowserWindow
+
+| Method | Meaning |
+|---|---|
+| `id` / `webContents` | Number, page object |
+| `show()` / `showInactive()` / `hide()` | Show, show without taking focus, hide |
+| `close()` / `destroy()` | Close |
+| `isVisible()` / `isDestroyed()` / `isFocused()` | State |
+| `focus()` / `blur()` / `moveTop()` | Focus, raise to the top |
+| `getSize()` / `setSize(w, h)` | Page area width and height (**without title bar or frame**) |
+| `getContentSize()` / `setContentSize(w, h)` | Same as above (WebView2 has no inner/outer split here) |
+| `getPosition()` / `setPosition(x, y)` | Frame's top-left position |
+| `getBounds()` / `setBounds(b)` | Position plus page area size |
+| `getNormalBounds()` / `getContentBounds()` / `setContentBounds(b)` | Same values (there is no restored-from-maximised state) |
+| `getMinimumSize()` / `setMinimumSize(w, h)`, `getMaximumSize()` / `setMaximumSize(w, h)` | Limits |
+| `center()` | Move to the monitor's centre |
+| `setResizable(b)` / `isResizable()`, `setClosable(b)` / `isClosable()` | Edge dragging, closing |
+| `maximize()` / `unmaximize()` / `isMaximized()` | Maximise |
+| `minimize()` / `restore()` / `isMinimized()` / `isNormal()` | Minimise |
+| `setFullScreen(b)` / `isFullScreen()` | Full screen |
+| `setAlwaysOnTop(b)` / `isAlwaysOnTop()` | Always on top |
+| `setTitle(t)` / `getTitle()`, `setBackgroundColor(c)` / `getBackgroundColor()` | Title, background |
+| `setSkipTaskbar(b)` / `setIgnoreMouseEvents(b)` / `setOpacity(o)` | Taskbar, click-through, opacity |
+| `webContents.send(channel, ...args)` | Send to this window's page |
+| `webContents.executeJavaScript(code)` / `reload()` | Run script, reload |
+| `webContents.openDevTools()` / `closeDevTools()` / `isDevToolsOpened()` | DevTools |
+| `on("loaded" \| "closed", fn)` | Page ready, window closed (the `createBrowserWindow` callback is `loaded`) |
+
+Size semantics: `getSize()` reports the **page area** (the `width` / `height` you asked for), not the frame outside it; `getPosition()` is the frame's top-left. So `getSize()` after `setSize(w, h)` returns exactly the same numbers you set.
+
+### How the two talk
+
+| Direction | How | The other side receives it via |
+|---|---|---|
+| card → window | `win.webContents.send("channel", ...args)` | window page `ipcRenderer.on("channel", (event, ...args) => …)` |
+| window → card | `utools.sendToParent("channel", ...args)` | card page `ipcRenderer.on("channel", …)` |
+| window closed | `window.close()` in the window page | card `win.on("closed", fn)` |
+
+```js
+// panel.js — inside the window
+ipcRenderer.on("hello", (event, greeting) => {
+  document.title = greeting;
+});
+document.getElementById("ok").onclick = () => {
+  utools.sendToParent("save", { theme: "dark" });   // the card hears this
+  window.close();                                   // the host closes the window
+};
+```
+
+In uTools, `ipcRenderer.send(channel, ...args)` goes to the Electron main process. WinWidget has no main process, so it behaves like `utools.sendToParent`. `ipcRenderer.on` / `once` / `removeListener` / `removeAllListeners` are all there; listeners get `(event, ...args)` and `event` is only a placeholder object.
+
+### What is not available (and what happens)
+
+These methods keep their uTools names and **neither throw nor go silent**: the host answers `{ unsupported: "<reason>" }` and the compatibility layer logs one console warning, then returns `undefined`.
+
+| Method | Why |
+|---|---|
+| `capturePage()` / `print()` / `printToPDF()` / `savePage()` / `takeHeapSnapshot()` | WebView2 has no matching capture / print / save surface |
+| `loadURL()` / `loadFile()` | A window is bound to its page at creation; open another window instead |
+| `setZoomFactor()` / `insertCSS()` / `removeInsertedCSS()` | Use the page's own CSS and `document.body.style.zoom` |
+| `setAspectRatio()` / `setProgressBar()` / `setVisibleOnAllWorkspaces()` / `isVisibleOnAllWorkspaces()` | Nothing to map to on Windows |
+| `setContentProtection()` / `isContentProtected()` / `setKiosk()` / `isKiosk()` | Nothing to map to |
+| `flashFrame()` / `setEnabled()` / `isEnabled()` | Nothing to map to |
+| `setHasShadow()` / `hasShadow()` | Shadows follow the system setting |
+| `enableDeviceEmulation()` / `disableDeviceEmulation()` | WebView2 has no device emulation |
+| `findInPage()` / `stopFindInPage()` | Card pages use `window.find()`, which has no match count or highlight UI |
+
+### Things to know
+
+- Opening is **asynchronous**: `createBrowserWindow` returns the object at once, but `win.id` only gets a value when the window really exists (it is `0` if read synchronously); every method waits for creation, so the snippet above works as written.
+- Windows and the card share an origin and CSP: do not treat "only the card may see this" as a security boundary.
+- `show: false` plus `show()` in the callback is uTools' own advice; without it the page may flash white before it paints.
+- Full-screen transparent on top: `{ frame: false, transparent: true, skipTaskbar: true, alwaysOnTop: true }`, then cover the target monitor with `setBounds()`.
+
+---
+
 ## Looks: follow the theme
 
 WinWidget comes with several themes, and users can adjust background, text color, accent color, font, text size, corners, padding and opacity in the Control Center. Use the variables and classes below and all of that just works for your widget.
@@ -740,7 +870,7 @@ A uTools plugin is an Electron app: `plugin.json`, a `preload.js` that runs with
 2. declare the permissions it actually uses in `widget.json` (`showNotification` → `notify`, `copyText` → `clipboard`, `captureScreen` → `screen`, `shellOpenPath` → `shell.launch`, `shellOpenExternal` → `shell.open`);
 3. the `utools.*` calls are answered by the compatibility layer, no code changes needed.
 
-**Don't expect** `preload.js`, `require(...)`, `process`, `ipcRenderer`, `fs` or `child_process`: they do not exist here, and a copied preload just leaves the page blank.
+**Don't expect** `preload.js`, `require(...)`, `process`, `fs` or `child_process`: they do not exist here, and a copied preload just leaves the page blank. `ipcRenderer` is present as a page-side stand-in (see "Windows of your own") — it carries this widget's window messages, not Electron's process-to-process traffic.
 
 ### Ask first whether an API exists
 
@@ -759,7 +889,7 @@ console.log(utools.__compat.unsupported); // not there at all
 | uTools category | What WinWidget gives you |
 |---|---|
 | Events | `onPluginReady`, `onPluginEnter`, `onPluginOut(isKill)` all exist, in uTools' order (ready finishes, then enter; hidden is `false`, removed/quit is `true`); `onPluginDetach` registers but never fires, and `onScheduleTrigger` / `onMainPush` / `onDbPull` throw `utools.unsupported` on registration. The host's own lifecycle events are in the Lifecycle chapter |
-| Window | `hideMainWindow`, `showMainWindow`, `outPlugin`, `getWindowType`, `setExpendHeight` (height only, and asynchronous) |
+| Window | `createBrowserWindow` (windows of your own, see that chapter), `hideMainWindow`, `showMainWindow`, `outPlugin`, `getWindowType` (`"main"` / `"custom"`), `sendToParent`, `setExpendHeight` (height only, and asynchronous), `findInPage` / `stopFindInPage` (through `window.find`) |
 | System | `showNotification`, `shellOpenPath`, `shellOpenExternal`, `shellShowItemInFolder`, `shellTrashItem`, `shellBeep`, `getPath`, `getFileIconAsync`, `showOpenDialog`, `showSaveDialog`, `isDev`, `isWindows` and friends; `getPluginLocalDataPath` returns an empty string (there is no filesystem) |
 | Screen | `captureScreen()` grabs the whole virtual desktop as a PNG data URL (needs the `screen` permission); uTools' interactive snipping is not reproduced |
 | Input | Absent: uTools' `simulate` family (keyboard and mouse injection) is not in the layer |
@@ -967,6 +1097,10 @@ Anything returning a Promise can be awaited; "sync" means it returns immediately
 | `widget.appearance.get()` | — | sync | current appearance |
 | `widget.appearance.onChange(fn)` | — | unsubscribe | theme or appearance changed |
 | `widget.log(...args)` | — | sync | write to app.log |
+| `utools.createBrowserWindow(url, opts, cb)` | — | `BrowserWindow` | a window of your own, see above |
+| `utools.sendToParent(channel, ...args)` | — | Promise | window → parent window |
+| `utools.getWindowType()` | — | sync | `"main"` (card) / `"custom"` (own window) |
+| `ipcRenderer.on/once/removeListener` | — | sync | receive window messages (`(event, ...args)`) |
 
 ### Events
 

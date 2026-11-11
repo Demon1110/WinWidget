@@ -112,6 +112,11 @@ fn main() {
             Event::UserEvent(Ev::Ipc { win, msg }) => {
                 if win == app::CONTROL_WIN {
                     control::handle(&mut app, &msg);
+                } else if let Some(id) = win.strip_prefix("win:").and_then(|v| v.parse::<u32>().ok())
+                {
+                    if let Some(instance) = app.customs.get(&id).map(|w| w.instance.clone()) {
+                        bridge::handle_window(&mut app, &instance, id, &msg);
+                    }
                 } else {
                     bridge::handle(&mut app, &win, &msg);
                 }
@@ -144,6 +149,11 @@ fn main() {
                 app.after_command();
                 *control = ControlFlow::Wait;
             }
+            Event::UserEvent(Ev::Wake) => {
+                // The window is built by the `flush_windows` at the top of the next iteration; this
+                // event exists only to make that iteration happen now.
+                *control = ControlFlow::Wait;
+            }
             Event::UserEvent(Ev::Tick) => {
                 // The heartbeat thread drives the clock: tao's own WaitUntil timer wakes the loop
                 // by posting to its event target, which panics when it lands inside a build.
@@ -159,6 +169,18 @@ fn main() {
                 if app.control.as_ref().map(|c| c.window.id()) == Some(window_id) {
                     if let Some(control_win) = &app.control {
                         control_win.window.set_visible(false);
+                    }
+                } else if let Some(id) = app
+                    .customs
+                    .iter()
+                    .find(|(_, win)| win.window.id() == window_id)
+                    .map(|(key, _)| *key)
+                {
+                    // The user pressed the title bar's ×: only a closable window goes away, exactly
+                    // like Electron's `closable: false`.
+                    let closable = app.customs.get(&id).map(|win| win.closable).unwrap_or(true);
+                    if closable {
+                        app.close_custom(id);
                     }
                 }
                 *control = ControlFlow::Wait;

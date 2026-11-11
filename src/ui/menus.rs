@@ -207,7 +207,7 @@ pub fn run(app: &mut App, action: &str) {
             let dx = parts.next().and_then(|v| v.parse::<i32>().ok());
             let dy = parts.next().and_then(|v| v.parse::<i32>().ok());
             if let (false, Some(dx), Some(dy)) = (instance.is_empty(), dx, dy) {
-                crate::runtime::bridge::drag_by(app, instance, dx, dy);
+                crate::core::window::drag_by(app, instance, dx, dy);
             }
         }
         "control.open" | "tray.open" => {

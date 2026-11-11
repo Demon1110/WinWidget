@@ -46,6 +46,7 @@ pub const SWP_NOOWNERZORDER: u32 = 0x0200;
 pub const SWP_SHOWWINDOW: u32 = 0x0040;
 pub const SWP_HIDEWINDOW: u32 = 0x0080;
 
+pub const GW_HWNDNEXT: u32 = 2;
 pub const GW_HWNDPREV: u32 = 3;
 pub const LWA_ALPHA: u32 = 0x0000_0002;
 pub const GWL_EXSTYLE_LAYERED: isize = 0x0008_0000;

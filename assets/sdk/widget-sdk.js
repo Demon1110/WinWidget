@@ -465,6 +465,13 @@
     /** Is the card on screen right now? Kept in step by the host's show/hide events. */
     get visible() { return state.visible; },
 
+    /** Raw bridge call: `widget.call(method, params)` → Promise. Used by the uTools layer. */
+    call,
+    /** "main" on a card, "custom" inside a window a widget opened. */
+    windowType: boot.windowType || "main",
+    /** The custom window's own id (0 on a card). */
+    windowId: boot.windowId || 0,
+
     /** Picks the string for the user's language from { "zh-TW": ..., "zh-CN": ..., en: ... }. */
     t,
 

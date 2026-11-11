@@ -294,6 +294,13 @@ declare namespace WinWidget {
     readonly theme: string;
     /** Is the card on screen right now? Kept in step by the show/hide events. */
     readonly visible: boolean;
+    /** "main" on a card, "custom" inside a window the widget opened. */
+    readonly windowType: "main" | "custom";
+    /** The custom window's id; 0 on a card. */
+    readonly windowId: number;
+
+    /** Raw bridge call, `widget.call("win.create", { … })` → Promise. Used by the uTools layer. */
+    call(method: string, params?: unknown): Promise<any>;
 
     /** Picks the text for the user's language: t({ "zh-TW": "早安", en: "Morning" }). */
     t<T = string>(text: Localized<T>): T;
@@ -499,6 +506,33 @@ namespace WinWidget {
     };
     /** Runs after the page is up; a returned Promise is awaited before onPluginEnter fires. */
     onPluginReady(fn: () => void | Promise<void>): void;
+    /**
+     * Opens a window of the widget's own, the uTools way:
+     * `utools.createBrowserWindow("panel.html", { width: 520, height: 380, show: false },
+     *   (win) => win.show())`.
+     *
+     * The page is a file inside this widget (`panel.html` or `panel.html?mode=1`); it inherits the
+     * widget's origin, theme and storage. The object returned is a `BrowserWindow` (see
+     * `WinWidget.BrowserWindow`) whose getters answer from a local mirror, because building the
+     * window is one asynchronous hop through the host.
+     */
+    createBrowserWindow(
+      url: string,
+      options?: BrowserWindowOptions,
+      callback?: (win: BrowserWindow) => void
+    ): BrowserWindow;
+    /** "main" on a card, "custom" inside a window you opened. */
+    getWindowType(): "main" | "custom";
+    /** From a custom window: send a message back to the window that opened it. */
+    sendToParent(channel: string, ...args: unknown[]): Promise<void>;
+    /** Find text in the card's page. */
+    findInPage(text: string, options?: { forward?: boolean; matchCase?: boolean }): Promise<void>;
+    stopFindInPage(action?: "clearSelection" | "keepSelection"): Promise<void>;
+    /** Hides the card. `isFocusPrevWindow` hands the keyboard back to the previous window. */
+    hideMainWindow(isFocusPrevWindow?: boolean): Promise<boolean>;
+    showMainWindow(): Promise<boolean>;
+    outPlugin(isKill?: boolean): Promise<{ isKill: boolean }>;
+    setExpendHeight(height: number): Promise<boolean>;
     /** The card came on screen. Fires once per show, with the uTools-shaped action object. */
     onPluginEnter(fn: (enter: PluginEnterAction) => void): void;
     /** Hidden (isKill = false) or removed / app quitting (isKill = true). */
@@ -511,12 +545,6 @@ namespace WinWidget {
     onMainPush(fn: (action: unknown) => unknown, onSelect?: (action: PluginEnterAction) => boolean | undefined): never;
     /** Not available: no cross-device sync. Throws code "utools.unsupported". */
     onDbPull(fn: (docs: unknown[]) => void): never;
-    hideMainWindow(): Promise<void>;
-    showMainWindow(): Promise<void>;
-    outPlugin(): Promise<void>;
-    getWindowType(): "main";
-    setExpendHeight(height: number): Promise<unknown>;
-    showNotification(body: string): Promise<void>;
     shellOpenPath(fullPath: string): Promise<string>;
     shellShowItemInFolder(fullPath: string): Promise<void>;
     shellOpenExternal(url: string): Promise<void>;
@@ -549,7 +577,139 @@ namespace WinWidget {
     /** Anything else throws an Error whose code is "utools.unsupported". */
     [api: string]: unknown;
   }
+
+  /**
+   * `BrowserWindowConstructorOptions`, uTools / Electron shaped. Every field is accepted; the ones
+   * WebView2 cannot honour (`roundedCorners: false`, `hasShadow`, `titleBarStyle`, …) are ignored
+   * rather than refused, and the docs say which.
+   */
+  interface BrowserWindowOptions {
+    show?: boolean;
+    title?: string;
+    width?: number;
+    height?: number;
+    minWidth?: number;
+    minHeight?: number;
+    maxWidth?: number;
+    maxHeight?: number;
+    x?: number;
+    y?: number;
+    center?: boolean;
+    resizable?: boolean;
+    movable?: boolean;
+    minimizable?: boolean;
+    maximizable?: boolean;
+    closable?: boolean;
+    frame?: boolean;
+    hasShadow?: boolean;
+    roundedCorners?: boolean;
+    alwaysOnTop?: boolean;
+    focusable?: boolean;
+    skipTaskbar?: boolean;
+    fullscreen?: boolean;
+    opacity?: number;
+    backgroundColor?: string;
+    transparent?: boolean;
+    titleBarStyle?: string;
+    acceptFirstMouse?: boolean;
+    /** Accepted for compatibility; the script does NOT run (no Node) — use the page itself. */
+    webPreferences?: { preload?: string; [key: string]: unknown };
+  }
+
+  interface WebContents {
+    id: number;
+    /** Sends `channel` + args to the window's page (it receives them through `ipcRenderer.on`). */
+    send(channel: string, ...args: unknown[]): Promise<void>;
+    openDevTools(): void;
+    closeDevTools(): void;
+    isDevToolsOpened(): boolean;
+    executeJavaScript(code: string): void;
+    reload(): void;
+  }
+
+  /**
+   * A window opened by `utools.createBrowserWindow`. Getters read a local mirror, so they answer
+   * synchronously the way Electron's do; setters apply the mirror and tell the host.
+   */
+  interface BrowserWindow {
+    readonly id: number;
+    readonly webContents: WebContents;
+    show(): void;
+    showInactive(): void;
+    hide(): void;
+    close(): void;
+    destroy(): void;
+    isVisible(): boolean;
+    isDestroyed(): boolean;
+    isFocused(): boolean;
+    focus(): void;
+    blur(): void;
+    setSize(width: number, height: number): void;
+    getSize(): [number, number];
+    setContentSize(width: number, height: number): void;
+    getContentSize(): [number, number];
+    setPosition(x: number, y: number): void;
+    getPosition(): [number, number];
+    setBounds(bounds: Partial<Rectangle> & { width?: number; height?: number }): void;
+    getBounds(): Rectangle;
+    getNormalBounds(): Rectangle;
+    setContentBounds(bounds: Partial<Rectangle> & { width?: number; height?: number }): void;
+    getContentBounds(): Rectangle;
+    setMinimumSize(width: number, height: number): void;
+    getMinimumSize(): [number, number];
+    setMaximumSize(width: number, height: number): void;
+    getMaximumSize(): [number, number];
+    center(): void;
+    setResizable(on: boolean): void;
+    isResizable(): boolean;
+    maximize(): void;
+    unmaximize(): void;
+    isMaximized(): boolean;
+    minimize(): void;
+    restore(): void;
+    isMinimized(): boolean;
+    isNormal(): boolean;
+    setFullScreen(on: boolean): void;
+    isFullScreen(): boolean;
+    setClosable(on: boolean): void;
+    isClosable(): boolean;
+    setAlwaysOnTop(flag: boolean, level?: string): void;
+    isAlwaysOnTop(): boolean;
+    moveTop(): void;
+    setTitle(title: string): void;
+    getTitle(): string;
+    setBackgroundColor(color: string): void;
+    getBackgroundColor(): string;
+    setOpacity(opacity: number): void;
+    setSkipTaskbar(skip: boolean): void;
+    setIgnoreMouseEvents(ignore: boolean): void;
+    /** No-op on Windows with WebView2; kept so a plugin's call does not crash. */
+    setHasShadow(_: boolean): void;
+    hasShadow(): boolean;
+    on(event: "closed" | "loaded" | "ready-to-show", fn: () => void): BrowserWindow;
+  }
+
+  interface Rectangle {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }
+
+  /** Page-side stand-in for Electron's `ipcRenderer`: `on(channel, …)` for window messages. */
+  interface IpcRenderer {
+    on(channel: string, fn: (event: unknown, ...args: unknown[]) => void): IpcRenderer;
+    once(channel: string, fn: (event: unknown, ...args: unknown[]) => void): IpcRenderer;
+    removeListener(channel: string, fn: Function): IpcRenderer;
+    removeAllListeners(channel?: string): IpcRenderer;
+    /** There is no main process: `send` goes to the parent window, like `utools.sendToParent`. */
+    send(channel: string, ...args: unknown[]): Promise<void>;
+    sendSync(...args: unknown[]): never;
+  }
 }
+
+/** Present in every page, card and custom window alike. */
+declare const ipcRenderer: WinWidget.IpcRenderer;
 
 interface Window {
   readonly widget: WinWidget.Widget;

@@ -32,10 +32,19 @@ pub struct Instance {
     pub folders: HashMap<String, PathBuf>,
 }
 
+/// A page opened by `utools.createBrowserWindow`: it shares its instance's origin and theme, but
+/// the boot data has to say it is a custom window and which one.
+#[derive(Clone)]
+pub struct WinPage {
+    pub instance: String,
+    pub visible: bool,
+}
+
 #[derive(Default)]
 pub struct State {
     pub hosts: HashMap<String, Host>,
     pub instances: HashMap<String, Instance>,
+    pub wins: HashMap<u32, WinPage>,
     pub port: u16,
 }
 
@@ -232,6 +241,10 @@ fn serve_page(
     }
     let st = state.lock();
     let target = st.hosts.get(host)?;
+    let win_id = query
+        .split('&')
+        .find_map(|kv| kv.strip_prefix("win="))
+        .and_then(|v| v.parse::<u32>().ok());
     let instance_id = query
         .split('&')
         .find_map(|kv| kv.strip_prefix("w="))
@@ -242,7 +255,32 @@ fn serve_page(
                 .find(|(_, i)| i.host == host)
                 .map(|(id, _)| id.clone())
         });
-    let instance = instance_id.and_then(|id| st.instances.get(&id).cloned());
+    let mut instance = instance_id
+        .clone()
+        .and_then(|id| st.instances.get(&id).cloned());
+    // A custom window shares its card's origin, theme and settings; only its boot data differs.
+    // The URL carries the markers (`win=`, `wt=custom`, `vis=`) because the page may start loading
+    // before the host had a chance to publish this window into `wins`.
+    let marked_custom = query.split('&').any(|kv| kv == "wt=custom");
+    let marked_visible = query
+        .split('&')
+        .find_map(|kv| kv.strip_prefix("vis="))
+        .map(|v| v == "1");
+    if let Some(id) = win_id {
+        let page = st.wins.get(&id).cloned();
+        let page_instance = page.as_ref().map(|p| p.instance.clone());
+        let page_visible = page.as_ref().map(|p| p.visible);
+        let parent_instance = page_instance.or_else(|| instance_id.clone());
+        let visible = marked_visible.or(page_visible).unwrap_or(true);
+        if marked_custom || page.is_some() {
+            if let Some(mut parent) = parent_instance
+                .and_then(|name| st.instances.get(&name).cloned())
+            {
+                parent.boot = custom_boot(&parent.boot, id, visible);
+                instance = Some(parent);
+            }
+        }
+    }
     let rel = if path == "/" || path.is_empty() {
         target.entry.clone()
     } else {
@@ -308,8 +346,21 @@ fn inject_page(html: &str, inst: &Instance) -> String {
     out
 }
 
-fn percent_decode(s: &str) -> String {
-    let bytes = s.as_bytes();
+/// Turns a card's boot data into a custom window's: same origin, same settings, but the page has to
+/// know which window it is and where it lives.
+fn custom_boot(parent_boot: &str, id: u32, visible: bool) -> String {
+    let mut value: Value = serde_json::from_str(parent_boot).unwrap_or_else(|_| serde_json::json!({}));
+    if let Some(obj) = value.as_object_mut() {
+        let instance = obj.get("instanceId").cloned().unwrap_or(Value::Null);
+        obj.insert("windowType".into(), Value::String("custom".into()));
+        obj.insert("windowId".into(), serde_json::json!(id));
+        obj.insert("parentInstance".into(), instance);
+        obj.insert("visible".into(), Value::Bool(visible));
+    }
+    value.to_string()
+}
+
+fn percent_decode(s: &str) -> String {    let bytes = s.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
     while i < bytes.len() {
@@ -355,6 +406,7 @@ pub fn boot_json(
         "developer": boot.developer,
         "permissions": boot.permissions,
         "visible": boot.visible,
+        "windowType": "main",
     });
     value.to_string()
 }

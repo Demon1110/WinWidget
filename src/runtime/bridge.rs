@@ -12,6 +12,17 @@ pub enum Reply {
 }
 
 pub fn handle(app: &mut App, instance: &str, msg: &str) {
+    route(app, instance, instance, None, msg);
+}
+
+/// A message from the page inside a custom window (`utools.createBrowserWindow`). It speaks the
+/// same protocol; only the window it acts on differs, and its replies go back to that window.
+pub fn handle_window(app: &mut App, instance: &str, win: u32, msg: &str) {
+    let key = format!("win:{win}");
+    route(app, instance, &key, Some(win), msg);
+}
+
+fn route(app: &mut App, instance: &str, target: &str, ctx: Option<u32>, msg: &str) {
     let value: Value = match serde_json::from_str(msg) {
         Ok(v) => v,
         Err(_) => return,
@@ -23,23 +34,93 @@ pub fn handle(app: &mut App, instance: &str, msg: &str) {
         .to_string();
     let params = value.get("p").cloned().unwrap_or(Value::Null);
     match value.get("id").and_then(|i| i.as_i64()) {
-        Some(id) => match call(app, instance, &method, &params, id) {
+        Some(id) => match call_at(app, instance, ctx, &method, &params, id) {
             Ok(Reply::Now(result)) => {
                 let body = json!({ "id": id, "r": result }).to_string();
-                app.send_to(instance, &body);
+                app.send_to(target, &body);
             }
             Ok(Reply::Later) => {}
             Err(e) => {
                 crate::core::logging::warn(&format!("{instance} → {method}: {}", e.0));
                 let body = json!({ "id": id, "e": e.0 }).to_string();
-                app.send_to(instance, &body);
+                app.send_to(target, &body);
             }
         },
-        None => notify(app, instance, &method, &params),
+        None => notify_at(app, instance, ctx, &method, &params),
     }
 }
 
+/// A card's message, or a custom window's: `ctx` is the custom window when there is one.
+fn call_at(
+    app: &mut App,
+    instance: &str,
+    ctx: Option<u32>,
+    method: &str,
+    p: &Value,
+    id: i64,
+) -> BridgeResult<Reply> {
+    // The window category lives in `core::window`, the way uTools splits its own API.
+    if method.starts_with("win.") {
+        return crate::core::window::custom_call(app, ctx, instance, method, p);
+    }
+    if let Some(rest) = method.strip_prefix("window.") {
+        if ctx.is_some() {
+            // A custom window's page talking about "window" means its own window.
+            return crate::core::window::custom_call(
+                app,
+                ctx,
+                instance,
+                &format!("win.{rest}"),
+                p,
+            );
+        }
+        if let Some(reply) = crate::core::window::card_call(app, instance, method, p)? {
+            return Ok(reply);
+        }
+    }
+    call(app, instance, method, p, id)
+}
+
+/// Notifications (no `id`): `ready` from a custom window is what fires `createBrowserWindow`'s
+/// callback, so it is handled here rather than in the card's own dispatcher.
+fn notify_at(app: &mut App, instance: &str, ctx: Option<u32>, method: &str, p: &Value) {
+    if let Some(win) = ctx {
+        match method {
+            "ready" => {
+                app.mark_custom_loaded(win);
+                return;
+            }
+            "log" => {
+                let level = jstr(p, "level").unwrap_or_else(|| "info".into());
+                let text = jstr(p, "msg").unwrap_or_default();
+                let line = format!("[win {win}] {text}");
+                match level.as_str() {
+                    "error" => crate::core::logging::error(&line),
+                    "warn" => crate::core::logging::warn(&line),
+                    _ => crate::core::logging::info(&line),
+                }
+                return;
+            }
+            other => {
+                // A custom window has no card behind it: `window.*` notifications (press, drag,
+                // resize) are meaningless there, not a mistake worth a warning.
+                if !other.starts_with("window.") {
+                    crate::core::logging::warn(&format!(
+                        "win {win}: unknown notification '{other}'"
+                    ));
+                }
+                return;
+            }
+        }
+    }
+    notify(app, instance, method, p);
+}
+
 fn notify(app: &mut App, instance: &str, method: &str, params: &Value) {
+    if method.starts_with("window.") && crate::core::window::card_notify(app, instance, method, params)
+    {
+        return;
+    }
     match method {
         "ready" => {
             crate::core::logging::info(&format!("{instance} ready"));
@@ -57,23 +138,6 @@ fn notify(app: &mut App, instance: &str, method: &str, params: &Value) {
                 "error" => crate::core::logging::error(&format!("[{instance}] {text}")),
                 "warn" => crate::core::logging::warn(&format!("[{instance}] {text}")),
                 _ => crate::core::logging::info(&format!("[{instance}] {text}")),
-            }
-        }
-        "window.drag" => start_drag(app, instance, params),
-        "window.press" => {
-            // The page is using this press for a control inside the card; the watcher that would
-            // otherwise turn a long slide into a window drag has to stand down for it.
-            if let Some(win) = app.windows.get(instance) {
-                crate::runtime::window::claim_press(win.hwnd());
-            }
-        }
-        "window.resize" => start_resize(app, instance),
-        "window.menu" => crate::ui::menus::widget_menu(app, instance),
-        "window.devtools" => {
-            if app.cfg().developer_mode {
-                if let Some(win) = app.windows.get(instance) {
-                    win.webview.open_devtools();
-                }
             }
         }
         _ => crate::core::logging::warn(&format!("{instance}: unknown notification '{method}'")),
@@ -113,42 +177,6 @@ fn call(app: &mut App, instance: &str, method: &str, p: &Value, id: i64) -> Brid
     let allowed = crate::model::permissions::allowed(&app.store.data, &manifest);
 
     match method {
-        "window.getSize" => {
-            let inst = app
-                .instance(instance)
-                .ok_or_else(|| BridgeError::new("no such instance"))?;
-            Ok(Reply::Now(
-                json!({ "width": inst.width, "height": inst.height }),
-            ))
-        }
-        "window.setSize" => {
-            let width = jnum(p, "width").unwrap_or(0.0);
-            let height = jnum(p, "height").unwrap_or(0.0);
-            if width <= 0.0 && height <= 0.0 {
-                return Err(BridgeError::new("width or height is required"));
-            }
-            let s = &manifest.size;
-            let w = if width > 0.0 {
-                width.clamp(s.min_width, s.max_width)
-            } else {
-                app.instance(instance).map(|i| i.width).unwrap_or(s.width)
-            };
-            let h = if height > 0.0 {
-                height.clamp(s.min_height, s.max_height)
-            } else {
-                app.instance(instance).map(|i| i.height).unwrap_or(s.height)
-            };
-            if let Some(inst) = app.instance_mut(instance) {
-                inst.width = w;
-                inst.height = h;
-            }
-            app.place_window(instance);
-            app.save();
-            app.push_state(instance);
-            app.push_state_to_control(None);
-            Ok(Reply::Now(json!({ "width": w, "height": h })))
-        }
-
         "settings.set" => {
             let key = req_str(p, "key")?;
             let value = p.get("value").cloned().unwrap_or(Value::Null);
@@ -584,18 +612,6 @@ fn call(app: &mut App, instance: &str, method: &str, p: &Value, id: i64) -> Brid
             }))
         }
 
-        // ── the card's own visibility ─────────────────────────────────────
-        "window.hide" => {
-            app.set_visible(instance, false, "api");
-            app.refresh_tray_menu();
-            Ok(Reply::Now(Value::Null))
-        }
-        "window.show" => {
-            app.set_visible(instance, true, "api");
-            app.refresh_tray_menu();
-            Ok(Reply::Now(Value::Null))
-        }
-
         other => Err(BridgeError::new(format!("unknown method '{other}'"))),
     }
 }
@@ -621,170 +637,4 @@ fn monitors(_app: &App) -> (Vec<(i32, i32, bool)>, i32) {
     (list, primary_width)
 }
 
-/// The card the OS currently shows for `instance`, in physical pixels.
-pub(crate) fn current_card(app: &App, instance: &str) -> Option<(w::RECT, i32, f64)> {
-    let win = app.windows.get(instance)?;
-    let outer = w::window_rect(win.hwnd());
-    let margin = win.margin;
-    let card = w::RECT {
-        left: outer.left + margin,
-        top: outer.top + margin,
-        right: outer.right - margin,
-        bottom: outer.bottom - margin,
-    };
-    Some((card, margin, win.scale))
-}
 
-pub(crate) fn other_cards(app: &App, skip: &str) -> Vec<w::RECT> {
-    let mut out = Vec::new();
-    for (id, win) in &app.windows {
-        if id == skip || !win.visible {
-            continue;
-        }
-        let outer = w::window_rect(win.hwnd());
-        let margin = win.margin;
-        out.push(w::RECT {
-            left: outer.left + margin,
-            top: outer.top + margin,
-            right: outer.right - margin,
-            bottom: outer.bottom - margin,
-        });
-    }
-    out
-}
-
-/// The dashed lines take the card's own accent colour, the way FullWidget did.
-pub(crate) fn guide_ink(app: &App, instance: &str) -> u32 {
-    let appearance =
-        crate::model::appearance::effective(&app.themes, app.cfg(), app.instance(instance));
-    let accent = appearance
-        .get("accentColor")
-        .and_then(|v| v.as_str())
-        .unwrap_or("#4cc9f0");
-    match crate::core::util::parse_color(accent) {
-        Some((r, g, b)) => ((r as u32) << 16) | ((g as u32) << 8) | b as u32,
-        None => 0x4CC9F0,
-    }
-}
-
-/// Gap kept between cards, and how close a card has to come before it snaps, both on the screen.
-pub(crate) fn snap_metrics(scale: f64) -> (i32, i32, (i32, i32, i32)) {
-    let gap = (12.0 * scale).round() as i32;
-    let reach = (8.0 * scale).round() as i32;
-    let thickness = (1.0 * scale).round().max(1.0) as i32;
-    let dash = (5.0 * scale).round().max(1.0) as i32;
-    let space = (4.0 * scale).round().max(1.0) as i32;
-    (gap.max(0), reach.max(1), (thickness, dash, space))
-}
-
-/// The page reports the pointer delta since the button went down; the window has not moved yet,
-/// so it jumps by that delta and then rides Windows' own move loop until the button is released.
-pub(crate) fn start_drag(app: &mut App, instance: &str, p: &Value) {
-    let dx = jnum(p, "dx").unwrap_or(0.0).round() as i32;
-    let dy = jnum(p, "dy").unwrap_or(0.0).round() as i32;
-    let Some(inst) = app.instance(instance).cloned() else {
-        return;
-    };
-    if inst.locked && !app.edit_mode {
-        return;
-    }
-    let Some((card, margin, scale)) = current_card(app, instance) else {
-        return;
-    };
-    if app
-        .windows
-        .get(instance)
-        .map(|w| w.click_through)
-        .unwrap_or(false)
-    {
-        return;
-    }
-    let moved = w::RECT {
-        left: card.left + dx,
-        top: card.top + dy,
-        right: card.right + dx,
-        bottom: card.bottom + dy,
-    };
-    let hwnd = match app.windows.get(instance) {
-        Some(win) => win.hwnd(),
-        None => return,
-    };
-    w::move_window(hwnd, moved.left - margin, moved.top - margin);
-    if let Some(win) = app.windows.get_mut(instance) {
-        win.card = moved;
-    }
-    let others = other_cards(app, instance);
-    let ink = guide_ink(app, instance);
-    let (gap, reach, line) = snap_metrics(scale);
-    crate::runtime::window::begin_move(
-        hwnd,
-        crate::runtime::window::DragStart {
-            instance: instance.to_string(),
-            proxy: app.proxy.clone(),
-            margin,
-            card: moved,
-            peers: others,
-            gap,
-            reach,
-            ink,
-            line,
-            min: (32, 32),
-            max: (0, 0),
-        },
-    );
-}
-
-/// The window's own drag: the same move the page would have asked for, started when the page never
-/// saw the press. `dx`/`dy` are how far the pointer has already travelled.
-pub(crate) fn drag_by(app: &mut App, instance: &str, dx: i32, dy: i32) {
-    let params = serde_json::json!({ "dx": dx, "dy": dy });
-    start_drag(app, instance, &params);
-}
-
-/// Resizing follows the pointer from the grip instead of the reported delta, so the card tracks
-/// the cursor even when the page throttles its events.
-fn start_resize(app: &mut App, instance: &str) {
-    let Some(inst) = app.instance(instance).cloned() else {
-        return;
-    };
-    if inst.locked && !app.edit_mode {
-        return;
-    }
-    let Some((card, margin, scale)) = current_card(app, instance) else {
-        return;
-    };
-    let Some(manifest) = app.manifest_for(instance) else {
-        return;
-    };
-    if !manifest.size.resizable {
-        return;
-    }
-    let hwnd = match app.windows.get(instance) {
-        Some(win) => win.hwnd(),
-        None => return,
-    };
-    let others = other_cards(app, instance);
-    let ink = guide_ink(app, instance);
-    let (gap, reach, line) = snap_metrics(scale);
-    crate::runtime::window::begin_resize(
-        hwnd,
-        card,
-        w::cursor_pos(),
-        margin,
-        (
-            (manifest.size.min_width * scale).round().max(1.0) as i32,
-            (manifest.size.min_height * scale).round().max(1.0) as i32,
-        ),
-        (
-            (manifest.size.max_width * scale).round() as i32,
-            (manifest.size.max_height * scale).round() as i32,
-        ),
-        others,
-        gap,
-        reach,
-        ink,
-        line,
-        app.proxy.clone(),
-        instance.to_string(),
-    );
-}
