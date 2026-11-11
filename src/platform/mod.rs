@@ -10,6 +10,7 @@ pub mod power;
 pub mod shell;
 pub mod sysinfo;
 pub mod tray;
+pub mod update;
 pub mod win32;
 
 impl From<win32::SYSTEMTIME> for (u16, u16, u16) {

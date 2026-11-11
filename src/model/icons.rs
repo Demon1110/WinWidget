@@ -22,41 +22,50 @@ fn mtime(path: &std::path::Path) -> u64 {
         .unwrap_or(0)
 }
 
+/// mtime of a real file; a widget inside the binary never changes, so it gets 0 and stays cached.
+fn stamp(dir: &std::path::Path, rel: &str) -> u64 {
+    if crate::core::assets::is_virtual(dir) {
+        return 0;
+    }
+    let Some(path) = crate::core::paths::resolve_inside(dir, rel) else {
+        return 0;
+    };
+    mtime(&path)
+}
+
 /// The widget's icon as a `data:` URL, at most `size` pixels wide.
 pub fn icon_data_url(manifest: &Manifest, size: u32) -> Option<String> {
-    let rel = manifest.icon.as_deref()?.trim();
+    let rel = manifest.icon.as_deref()?.trim().replace('\\', "/");
     if rel.is_empty() {
         return None;
     }
-    let path = crate::core::paths::resolve_inside(&manifest.dir, rel)?;
-    if !path.is_file() {
+    if !crate::core::assets::file_exists(&manifest.dir, &rel) {
         return None;
     }
-    let key = format!("icon:{}:{size}", path.to_string_lossy());
-    let stamp = mtime(&path);
+    let key = format!("icon:{}:{rel}:{size}", manifest.dir.display());
+    let mark = stamp(&manifest.dir, &rel);
     {
         let mut guard = CACHE.lock().unwrap();
         let map = guard.get_or_insert_with(HashMap::new);
         if let Some((old, value)) = map.get(&key) {
-            if *old == stamp {
+            if *old == mark {
                 return Some(value.clone());
             }
         }
     }
 
-    let ext = path
+    let ext = std::path::Path::new(&rel)
         .extension()
         .and_then(|e| e.to_str())
         .unwrap_or("")
         .to_lowercase();
+    let bytes = crate::core::assets::file_bytes(&manifest.dir, &rel)?;
     let value = if ext == "svg" {
-        let text = crate::core::util::read_text(&path).ok()?;
         format!(
             "data:image/svg+xml;base64,{}",
-            crate::platform::win32::base64(text.as_bytes())
+            crate::platform::win32::base64(bytes.as_slice())
         )
     } else {
-        let bytes = std::fs::read(&path).ok()?;
         let png = crate::core::img::thumbnail_bytes(&bytes, size).ok()?;
         format!(
             "data:image/png;base64,{}",
@@ -67,7 +76,7 @@ pub fn icon_data_url(manifest: &Manifest, size: u32) -> Option<String> {
         .lock()
         .unwrap()
         .get_or_insert_with(HashMap::new)
-        .insert(key, (stamp, value.clone()));
+        .insert(key, (mark, value.clone()));
     Some(value)
 }
 
@@ -81,8 +90,7 @@ pub fn preview_url(manifest: &Manifest, theme: &str, lang: &str) -> Option<Strin
         .replace("{theme}", theme)
         .replace("{lang}", lang)
         .replace('\\', "/");
-    let path = crate::core::paths::resolve_inside(&manifest.dir, &rel)?;
-    if !path.is_file() {
+    if !crate::core::assets::file_exists(&manifest.dir, &rel) {
         return None;
     }
     let folder = manifest
@@ -94,7 +102,7 @@ pub fn preview_url(manifest: &Manifest, theme: &str, lang: &str) -> Option<Strin
     let kind = if manifest.builtin { "builtin" } else { "user" };
     Some(format!(
         "/__preview/{kind}/{folder}/{rel}?v={}",
-        mtime(&path)
+        stamp(&manifest.dir, &rel)
     ))
 }
 
@@ -135,15 +143,12 @@ fn collect_previews(manifest: &Manifest, template: &str, themes: &[String]) -> V
     };
     let langs = ["zh-TW", "zh-CN", "en"];
     let mut push = |rel: String| {
-        let path = crate::core::paths::resolve_inside(&manifest.dir, &rel);
-        if let Some(path) = path {
-            if path.is_file() {
-                let kind = if manifest.builtin { "builtin" } else { "user" };
-                out.push(format!(
-                    "/__preview/{kind}/{folder}/{rel}?v={}",
-                    mtime(&path)
-                ));
-            }
+        if crate::core::assets::file_exists(&manifest.dir, &rel) {
+            let kind = if manifest.builtin { "builtin" } else { "user" };
+            out.push(format!(
+                "/__preview/{kind}/{folder}/{rel}?v={}",
+                stamp(&manifest.dir, &rel)
+            ));
         }
     };
     if !template.contains('{') {

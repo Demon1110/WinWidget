@@ -268,6 +268,21 @@ fn install_staged(app: &mut App, staged: &Staged) -> Result<Value, String> {
     }))
 }
 
+/// Writes a template that lives inside the binary out to a real folder.
+fn copy_embedded_dir(root: &Path, to: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(to).map_err(|e| format!("{}: {e}", to.display()))?;
+    for rel in crate::core::assets::files_under(root) {
+        let dest = to.join(rel.replace('/', std::path::MAIN_SEPARATOR_STR));
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+        }
+        let bytes = crate::core::assets::read_under(root, &rel)
+            .ok_or_else(|| format!("{rel} is missing from the built-in copy"))?;
+        std::fs::write(&dest, bytes).map_err(|e| format!("{}: {e}", dest.display()))?;
+    }
+    Ok(())
+}
+
 fn copy_dir(from: &Path, to: &Path) -> Result<(), String> {
     std::fs::create_dir_all(to).map_err(|e| format!("{}: {e}", to.display()))?;
     for entry in std::fs::read_dir(from)
@@ -306,7 +321,12 @@ pub fn export(app: &App, widget_id: &str) -> Result<Value, String> {
     let mut writer = zip::ZipWriter::new(file);
     let options = zip::write::SimpleFileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated);
-    add_folder(&mut writer, &manifest.dir, &folder, options)?;
+    // A built-in widget has no folder to walk: its files come out of the binary.
+    if crate::core::assets::is_virtual(&manifest.dir) {
+        add_embedded_folder(&mut writer, &manifest.dir, &folder, options)?;
+    } else {
+        add_folder(&mut writer, &manifest.dir, &folder, options)?;
+    }
     writer
         .finish()
         .map_err(|e| format!("the package could not be finished: {e}"))?;
@@ -338,6 +358,24 @@ fn add_folder<W: Write + std::io::Seek>(
                 .map_err(|e| e.to_string())?;
             writer.write_all(&bytes).map_err(|e| e.to_string())?;
         }
+    }
+    Ok(())
+}
+
+/// The same, for a widget that lives inside the binary.
+fn add_embedded_folder<W: Write + std::io::Seek>(
+    writer: &mut zip::ZipWriter<W>,
+    dir: &Path,
+    prefix: &str,
+    options: zip::write::SimpleFileOptions,
+) -> Result<(), String> {
+    for rel in crate::core::assets::files_under(dir) {
+        let bytes = crate::core::assets::read_under(dir, &rel)
+            .ok_or_else(|| format!("{rel} is missing from the built-in copy"))?;
+        writer
+            .start_file(format!("{prefix}/{rel}"), options)
+            .map_err(|e| e.to_string())?;
+        writer.write_all(&bytes).map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -402,7 +440,10 @@ pub fn create(app: &mut App, name: &str) -> Result<Value, String> {
     let folder = crate::core::paths::get().user_widgets_dir().join(&id);
     std::fs::create_dir_all(&folder).map_err(|e| format!("{}: {e}", folder.display()))?;
     let template = crate::core::paths::get().templates_dir().join("widget");
-    if template.is_dir() {
+    if crate::core::assets::is_virtual(&template) {
+        // The starter files ship inside the exe; write them out from there.
+        copy_embedded_dir(&template, &folder)?;
+    } else if template.is_dir() {
         copy_dir(&template, &folder)?;
     }
     let manifest_file = folder.join("widget.json");

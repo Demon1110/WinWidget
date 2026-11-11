@@ -39,30 +39,31 @@
 | 页面服务 | `tiny_http`（本地回环 HTTP，按 `Host` 路由到不同组件，端口随机） |
 | Windows 原生 | `windows` 0.61 + 手写 `extern "system"` 绑定（托盘 `Shell_NotifyIconW`、DWM 亚克力、桌面层 `SetParent(Progman)`、回收站 `SHFileOperationW`、电源、音频） |
 | 系统信息 | `sysinfo` 0.40 |
-| 其它 | `serde`/`serde_json`、`notify`（文件监听）、`zip`（`.fwz` 打包）、`ureq`（市场/更新下载）、`image`、`rfd`（文件对话框）、`winreg`（自启动与文件关联） |
+| 其它 | `serde`/`serde_json`、`notify`（文件监听）、`zip`（`.fwz` 打包）、`ureq`（市场/更新下载）、`flate2`（编译期压缩 assets）、`image`、`rfd`（文件对话框）、`winreg`（自启动与文件关联） |
 
 ## 目录结构
 
 ```
 WinWidget/
 ├─ Cargo.toml
-├─ assets/                    # 与宿主解耦的前端资产（可直接改、可直接发版）
+├─ build.rs                   # 把 assets/ 压进二进制（+ 图标与版本资源）
+├─ assets/                    # 与宿主解耦的前端资产（源码在这里改；发布时编进 exe）
 │  ├─ widgets/                # 38 个内置组件，每个一个文件夹
 │  ├─ sdk/                    # base.css、widget-sdk.js、widget.d.ts、three themes/
 │  ├─ ui/control-center/      # 控制中心页面（index.html / style.css / app.js / i18n.js）
 │  ├─ ui/docs/                # 内置文档页
 │  ├─ templates/              # "新建组件"用的模板
-│  └─ docs/                   # 组件开发指南、市场说明、里程碑说明
+│  └─ docs/                   # 组件开发指南、市场说明、里程碑说明（m* 截图不进二进制）
 ├─ src/
-│  ├─ main.rs                 # 纯入口：单实例、事件循环、CLI；逻辑都在 lib.rs 里
+│  ├─ main.rs                 # 纯入口：单实例、事件循环、CLI、--apply-update；逻辑都在 lib.rs 里
 │  ├─ lib.rs                  # 库入口，把下面几层按依赖顺序曝光
-│  ├─ core/                   # 地基：paths / config / storage / logging / text / net / img / util
+│  ├─ core/                   # 地基：assets(嵌入式资源表) / paths / config / storage / logging / text / net / img / util
 │  ├─ model/                  # 磁盘上的描述与校验：manifest / catalog / categories / themes /
 │  │                          #   appearance / permissions / icons
 │  ├─ market/                 # 分发：packages(.fwz) / client(市场) / updater
 │  ├─ runtime/                # 唯一持有窗口与事件循环的一层：app / window / bridge / snap / shim / monitor
 │  ├─ ui/                     # 用户动作的入口面：control(控制中心 API) / menus / server(本地 HTTP)
-│  └─ platform/               # 与 Windows 打交道：win32 / tray / shell / sysinfo / audio / media / files / power
+│  └─ platform/               # 与 Windows 打交道：win32 / tray / shell / update(自我替换) / sysinfo / audio / media / files / power
 └─ docs/screenshots/          # 本文用到的实机截图
 ```
 
@@ -87,31 +88,37 @@ winwidget add winwidget.notes  # 在桌面上放一张便签（需先退出正�
 winwidget remove <instance-id>
 ```
 
+### 资源从哪来（一个 exe 怎么装下全部组件）
+
+`build.rs` 在编译时把 `assets/` 整棵扫一遍（跳过 `docs/m*` 截图），大于 256 字节的文件 deflate 压缩，落到 `OUT_DIR/asset-blobs/`，再生成一张「路径 / 是否压缩 / 字节」表；`src/core/assets.rs` 用 `include!` 把这张表和 `include_bytes!` 的压缩块一起收进二进制。发布版因此只有一个 exe，运行时直接从内存读，不落盘、不解压到临时目录。
+
+读取顺序（`src/core/paths.rs::resolve_resource_root`）：`WINWIDGET_DEV_ROOT` → exe 旁边的 `assets\` → exe 往上三级祖先里的 `assets\`（`cargo run` 落到的就是仓库那份）→ 都没有就用二进制里那份。最后一种情况下 `paths::get().resource_root()` 是虚拟路径 `embedded:/assets`，`paths::get().embedded()` 为真，所有读文件的地方（本地 HTTP 服务、组件清单、主题、图标、预览图、`.fwz` 导出、新建组件模板）都会自动改从资源表取。
+
+三条由此产生的事实：
+
+- **开发时改 `assets/` 立即生效**（磁盘优先，不用重编）；发布出去以后没有磁盘副本，改内置组件要先导出成 `.fwz` 再装，或者直接复制到 `%APPDATA%\WinWidget\widgets`。
+- **组件列表 = 内置（嵌入）+ `%APPDATA%\WinWidget\widgets`**：`catalog::scan()` 两条都扫。用户目录里的组件与内置同 id 时不覆盖，而是在「未加载」列表里报冲突。
+- 「打开组件目录」对内置组件会提示先导出（内置的没有文件夹）；「打开文档」在单文件版本里走本地服务 `http://127.0.0.1:<端口>/__docs/`。
+
 ## 打包与发布
 
 脚本都在 `scripts/`，本地跑的就是 CI 跑的那几个：
 
 ```powershell
-pwsh -File scripts/run.ps1                        # 构建（调试）并启动；-Kill 先结束旧实例，-Release 用发布配置
-pwsh -File scripts/package-windows.ps1            # 一次出两样：便携 zip + 安装包 setup.exe，各附 .sha256
-pwsh -File scripts/package-windows.ps1 -Portable  # 便携包的数据落到 exe 旁边的 data\（U 盘 / 绿色版用法）
-pwsh -File scripts/package-windows.ps1 -Upx       # 便携包打包前用 UPX 压缩 exe
-pwsh -File scripts/package-windows.ps1 -NoSetup   # 只出便携 zip（没装 Inno Setup 时）
-python scripts/build-docs.py                      # 三语开发指南 → assets/docs/developer-guide.html（+ index.html）
+pwsh -File scripts/run.ps1                    # 构建（调试）并启动；-Kill 先结束旧实例，-Release 用发布配置
+pwsh -File scripts/package-windows.ps1        # 构建并产出一个自带 assets 的 exe（+ .sha256）
+pwsh -File scripts/package-windows.ps1 -Upx   # 打包后用 UPX 再压一遍
+pwsh -File scripts/package-windows.ps1 -SkipBuild -Version 1.2.0   # 不重编、指定版本号
+python scripts/build-docs.py                  # 三语开发指南 → assets/docs/developer-guide.html（+ index.html）
 ```
 
-打包先组装 `dist\stage\WinWidget-<版本>-windows-x64\`：`winwidget.exe` + 整棵 `assets\`（38 个组件、SDK、主题、控制中心、开发文档）+ README/LICENSE。资源必须跟着 exe 走，程序是从 exe 旁边的 `assets\` 读组件和文档的；`assets\docs\m*` 那些里程碑截图只是仓库里的说明素材，不进包。
+**发布件只有一个文件**：`dist\WinWidget-<版本>-windows-x64.exe`（约 7.5 MB），旁边一份 `.sha256`。没有 zip，也没有安装包——`assets\` 整棵（38 个组件、SDK、主题、控制中心、开发文档）在编译时就被 `build.rs` 压进二进制，运行时从内存读，不落盘、不解压。只有 `assets\docs\m*`（里程碑截图，约 13 MB，纯仓库素材）被排除。
 
-然后由这份 stage 产出两件发布件：
+脚本末尾有一道自检：把产物拷到一个**没有 `assets\`** 的临时目录里跑 `winwidget list`，能列出 30+ 个内置组件才算出包成功——否则说明资源没编进去，只是从仓库的 `assets\` 里捡到的。
 
-| 文件 | 给谁 | 是什么 |
-| --- | --- | --- |
-| `dist\WinWidget-<版本>-setup.exe` | 普通用户、**应用内更新** | Inno Setup 安装包：装到 `%LOCALAPPDATA%\WinWidget`，开始菜单/可选桌面快捷方式、自带卸载，**不需要管理员权限** |
-| `dist\WinWidget-<版本>-windows-x64.zip` | 不想装的人 | 便携版，解压即用（配 `portable` 标记就是绿色版） |
+复制这个 exe 到任何位置就能跑；数据仍在 `%APPDATA%\WinWidget`。要绿色版（数据放 exe 旁边的 `data\`），在同目录建一个空的 `portable` 文件即可。
 
-安装包的位置是有讲究的：`updater.rs::parse_release` 只认名字里带 `setup` 的 `.exe`，所以「設定 → 檢查更新」下载并拉起的正是这个 setup。装完/升级后用户数据（`%APPDATA%\WinWidget` 里的配置、组件、存储）原样保留——安装包只动 `%LOCALAPPDATA%\WinWidget` 里的程序和 `assets\`。安装前会先结束正在跑的 `winwidget.exe`（`installer.iss` 的 `PrepareToInstall`），所以从应用内点更新不会卡在「文件被占用」。
-
-`scripts\installer.iss` 就是这个安装包的脚本，中文文案在 `[Messages]` 里；改完用上面的命令重新编一次即可（Inno Setup 6 需要先装：`winget install JRSoftware.InnoSetup`）。
+应用内更新也走这条链：`updater.rs` 从 Release 里挑 `.exe`（名字带 `setup` 的安装包优先，兼容旧版本；否则就是单文件 exe），下载到 `%LOCALAPPDATA%\WinWidget\update\`，再以 `new.exe --apply-update <要替换的 exe>` 启动它。替换器等旧进程退出（Windows 不让程序覆盖自己正在运行的镜像），拷过去，再拉起新版本——见 `src/platform/update.rs`。替换失败会弹窗说明，不会静默失败；`update\` 里的旧下载在下次启动时清掉。
 
 发布走 GitHub Actions 的 **Release** 工作流（手动 `Run workflow`，选 `patch` / `minor` / `major`），阶段顺序固定：
 
@@ -119,7 +126,7 @@ python scripts/build-docs.py                      # 三语开发指南 → asset
 | --- | --- | --- |
 | `prepare` | 只算新版本号，改 `Cargo.toml` + `Cargo.lock` 上传成 artifact | 否 |
 | `checks` | `cargo fmt --check` / `clippy -D warnings` / `cargo test` | 否 |
-| `windows` | `scripts/package-windows.ps1` → setup.exe + 便携 zip + 各自 sha256 | 否 |
+| `windows` | `scripts/package-windows.ps1` → 单文件 exe + sha256（含脱离 `assets\` 的自检） | 否 |
 | `docs` | 渲染三语开发指南，并校验「文档和 Markdown 源文件是否同步」 | 否 |
 | `release` | 全部成功后才提交版本号、打 tag、建 GitHub Release | 是 |
 
@@ -127,7 +134,7 @@ python scripts/build-docs.py                      # 三语开发指南 → asset
 
 ## 自己写一个组件
 
-一个组件就是一个文件夹，放进 `%APPDATA%\WinWidget\widgets\`（或内置目录 `assets/widgets/`）：
+一个组件就是一个文件夹，放进 `%APPDATA%\WinWidget\widgets\`（发布版里内置组件编在 exe 里，开发期改的是仓库的 `assets/widgets/`）：
 
 ```
 my-widget/
@@ -200,9 +207,11 @@ WebView2 的 `chrome.webview.postMessage` 在 wry 下**只能传字符串**（�
 
 ## 已验证
 
-- `cargo build` / `cargo build --release` 通过，release 单文件 **约 3.8 MB**（`opt-level="s"` + LTO + strip，含 devtools 支持）。
+- `cargo build` / `cargo build --release` 通过，release 单文件 **约 7.5 MB**（`opt-level="s"` + LTO + strip + 嵌入式 assets，含 devtools 支持；上一版不带资源是 3.8 MB）。
+- 单文件脱离 `assets\`：把 `dist\WinWidget-1.0.0-windows-x64.exe` 单独拷到空目录，`list` 仍列出 **38 个内置组件**；再往 `%APPDATA%\WinWidget\widgets` 放一个测试组件，同一目录下 `list` 变成 **39 个**（内置 + 用户目录的合集）。
+- 空目录里直接跑：日志 `Catalog: 38 widget(s)`、`Themes: instrument, paper, type; system accent #…`、`Serving pages on 127.0.0.1:9818`、两张卡 `ready`；本地服务对嵌入资源全部 200 —— `/__fw/base.css`(8.9 KB)、`/__fw/widget-sdk.js`(23.7 KB)、`/__fw/themes/instrument/theme.css`、`/__ui/control-center/index.html`、`/__ui/control-center/img/theme-paper.png`(222 KB)、`/__docs/developer-guide.html`(225 KB)、`/__templates/hello-widget/widget.json`、`/__preview/builtin/clock/preview/instrument.zh-CN.webp`。
+- 自更新：旧实例在跑时，替换器等到 `copy` 成功（约 3 s）才覆盖并拉起新副本；日志 `apply-update: … -> …` / `copied, starting the new build` / `started … (pid …)`，替换后目标 exe 字节数与「新版本」一致，新实例日志照常 38 个组件。
 - 启动日志：`Catalog: 38 widget(s)`、`Themes: instrument, paper, type; system accent #…`、`Serving pages on 127.0.0.1:<port>`。
-- 本地服务：控制中心页 200（`Host: widgets.localhost`）、卡片页 200（`Host: winwidget-clock.widgets.localhost`）且注入的 `window.__FW_BOOT__` 完整（`locale: zh-CN`、`settings`、`appearance.values`、主题 href 均正确）；预览图 `/__preview/builtin/clock/preview/instrument.zh-CN.webp` 返回 `image/webp`。
 - 卡片实际渲染：时钟卡片（深色圆角卡 + 大字号时间 + 24 小时刻度条）、系统监控卡片（双环形仪表 + 磁盘/网络）；把 `theme_id` 改成 `paper` 后同一张卡片换成浅色纸张排版 —— 三张截图都用 `PrintWindow` 抓真实窗口内容。
 - 控制中心实际渲染：三栏布局、组件列表、内容/外观/位置与行为三页签；设置项开关状态与 `widget.json` 的默认值一致（`24 小时制 / 显示秒 / 显示日期` 全为开）。
 - 托盘链路：第二份副本启动 → `Another copy is already running; showing it` → 托盘线程收到 `ASK_CONTROL` → `Opening the control center` → 控制中心窗口出现并渲染。
@@ -210,12 +219,14 @@ WebView2 的 `chrome.webview.postMessage` 在 wry 下**只能传字符串**（�
 
 ## 已知限制
 
+- **内置组件没有磁盘目录**：发布版里它们在 exe 里，「打开组件目录」对内置组件会提示先导出 `.fwz`；`assets\docs\m*`（里程碑截图，约 13 MB）没有编进二进制，需要看图请从仓库取。
 - **音频设备友好名**未取到：`windows` 0.61 里没有 `PROPVARIANT → String` 的现成辅助，`audio.state()` 的 `device` 固定为 `null`（音量数值本身正常）。
 - **`shell.paths` 与 `callWithFiles` 降级**：wry 没有 `postMessageWithAdditionalObjects`，页面无法把文件对象一并交给宿主，文件清单以 `p.files`（纯文件名数组）传递、宿主侧返回空数组。
 - **卡片右键菜单**用原生 `TrackPopupMenu`（Win32 手写），没有接 `assets/ui/menu` 的自绘菜单，视觉上是系统菜单。
 - **组件市场 / 自动更新**默认未配置 `market_url`、`update_url`，入口会明确提示"还没有设定来源"。
 - **默认热键 `Ctrl+Alt+W`** 可能与系统里其它程序冲突，注册失败只记 `warn` 日志，不影响启动；可在控制中心"设置 → 热键"里改。
-- 未包含：安装程序（MSI/Inno Setup）、`.ico` 资源与 `winresource` 嵌图标、自动发布流水线。
+- **「新建组件」没有用上 `assets/templates/hello-widget*`**：`packages::create` 找的是 `templates/widget`，这个目录不存在，所以一直走代码里内联的最小模板（模板目录目前只被 `/__templates/` 文档示例引用）。
+- 更新链路兼容两种资产：名字带 `setup` 的安装包（旧版本发布件）直接拉起安装，其他 `.exe` 走 `--apply-update` 自我替换。
 
 ## 说明
 

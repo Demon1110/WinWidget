@@ -364,19 +364,23 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
         }
         "app.openFolder" => {
             let which = jstr(p, "which").unwrap_or_else(|| "data".into());
+            let paths = crate::core::paths::get();
             let path = match which.as_str() {
-                "widgets" => crate::core::paths::get().user_widgets_dir(),
-                "builtin" => crate::core::paths::get().builtin_widgets_dir(),
-                "local" => crate::core::paths::get().local_dir.clone(),
-                "logs" => crate::core::paths::get()
+                "widgets" => paths.user_widgets_dir(),
+                // 内置组件与主题现在编在 exe 里，没有文件夹可开：内置组件的用法是复制到
+                // 用户目录再改，所以这个按钮落到用户组件目录。
+                "builtin" | "themes" if paths.embedded() => paths.user_widgets_dir(),
+                "builtin" => paths.builtin_widgets_dir(),
+                "local" => paths.local_dir.clone(),
+                "logs" => paths
                     .log_file()
                     .parent()
                     .map(|p| p.to_path_buf())
-                    .unwrap_or_else(|| crate::core::paths::get().data_dir.clone()),
-                "themes" => crate::core::paths::get().themes_dir(),
-                "storage" => crate::core::paths::get().storage_dir(),
-                "exports" => crate::core::paths::get().exports_dir(),
-                _ => crate::core::paths::get().data_dir.clone(),
+                    .unwrap_or_else(|| paths.data_dir.clone()),
+                "themes" => paths.themes_dir(),
+                "storage" => paths.storage_dir(),
+                "exports" => paths.exports_dir(),
+                _ => paths.data_dir.clone(),
             };
             std::fs::create_dir_all(&path).ok();
             // These are folders on this machine, not links: `open` only takes http/https/mailto.
@@ -711,6 +715,12 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
                 .find(&widget)
                 .map(|m| m.dir.clone())
                 .ok_or_else(|| BridgeError::new(format!("no widget called {widget}")))?;
+            if crate::core::assets::is_virtual(&dir) {
+                // 内置组件编在 exe 里，没有文件夹可开：先导出成 .fwz 才有可编辑的副本。
+                return Err(BridgeError::new(
+                    "built-in widgets live inside the exe — export it to a .fwz first, then install that copy",
+                ));
+            }
             crate::platform::shell::open(&dir.to_string_lossy()).map_err(BridgeError::new)?;
             Ok(Value::Null)
         }

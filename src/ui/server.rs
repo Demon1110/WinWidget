@@ -149,17 +149,24 @@ fn serve_file(
     csp: Option<&str>,
     inject: Option<&Instance>,
 ) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
-    let file = crate::core::paths::resolve_inside(root, rel)?;
-    if !file.is_file() {
-        return None;
-    }
     let mime = crate::core::util::mime_for(rel);
+    let is_file_on_disk = crate::core::paths::resolve_inside(root, rel)
+        .map(|file| file.is_file())
+        .unwrap_or(false);
+    // A folder next to the exe wins (development); a shipped single exe has no folder, so the
+    // bytes come out of the binary.
+    let raw: Vec<u8> = if is_file_on_disk {
+        let file = crate::core::paths::resolve_inside(root, rel)?;
+        std::fs::read(&file).ok()?
+    } else {
+        crate::core::assets::read_under(root, rel)?
+    };
     let bytes = if mime.starts_with("text/html") && inject.is_some() {
-        let text = std::fs::read_to_string(&file).ok()?;
+        let text = String::from_utf8_lossy(&raw).to_string();
         let page = inject_page(&text, inject?);
         page.into_bytes()
     } else {
-        std::fs::read(&file).ok()?
+        raw
     };
     let mut resp = response(200, mime, bytes);
     if let Some(policy) = csp {

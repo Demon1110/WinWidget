@@ -139,27 +139,45 @@ fn scan_dir(
     root: &Path,
     builtin: bool,
 ) {
-    let entries = match std::fs::read_dir(root) {
-        Ok(rd) => rd,
-        Err(_) => return,
+    // Built-in widgets ship inside the binary as well as next to it, so a folder that is not on
+    // disk is listed from the asset table instead of being reported as empty.
+    let virtual_root = crate::core::assets::is_virtual(root);
+    let dirs: Vec<(String, std::path::PathBuf)> = if virtual_root {
+        crate::core::assets::children_dirs(root)
+            .into_iter()
+            .map(|name| {
+                let dir = root.join(&name);
+                (name, dir)
+            })
+            .collect()
+    } else {
+        let Ok(entries) = std::fs::read_dir(root) else {
+            return;
+        };
+        entries
+            .flatten()
+            .filter(|e| e.path().is_dir())
+            .map(|e| (e.file_name().to_string_lossy().to_string(), e.path()))
+            .collect()
     };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if !path.is_dir() {
-            continue;
-        }
-        let name = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("")
-            .to_string();
+    for (name, path) in dirs {
         if name.starts_with('.') {
             continue; // staging folders (.install) and the like
         }
-        if !path.join("widget.json").is_file() {
+        let has_manifest = if virtual_root {
+            crate::core::assets::has_under(&path, "widget.json")
+        } else {
+            path.join("widget.json").is_file()
+        };
+        if !has_manifest {
             continue;
         }
-        match Manifest::load(&path, builtin) {
+        let loaded = if virtual_root {
+            Manifest::load_embedded(&path)
+        } else {
+            Manifest::load(&path, builtin)
+        };
+        match loaded {
             Ok(m) => {
                 if !builtin && m.id.to_lowercase().starts_with(RESERVED_PREFIX) {
                     problems.push(Problem {

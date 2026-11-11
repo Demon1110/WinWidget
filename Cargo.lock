@@ -3537,6 +3537,7 @@ dependencies = [
 name = "winwidget"
 version = "1.0.0"
 dependencies = [
+ "flate2",
  "image",
  "notify",
  "rfd",

@@ -38,22 +38,30 @@ impl Themes {
     pub fn load() -> Themes {
         let mut all = Vec::new();
         let dir = crate::core::paths::get().themes_dir();
-        if let Ok(entries) = std::fs::read_dir(&dir) {
-            for entry in entries.flatten() {
-                let file = entry.path().join("theme.json");
-                if !file.is_file() {
-                    continue;
-                }
-                match crate::core::util::read_text(&file)
-                    .ok()
-                    .and_then(|t| serde_json::from_str::<ThemeInfo>(&t).ok())
-                {
-                    Some(t) if !t.id.is_empty() => all.push(t),
-                    Some(_) => {}
-                    None => {
-                        crate::core::logging::warn(&format!("Theme {} skipped", file.display()))
-                    }
-                }
+        let virtual_dir = crate::core::assets::is_virtual(&dir);
+        let ids: Vec<String> = if virtual_dir {
+            crate::core::assets::children_dirs(&dir)
+        } else {
+            match std::fs::read_dir(&dir) {
+                Ok(entries) => entries
+                    .flatten()
+                    .filter(|e| e.path().is_dir())
+                    .filter_map(|e| e.file_name().to_str().map(|s| s.to_string()))
+                    .collect(),
+                Err(_) => Vec::new(),
+            }
+        };
+        for id in ids {
+            let text = if virtual_dir {
+                crate::core::assets::read_under(&dir.join(&id), "theme.json")
+                    .map(|bytes| String::from_utf8_lossy(&bytes).to_string())
+            } else {
+                crate::core::util::read_text(&dir.join(&id).join("theme.json")).ok()
+            };
+            match text.and_then(|t| serde_json::from_str::<ThemeInfo>(&t).ok()) {
+                Some(t) if !t.id.is_empty() => all.push(t),
+                Some(_) => {}
+                None => crate::core::logging::warn(&format!("Theme {} skipped", id)),
             }
         }
         all.sort_by(|a, b| {

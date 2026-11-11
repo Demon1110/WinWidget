@@ -4,6 +4,7 @@
 //! Keep this layer dependency-free (only `platform` may be reached for OS facts such as the
 //! data directory). Anything that knows about a widget, a theme or a window belongs elsewhere.
 
+pub mod assets;
 pub mod config;
 pub mod img;
 pub mod logging;

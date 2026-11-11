@@ -42,9 +42,12 @@ windows = { version = "0.61", features = [
 ] }
 sysinfo = "0.40.1"
 winreg = "0.56.0"
+# 发布版把 assets\ 编译进 exe（见 build.rs / src/core/assets.rs），读的时候要解一次 deflate
+flate2 = "1.1"
 
 [build-dependencies]
 winresource = "0.1"
+flate2 = "1.1"
 
 [profile.release]
 opt-level = "s"

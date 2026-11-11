@@ -1,8 +1,10 @@
 //! Where everything lives on disk.
 //!
 //! Data: `%APPDATA%\WinWidget` (or `.\data` in portable mode). Machine-local: `%LOCALAPPDATA%\WinWidget`.
-//! Resources (widgets, sdk, ui, docs) ship next to the exe in `assets\`, or come from the source
-//! tree when `WINWIDGET_DEV_ROOT` points at it — the same arrangement FullWidget uses.
+//! Resources (widgets, sdk, ui, docs) come from an `assets\` folder next to the exe or from the
+//! source tree when `WINWIDGET_DEV_ROOT` points at it; a shipped single exe has no such folder and
+//! falls back to the copy compiled into the binary (`core::assets`), reported as the virtual root
+//! `embedded:/assets`.
 
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -60,10 +62,16 @@ impl Paths {
     }
     /// True when built-in widgets and the SDK come from a source tree (edits show up at once).
     pub fn dev_root(&self) -> bool {
-        self.resource_root
-            .to_string_lossy()
-            .to_lowercase()
-            .ne(&exe_dir().to_string_lossy().to_lowercase())
+        !self.embedded()
+            && self
+                .resource_root
+                .to_string_lossy()
+                .to_lowercase()
+                .ne(&exe_dir().to_string_lossy().to_lowercase())
+    }
+    /// True when the assets are the copy inside the binary (a shipped single exe).
+    pub fn embedded(&self) -> bool {
+        crate::core::assets::is_virtual(&self.resource_root)
     }
 }
 
@@ -110,7 +118,8 @@ pub fn expand_env(input: &str) -> String {
 }
 
 /// Picks the folder that holds `sdk\base.css`: an explicit dev root, the exe's `assets`, or the
-/// source tree's `assets` next to the build folder (so `cargo run` needs no copying).
+/// source tree's `assets` next to the build folder (so `cargo run` needs no copying). With none of
+/// them (a shipped single exe) it returns the virtual root, answered from `core::assets`.
 fn resolve_resource_root() -> PathBuf {
     let mut candidates: Vec<PathBuf> = Vec::new();
     if let Ok(dir) = std::env::var("WINWIDGET_DEV_ROOT") {
@@ -130,10 +139,7 @@ fn resolve_resource_root() -> PathBuf {
             return c.clone();
         }
     }
-    candidates
-        .into_iter()
-        .next()
-        .unwrap_or_else(|| exe.join("assets"))
+    PathBuf::from(crate::core::assets::VROOT)
 }
 
 pub fn init() -> &'static Paths {

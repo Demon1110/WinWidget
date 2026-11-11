@@ -416,7 +416,16 @@ fn download(
         );
         return;
     }
-    match crate::platform::shell::launch(&target.to_string_lossy()) {
+    // A `*setup*.exe` is an installer to run; anything else is a replacement exe, and Windows will
+    // not let a running program overwrite itself — the downloaded copy does it after this one exits.
+    let installer = file.to_lowercase().contains("setup");
+    let started = if installer {
+        crate::platform::shell::launch(&target.to_string_lossy())
+    } else {
+        let old = std::env::current_exe().map_err(|e| e.to_string());
+        old.and_then(|old| crate::platform::update::spawn_applier(&target, &old).map(|_| ()))
+    };
+    match started {
         Ok(_) => {
             let _ = app::post(
                 proxy,

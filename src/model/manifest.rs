@@ -143,8 +143,14 @@ impl Manifest {
         if self.entry.trim().is_empty() {
             self.entry = "index.html".into();
         }
-        let entry = self.dir.join(self.entry.replace('\\', "/"));
-        if !entry.is_file() {
+        let entry_rel = self.entry.replace('\\', "/");
+        // A widget inside the binary has no folder to stat, so ask the asset table instead.
+        let entry_exists = if crate::core::assets::is_virtual(&self.dir) {
+            crate::core::assets::has_under(&self.dir, &entry_rel)
+        } else {
+            self.dir.join(&entry_rel).is_file()
+        };
+        if !entry_exists {
             return Err(format!("the entry file \"{}\" is missing", self.entry));
         }
         if self.version.trim().is_empty() {
@@ -184,6 +190,26 @@ impl Manifest {
         })?;
         m.dir = dir.to_path_buf();
         m.builtin = builtin;
+        m.validate()?;
+        Ok(m)
+    }
+
+    /// A widget compiled into the binary: `dir` is its virtual folder, e.g.
+    /// `embedded:/assets/widgets/clock`.
+    pub fn load_embedded(dir: &Path) -> Result<Manifest, String> {
+        let text = crate::core::assets::read_under(dir, "widget.json")
+            .ok_or_else(|| "widget.json is missing from the built-in copy".to_string())?;
+        let text = String::from_utf8_lossy(&text);
+        let mut m: Manifest = serde_json::from_str(&text).map_err(|e| {
+            let line = e.line();
+            if line > 0 {
+                format!("widget.json line {line}: {e}")
+            } else {
+                format!("widget.json: {e}")
+            }
+        })?;
+        m.dir = dir.to_path_buf();
+        m.builtin = true;
         m.validate()?;
         Ok(m)
     }
