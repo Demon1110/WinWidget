@@ -491,6 +491,13 @@ fn call(app: &mut App, instance: &str, method: &str, p: &Value, id: i64) -> Brid
             let size = jnum(p, "size").unwrap_or(64.0) as i32;
             Ok(Reply::Now(crate::platform::shell::info(&path, size)))
         }
+        "shell.reveal" => {
+            require(app, &manifest, "shell.launch")?;
+            let path = req_str(p, "path")?;
+            crate::platform::shell::reveal(&path)
+                .map(|_| Reply::Now(Value::Null))
+                .map_err(BridgeError::new)
+        }
         "shell.pick" => {
             require(app, &manifest, "shell.launch")?;
             let kind = jstr(p, "type").unwrap_or_else(|| "file".into());
@@ -513,6 +520,84 @@ fn call(app: &mut App, instance: &str, method: &str, p: &Value, id: i64) -> Brid
             Ok(Reply::Now(Value::String(
                 crate::platform::chinese::convert(&text, &to),
             )))
+        }
+
+        // ── clipboard ─────────────────────────────────────────────────────
+        "clipboard.readText" => {
+            require(app, &manifest, "clipboard")?;
+            Ok(Reply::Now(match w::clipboard_text() {
+                Some(text) => Value::String(text),
+                None => Value::Null,
+            }))
+        }
+        "clipboard.writeText" => {
+            require(app, &manifest, "clipboard")?;
+            let text = jstr(p, "text").unwrap_or_default();
+            Ok(Reply::Now(Value::Bool(w::set_clipboard_text(&text))))
+        }
+
+        // ── known folders ─────────────────────────────────────────────────
+        "paths.named" => {
+            let name = jstr(p, "name").unwrap_or_default();
+            Ok(Reply::Now(match w::known_folder_path(&name) {
+                Some(path) => Value::String(path),
+                None => Value::Null,
+            }))
+        }
+
+        // ── save dialog, file icon, recycle bin ──────────────────────────
+        "shell.save" => {
+            require(app, &manifest, "shell.launch")?;
+            let title = jstr(p, "title").unwrap_or_default();
+            let name = jstr(p, "name").unwrap_or_default();
+            let filter = jstr(p, "filter").unwrap_or_else(|| "all".into());
+            Ok(Reply::Now(
+                match crate::platform::shell::save(&title, &name, &filter) {
+                    Some(path) => Value::String(path),
+                    None => Value::Null,
+                },
+            ))
+        }
+        "shell.trash" => {
+            require(app, &manifest, "shell.launch")?;
+            let path = req_str(p, "path")?;
+            Ok(Reply::Now(Value::Bool(crate::platform::shell::trash(&path))))
+        }
+        "file.icon" => {
+            require(app, &manifest, "shell.launch")?;
+            let spec = req_str(p, "path")?;
+            let size = jnum(p, "size").unwrap_or(32.0) as i32;
+            Ok(Reply::Now(
+                match crate::platform::shell::icon(&spec, size) {
+                    Some(icon) => Value::String(icon),
+                    None => Value::Null,
+                },
+            ))
+        }
+
+        // ── screen ────────────────────────────────────────────────────────
+        "screen.capture" => {
+            require(app, &manifest, "screen")?;
+            Ok(Reply::Now(match w::capture_screen_png() {
+                Some(png) => Value::String(format!("data:image/png;base64,{}", w::base64(&png))),
+                None => Value::Null,
+            }))
+        }
+
+        // ── the card's own visibility ─────────────────────────────────────
+        "window.hide" => {
+            if let Some(win) = app.windows.get_mut(instance) {
+                win.hide();
+            }
+            app.refresh_tray_menu();
+            Ok(Reply::Now(Value::Null))
+        }
+        "window.show" => {
+            if let Some(win) = app.windows.get_mut(instance) {
+                win.show();
+            }
+            app.refresh_tray_menu();
+            Ok(Reply::Now(Value::Null))
         }
 
         other => Err(BridgeError::new(format!("unknown method '{other}'"))),

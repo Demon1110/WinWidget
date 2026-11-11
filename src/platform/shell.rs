@@ -197,3 +197,106 @@ pub fn paths() -> Value {
     }
     Value::Object(vars)
 }
+
+/// Native save dialog. `filter` is "images", "text", "json" or "all"; `name` may carry a folder.
+pub fn save(title: &str, name: &str, filter: &str) -> Option<String> {
+    let mut dialog = rfd::FileDialog::new();
+    if !title.is_empty() {
+        dialog = dialog.set_title(title);
+    }
+    if !name.is_empty() {
+        let p = Path::new(name);
+        if let (Some(dir), Some(file)) = (p.parent(), p.file_name()) {
+            if !dir.as_os_str().is_empty() && dir.is_dir() {
+                dialog = dialog.set_directory(dir);
+            }
+            dialog = dialog.set_file_name(file.to_string_lossy().to_string());
+        } else {
+            dialog = dialog.set_file_name(name);
+        }
+    }
+    match filter {
+        "images" => {
+            dialog = dialog.add_filter(
+                "Images",
+                &["png", "jpg", "jpeg", "gif", "webp", "bmp", "tif", "tiff"],
+            );
+        }
+        "text" => {
+            dialog = dialog.add_filter("Text", &["txt", "md", "log"]);
+            dialog = dialog.add_filter("All files", &["*"]);
+        }
+        "json" => {
+            dialog = dialog.add_filter("JSON", &["json"]);
+            dialog = dialog.add_filter("All files", &["*"]);
+        }
+        _ => {}
+    }
+    dialog
+        .save_file()
+        .map(|p| p.to_string_lossy().to_string())
+}
+
+/// Moves a file or folder to the recycle bin, so a mistake is still recoverable.
+pub fn trash(path: &str) -> bool {
+    let path = crate::core::paths::expand_env(path);
+    let p = Path::new(&path);
+    if path.trim().is_empty() || !p.exists() {
+        return false;
+    }
+    crate::platform::win32::recycle_path(p)
+}
+
+/// A file icon as a data URL. Accepts a real path, an extension such as ".pdf", or "folder".
+pub fn icon(spec: &str, size: i32) -> Option<String> {
+    let size = size.clamp(16, 256);
+    if spec.eq_ignore_ascii_case("folder") {
+        // Any always-present directory gives the shell's folder icon.
+        return crate::platform::win32::file_icon_data_url(
+            &std::env::temp_dir().to_string_lossy(),
+            size,
+        );
+    }
+    if let Some(ext) = spec.strip_prefix('.') {
+        // Windows only draws a file-type icon over a real file of that type: borrow an empty one.
+        let ext = ext.trim();
+        if ext.is_empty() || ext.contains(['\\', '/', ':']) {
+            return None;
+        }
+        let dir = std::env::temp_dir().join("winwidget-icon");
+        std::fs::create_dir_all(&dir).ok()?;
+        let probe = dir.join(format!("probe.{ext}"));
+        if !probe.exists() {
+            std::fs::write(&probe, b"").ok()?;
+        }
+        let icon = crate::platform::win32::file_icon_data_url(&probe.to_string_lossy(), size);
+        let _ = std::fs::remove_file(&probe);
+        return icon;
+    }
+    crate::platform::win32::file_icon_data_url(spec, size)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn icon_rejects_names_that_are_not_paths_or_extensions() {
+        // A path that does not exist has no icon; neither has an extension with separators in it.
+        assert!(icon("C:\\definitely\\not\\here\\nope.xyz", 32).is_none());
+        assert!(icon(".p/n", 32).is_none());
+        assert!(icon(".", 32).is_none());
+    }
+
+    #[test]
+    fn known_folders_resolve_to_absolute_paths() {
+        for name in ["home", "desktop", "documents", "downloads", "temp"] {
+            let path = crate::platform::win32::known_folder_path(name);
+            assert!(path.is_some(), "{name} should resolve");
+            let path = path.unwrap();
+            assert!(Path::new(&path).is_absolute(), "{name} → {path}");
+        }
+        assert!(crate::platform::win32::known_folder_path("nope").is_none());
+    }
+}
+

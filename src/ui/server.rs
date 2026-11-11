@@ -278,7 +278,7 @@ pub fn response(status: u16, mime: &str, body: Vec<u8>) -> Response<std::io::Cur
 fn inject_page(html: &str, inst: &Instance) -> String {
     let boot = &inst.boot;
     let head_block = format!(
-        "<link rel=\"stylesheet\" href=\"/__fw/base.css\"><link id=\"__fw_theme_link\" href=\"{href}\"><style id=\"__fw_theme\">{theme}</style><script>window.__FW_BOOT__={boot};</script><script src=\"/__fw/widget-sdk.js\"></script>",
+        "<link rel=\"stylesheet\" href=\"/__fw/base.css\"><link id=\"__fw_theme_link\" href=\"{href}\"><style id=\"__fw_theme\">{theme}</style><script>window.__FW_BOOT__={boot};</script><script src=\"/__fw/widget-sdk.js\"></script><script src=\"/__fw/utools.js\"></script>",
         href = inst.theme_href,
         theme = inst.theme_css,
         boot = boot

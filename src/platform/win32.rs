@@ -1237,6 +1237,266 @@ fn icon_to_png(icon: HICON, size: i32) -> Result<Vec<u8>, String> {
     }
 }
 
+// ── clipboard, screen capture, known folders ────────────────────────────────
+// The three capabilities widgets ask for through `widget.clipboard`, `widget.screen.capture()`
+// and `widget.paths.named()`. Kept here next to the other hand-declared Win32 calls.
+
+#[link(name = "user32")]
+extern "system" {
+    fn OpenClipboard(hwnd: HWND) -> i32;
+    fn CloseClipboard() -> i32;
+    fn EmptyClipboard() -> i32;
+    fn GetClipboardData(format: u32) -> HANDLE;
+    fn SetClipboardData(format: u32, mem: HANDLE) -> HANDLE;
+    fn IsClipboardFormatAvailable(format: u32) -> i32;
+}
+
+#[link(name = "gdi32")]
+extern "system" {
+    fn BitBlt(dest: isize, x: i32, y: i32, w: i32, h: i32, src: isize, sx: i32, sy: i32, rop: u32)
+        -> i32;
+}
+
+const CF_UNICODETEXT: u32 = 13;
+const GMEM_MOVEABLE: u32 = 0x0002;
+const SRCCOPY: u32 = 0x00CC_0020;
+const SM_XVIRTUALSCREEN: i32 = 76;
+const SM_YVIRTUALSCREEN: i32 = 77;
+const SM_CXVIRTUALSCREEN: i32 = 78;
+const SM_CYVIRTUALSCREEN: i32 = 79;
+
+/// A NUL-terminated wide string, as Win32 hands them out.
+unsafe fn read_wide(p: *const u16) -> String {
+    if p.is_null() {
+        return String::new();
+    }
+    let mut n = 0usize;
+    while *p.add(n) != 0 {
+        n += 1;
+    }
+    String::from_utf16_lossy(std::slice::from_raw_parts(p, n))
+}
+
+/// The clipboard's text, or `None` when it is empty or holds something else than text.
+pub fn clipboard_text() -> Option<String> {
+    unsafe {
+        if IsClipboardFormatAvailable(CF_UNICODETEXT) == 0 {
+            return None;
+        }
+        // Another process can hold the clipboard for a few hundred milliseconds; retry briefly
+        // instead of reporting "no text" on a clipboard that does have text.
+        for _ in 0..10 {
+            if OpenClipboard(0) != 0 {
+                let handle = GetClipboardData(CF_UNICODETEXT);
+                let text = if handle == 0 {
+                    None
+                } else {
+                    let p = GlobalLock(handle) as *const u16;
+                    let text = if p.is_null() {
+                        None
+                    } else {
+                        Some(read_wide(p))
+                    };
+                    GlobalUnlock(handle);
+                    text
+                };
+                CloseClipboard();
+                return text;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        None
+    }
+}
+
+/// Replaces the clipboard with `text`. Returns false when Windows refused the clipboard.
+pub fn set_clipboard_text(text: &str) -> bool {
+    let mut wide: Vec<u16> = text.encode_utf16().collect();
+    wide.push(0);
+    unsafe {
+        let mem = GlobalAlloc(GMEM_MOVEABLE, wide.len() * 2);
+        if mem == 0 {
+            return false;
+        }
+        let p = GlobalLock(mem) as *mut u16;
+        if p.is_null() {
+            GlobalFree(mem);
+            return false;
+        }
+        std::ptr::copy_nonoverlapping(wide.as_ptr(), p, wide.len());
+        GlobalUnlock(mem);
+        for _ in 0..10 {
+            if OpenClipboard(0) != 0 {
+                EmptyClipboard();
+                let ok = SetClipboardData(CF_UNICODETEXT, mem) != 0;
+                CloseClipboard();
+                if ok {
+                    return true;
+                }
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        // On success the clipboard owns the block; only free it when the handover failed.
+        GlobalFree(mem);
+        false
+    }
+}
+
+/// The whole virtual desktop as PNG bytes. `None` when GDI refused.
+pub fn capture_screen_png() -> Option<Vec<u8>> {
+    unsafe {
+        let (x, y) = (GetSystemMetrics(SM_XVIRTUALSCREEN), GetSystemMetrics(SM_YVIRTUALSCREEN));
+        let (w, h) = (GetSystemMetrics(SM_CXVIRTUALSCREEN), GetSystemMetrics(SM_CYVIRTUALSCREEN));
+        if w <= 0 || h <= 0 {
+            return None;
+        }
+        let screen = GetDC(0);
+        if screen == 0 {
+            return None;
+        }
+        let dc = CreateCompatibleDC(screen);
+        let bitmap = CreateCompatibleBitmap(screen, w, h);
+        if dc == 0 || bitmap == 0 {
+            if bitmap != 0 {
+                DeleteObject(bitmap);
+            }
+            if dc != 0 {
+                DeleteDC(dc);
+            }
+            ReleaseDC(0, screen);
+            return None;
+        }
+        let old = SelectObject(dc, bitmap);
+        let copied = BitBlt(dc, 0, 0, w, h, screen, x, y, SRCCOPY);
+        let mut info = BITMAPINFO {
+            bmiHeader: BITMAPINFOHEADER {
+                biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                biWidth: w,
+                biHeight: -h,
+                biPlanes: 1,
+                biBitCount: 32,
+                biCompression: 0,
+                ..Default::default()
+            },
+            bmiColors: [0; 3],
+        };
+        let mut bits = vec![0u8; (w * h * 4) as usize];
+        let lines = GetDIBits(
+            dc,
+            bitmap,
+            0,
+            h as u32,
+            bits.as_mut_ptr() as *mut c_void,
+            &mut info,
+            0,
+        );
+        SelectObject(dc, old);
+        DeleteObject(bitmap);
+        DeleteDC(dc);
+        ReleaseDC(0, screen);
+        if copied == 0 || lines == 0 {
+            return None;
+        }
+        for px in bits.as_chunks_mut::<4>().0 {
+            px.swap(0, 2);
+        }
+        crate::core::img::encode_png(w as u32, h as u32, &bits).ok()
+    }
+}
+
+const fn guid(data1: u32, data2: u16, data3: u16, data4: [u8; 8]) -> GUID {
+    GUID {
+        data1,
+        data2,
+        data3,
+        data4,
+    }
+}
+
+const FOLDERID_PROFILE: GUID = guid(
+    0x5E6C_858F,
+    0x0E22,
+    0x4760,
+    [0x9A, 0xFE, 0xEA, 0x33, 0x17, 0xB6, 0x71, 0x73],
+);
+const FOLDERID_DESKTOP: GUID = guid(
+    0xB4BF_CC3A,
+    0xDB2C,
+    0x424C,
+    [0xB0, 0x29, 0x7F, 0xE9, 0x9A, 0x87, 0xC6, 0x41],
+);
+const FOLDERID_DOCUMENTS: GUID = guid(
+    0xFDD3_9AD0,
+    0x238F,
+    0x46AF,
+    [0xAD, 0xB4, 0x6C, 0x85, 0x48, 0x03, 0x69, 0xC7],
+);
+const FOLDERID_DOWNLOADS: GUID = guid(
+    0x374D_E290,
+    0x123F,
+    0x4565,
+    [0x91, 0x64, 0x39, 0xC4, 0x92, 0x5E, 0x46, 0x7B],
+);
+const FOLDERID_MUSIC: GUID = guid(
+    0x4BD8_D571,
+    0x6D19,
+    0x48D3,
+    [0xBE, 0x97, 0x42, 0x22, 0x20, 0x08, 0x0E, 0x43],
+);
+const FOLDERID_PICTURES: GUID = guid(
+    0x33E2_8130,
+    0x4E1E,
+    0x4676,
+    [0x83, 0x5A, 0x98, 0x39, 0x5C, 0x3B, 0xC3, 0xBB],
+);
+const FOLDERID_VIDEOS: GUID = guid(
+    0x1898_9B1D,
+    0x99B5,
+    0x455B,
+    [0x84, 0x1C, 0xAB, 0x7C, 0x74, 0xE4, 0xDD, 0xFC],
+);
+
+fn shell_known_folder(id: &GUID) -> Option<String> {
+    unsafe {
+        let mut path: *mut u16 = std::ptr::null_mut();
+        let hr = SHGetKnownFolderPath(id, 0, 0, &mut path);
+        if hr < 0 || path.is_null() {
+            return None;
+        }
+        let text = read_wide(path);
+        CoTaskMemFree(path as *mut c_void);
+        if text.is_empty() {
+            None
+        } else {
+            Some(text)
+        }
+    }
+}
+
+/// One of uTools' `getPath` names: home, desktop, documents, downloads, music, pictures, videos.
+/// Resolved through Windows' own shell folders, so OneDrive-redirected folders come out right.
+/// `temp` and `appData` are the process' own directories rather than shell folders.
+pub fn known_folder_path(name: &str) -> Option<String> {
+    let id = match name {
+        "home" => FOLDERID_PROFILE,
+        "desktop" => FOLDERID_DESKTOP,
+        "documents" => FOLDERID_DOCUMENTS,
+        "downloads" => FOLDERID_DOWNLOADS,
+        "music" => FOLDERID_MUSIC,
+        "pictures" => FOLDERID_PICTURES,
+        "videos" => FOLDERID_VIDEOS,
+        "temp" => {
+            return Some(std::env::temp_dir().to_string_lossy().to_string());
+        }
+        "appData" => {
+            return std::env::var("LOCALAPPDATA").ok().filter(|s| !s.is_empty());
+        }
+        _ => return None,
+    };
+    shell_known_folder(&id)
+}
+
 /// Classic base64 for the few data URLs we build (icons, covers).
 pub fn base64(bytes: &[u8]) -> String {
     const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";

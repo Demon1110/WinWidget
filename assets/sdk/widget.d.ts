@@ -389,12 +389,41 @@ declare namespace WinWidget {
       info(path: string, options?: { size?: number }): Promise<PathInfo>;
       /** Asks the user to choose a file or folder; null if they cancel. Needs "shell.launch". */
       pick(options?: { type?: "file" | "folder"; filter?: "programs" | "images" | "all"; title?: string }): Promise<string | null>;
+      /** Asks the user where to save; null if they cancel. Needs "shell.launch". */
+      save(options?: { title?: string; name?: string; filter?: "images" | "text" | "json" | "all" }): Promise<string | null>;
+      /** Shows the file in its folder in Explorer. Needs "shell.launch". */
+      reveal(path: string): Promise<void>;
+      /** Moves a file or folder to the recycle bin, so a mistake stays recoverable. Needs "shell.launch". */
+      trash(path: string): Promise<boolean>;
       /**
        * Full paths of files dropped on the widget. Needs "shell.launch".
        *   document.addEventListener("drop", async e => { e.preventDefault(); add(await widget.shell.paths(e.dataTransfer.files)); });
        */
       paths(files: FileList | File[]): Promise<string[]>;
     };
+
+    /** The Windows clipboard. Needs the "clipboard" permission. */
+    clipboard: {
+      /** The copied text, or null when the clipboard holds no text. */
+      readText(): Promise<string | null>;
+      /** Puts text on the clipboard; false when Windows refused it. */
+      writeText(text: string): Promise<boolean>;
+    };
+
+    /** Windows' own known folders (OneDrive redirection included). No permission needed. */
+    paths: {
+      /** named("home" | "desktop" | "documents" | "downloads" | "music" | "pictures" | "videos" | "temp" | "appData") → path, or null. */
+      named(name: "home" | "desktop" | "documents" | "downloads" | "music" | "pictures" | "videos" | "temp" | "appData"): Promise<string | null>;
+    };
+
+    /** The screen. Needs the "screen" permission. */
+    screen: {
+      /** The whole virtual desktop as a PNG data URL, or null when GDI refused. */
+      capture(): Promise<string | null>;
+    };
+
+    /** A file type's icon as a data URL: a path, an extension (".pdf") or "folder". Needs "shell.launch". */
+    fileIcon(spec: string, options?: { size?: number }): Promise<string | null>;
 
     /** Simplified ↔ Traditional Chinese, character by character, with Windows' own tables. */
     convertChinese(text: string, to: "traditional" | "simplified"): Promise<string>;
@@ -405,6 +434,10 @@ declare namespace WinWidget {
       setSize(width: number, height: number): Promise<Size>;
       /** Starts moving the widget with the mouse (call from a mousedown handler). */
       startDrag(): void;
+      /** Puts the card away; the tray menu and the control center bring it back. */
+      hide(): Promise<void>;
+      /** Brings a hidden card back. */
+      show(): Promise<void>;
     };
 
     appearance: {
@@ -420,6 +453,65 @@ declare namespace WinWidget {
 /** The WinWidget API, ready when your script runs. */
 declare const widget: WinWidget.Widget;
 
+namespace WinWidget {
+  /**
+   * The uTools compatibility layer: the subset of `utools.*` a plain web page can use.
+   * It is NOT the uTools runtime — no Electron, no Node, no native modules here.
+   * Check `utools.__compat` before relying on anything beyond the members below.
+   */
+  interface Utools {
+    __compat: {
+      host: "WinWidget";
+      level: "web-subset";
+      supported: readonly string[];
+      degraded: readonly string[];
+      unsupported: readonly string[];
+      supports(name: string): boolean;
+    };
+    onPluginReady(fn: () => void): void;
+    onPluginEnter(fn: (enter: { code: string; type: "text"; payload: string }) => void): void;
+    onPluginOut(fn: () => void): void;
+    hideMainWindow(): Promise<void>;
+    showMainWindow(): Promise<void>;
+    outPlugin(): Promise<void>;
+    getWindowType(): "main";
+    setExpendHeight(height: number): Promise<unknown>;
+    showNotification(body: string): Promise<void>;
+    shellOpenPath(fullPath: string): Promise<string>;
+    shellShowItemInFolder(fullPath: string): Promise<void>;
+    shellOpenExternal(url: string): Promise<void>;
+    shellTrashItem(fullPath: string): Promise<boolean>;
+    shellBeep(): void;
+    getPath(name: string): string;
+    getFileIcon(filePath: string): Promise<string | null>;
+    getFileIconAsync(filePath: string): Promise<string | null>;
+    showOpenDialog(options?: { title?: string; properties?: string[] }): Promise<string[] | undefined>;
+    showSaveDialog(options?: { title?: string; defaultPath?: string }): Promise<string | undefined>;
+    getAppVersion(): string;
+    getNativeId(): string;
+    getUser(): null;
+    isDev(): boolean;
+    isWindows(): boolean;
+    isMacOS(): boolean;
+    isLinux(): boolean;
+    isDarkColors(): boolean;
+    copyText(text: string): Promise<boolean>;
+    getCopyedFiles(): string[];
+    dbStorage: {
+      getItem(key: string): unknown;
+      setItem(key: string, value: unknown): unknown;
+      removeItem(key: string): void;
+      clear(): void;
+    };
+    captureScreen(): Promise<string | null>;
+    getPluginLocalDataPath(): string;
+    getPluginTempPath(): string;
+    /** Anything else throws an Error whose code is "utools.unsupported". */
+    [api: string]: unknown;
+  }
+}
+
 interface Window {
   readonly widget: WinWidget.Widget;
+  readonly utools: WinWidget.Utools;
 }

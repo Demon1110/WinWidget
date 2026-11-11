@@ -515,9 +515,39 @@
       info: (path, options) => call("shell.info", { path, size: (options && options.size) || 64 }),
       /** A file or folder dialog: pick({ type: "file"|"folder", filter: "programs"|"images"|"all", title }) → path or null. */
       pick: (options) => call("shell.pick", options || {}),
+      /** A save dialog: save({ title, name, filter: "images"|"text"|"json"|"all" }) → path or null. */
+      save: (options) => call("shell.save", options || {}),
+      /** Shows the file in its folder in Explorer. */
+      reveal: (path) => call("shell.reveal", { path }),
       /** Full paths of dropped files: in a "drop" handler, paths(e.dataTransfer.files). Needs "shell.launch". */
       paths: (files) => callWithFiles("shell.paths", {}, [...(files || [])]),
+      /** Moves a file or folder to the recycle bin. Needs "shell.launch". */
+      trash: (path) => call("shell.trash", { path }),
     }),
+
+    /** The Windows clipboard; needs the "clipboard" permission. */
+    clipboard: Object.freeze({
+      /** The copied text, or null when the clipboard holds no text. */
+      readText: () => call("clipboard.readText"),
+      /** Puts text on the clipboard; false when Windows refused it. */
+      writeText: (text) => call("clipboard.writeText", { text: String(text ?? "") }),
+    }),
+
+    /** Windows' own known folders, OneDrive redirection included. */
+    paths: Object.freeze({
+      /** named("home" | "desktop" | "documents" | "downloads" | "music" | "pictures" | "videos" | "temp" | "appData") → path or null. */
+      named: (name) => call("paths.named", { name: String(name || "") }),
+    }),
+
+    /** The screen; capture() needs the "screen" permission. */
+    screen: Object.freeze({
+      /** The whole virtual desktop as a PNG data URL, or null when it failed. */
+      capture: () => call("screen.capture"),
+    }),
+
+    /** A file type's icon as a data URL. Accepts a path, an extension (".pdf") or "folder". */
+    fileIcon: (spec, options) => call("file.icon", { path: String(spec || ""), size: (options && options.size) || 32 }),
+
 
     /** Simplified ↔ Traditional Chinese, character by character (Windows' own tables). */
     convertChinese: (text, to) => call("text.chinese", { text: String(text ?? ""), to: to === "simplified" ? "simplified" : "traditional" }),
@@ -529,6 +559,10 @@
       getSize: () => call("window.getSize"),
       setSize: (width, height) => call("window.setSize", { width, height }),
       startDrag: () => send("window.drag"),
+      /** Puts the card away; the tray menu and the control center can bring it back. */
+      hide: () => call("window.hide"),
+      /** Brings a hidden card back. */
+      show: () => call("window.show"),
     }),
 
     appearance: Object.freeze({

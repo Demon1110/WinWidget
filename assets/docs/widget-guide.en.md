@@ -597,7 +597,9 @@ By default a widget can only show its own content: it can't go online, can't rea
 | `notify` | `widget.notify`: showing Windows notifications |
 | `audio` | `widget.audio`: reading and changing the system volume and mute |
 | `media` | `widget.media`: what's playing (title, cover) and play, pause, skip |
-| `shell.launch` | `widget.shell.launch`, `pick`, `info`, `paths`: opening programs and files, choosing files, reading names and icons (users see a clear warning when allowing it) |
+| `clipboard` | `widget.clipboard`: reading and writing the clipboard's text (users see a clear warning when allowing it) |
+| `screen` | `widget.screen.capture`: taking the whole screen as a picture (users see a clear warning when allowing it) |
+| `shell.launch` | `widget.shell.launch`, `pick`, `save`, `reveal`, `trash`, `info`, `paths`, `fileIcon`: opening programs and files, choosing files, choosing where to save, showing a file in Explorer, moving it to the recycle bin, reading names and icons (users see a clear warning when allowing it) |
 
 Reading a folder needs no permission: the widget can read only the pictures in the folder the user chose in its settings. See [`widget.files`](#a-folder-the-user-chose-widgetfiles).
 
@@ -647,6 +649,57 @@ A `.fwz` file is a widget folder zipped up with another extension.
 - **Limits**: a `.fwz` can be up to 64 MB, and at most 256 MB and 5000 files unpacked.
 
 ---
+
+## Where uTools plugins stand (how far compatibility goes)
+
+A uTools plugin is an Electron app: `plugin.json`, a `preload.js` that runs with Node (`require("fs")`, Sharp and FFmpeg installed there), and a page. WinWidget is Rust + WebView2 — **no Electron, no Node** — so a uTools plugin cannot be dropped in unchanged. What can be carried over is the page plus the `utools.*` calls it makes: every widget page gets a `utools` compatibility layer (`/__fw/utools.js`) wired to WinWidget's own capabilities.
+
+### Bringing an existing uTools plugin's screen in
+
+1. Put the plugin's `index.html`, CSS and JS into a widget folder;
+2. declare the permissions it actually uses in `widget.json` (`showNotification` → `notify`, `copyText` → `clipboard`, `captureScreen` → `screen`, `shellOpenPath` → `shell.launch`, `shellOpenExternal` → `shell.open`);
+3. the `utools.*` calls are answered by the compatibility layer, no code changes needed.
+
+**Don't expect** `preload.js`, `require(...)`, `process`, `ipcRenderer`, `fs` or `child_process`: they do not exist here, and a copied preload just leaves the page blank.
+
+### Ask first whether an API exists
+
+```js
+if (utools.__compat.supports("captureScreen")) {
+  const png = await utools.captureScreen();        // PNG data URL
+} else {
+  document.body.textContent = "this host cannot capture the screen";
+}
+console.log(utools.__compat.degraded);    // there, but the semantics changed
+console.log(utools.__compat.unsupported); // not there at all
+```
+
+### Category by category, as the uTools docs list them
+
+| uTools category | What WinWidget gives you |
+|---|---|
+| Events | `onPluginReady`, `onPluginEnter`, `onPluginOut`; the enter event is synthesised at load as `{ code: widget id, type: "text", payload: "" }` |
+| Window | `hideMainWindow`, `showMainWindow`, `outPlugin`, `getWindowType`, `setExpendHeight` (height only, and asynchronous) |
+| System | `showNotification`, `shellOpenPath`, `shellOpenExternal`, `shellShowItemInFolder`, `shellTrashItem`, `shellBeep`, `getPath`, `getFileIconAsync`, `showOpenDialog`, `showSaveDialog`, `isDev`, `isWindows` and friends; `getPluginLocalDataPath` returns an empty string (there is no filesystem) |
+| Screen | `captureScreen()` grabs the whole virtual desktop as a PNG data URL (needs the `screen` permission); uTools' interactive snipping is not reproduced |
+| Input | Absent: uTools' `simulate` family (keyboard and mouse injection) is not in the layer |
+| Copy | `copyText` works (`clipboard` permission); `copyImage` and `getCopyedFiles` do not — the clipboard is text only |
+| Database | `dbStorage.getItem` / `setItem` / `removeItem` / `clear`, synchronous, kept in this widget's local storage; **no cloud sync**, and uTools' document store `db` (with `_id`) is absent |
+| AI | Absent: no uTools account, no cloud models, no Node to reach a local one |
+| Scheduled tasks | No uTools scheduler; use `widget.notify({ at })` or the page's own timers |
+| Automation / simulation | Absent |
+| Dynamic features | Absent |
+| Quick entries | Absent: WinWidget is a desktop widget host; its entries are the tray and the control center |
+| uBrowser | No embedded browser window; open links with `utools.shellOpenExternal` or `widget.shell.open` |
+| Sharp image processing | Absent: native modules cannot be loaded; use Canvas, or let the host do it |
+| FFmpeg audio/video | Absent |
+| Payments | Absent |
+
+Nothing missing fails quietly: calling it throws an error whose `code` is `"utools.unsupported"` and whose message names the API and the reason — far easier to chase than `TypeError: utools.xxx is not a function`.
+
+### New widgets should not go through uTools
+
+The layer exists for pages already written against uTools. A new widget should use `widget.*`: complete types (`widget.d.ts`), the permission model, theme awareness and clear errors. Where both exist, `widget.*` is the real path and `utools.*` is the compatibility path.
 
 ## How a widget talks to the host (advanced)
 
@@ -720,9 +773,13 @@ The SDK wraps all of these. The table shows the underlying names so you can matc
 | `power.do` | `widget.power(action)` (built-in widgets only) |
 | `net.fetch` | `widget.fetch(url, options)` |
 | `notify.show` / `cancel` | `widget.notify(...)` |
-| `shell.open` / `launch` / `info` / `pick` / `paths` | `widget.shell.*` |
+| `shell.open` / `launch` / `info` / `pick` / `save` / `reveal` / `trash` / `paths` | `widget.shell.*` |
+| `file.icon` | `widget.fileIcon(spec, { size })`: `spec` is a path, an extension such as `.pdf`, or `"folder"` |
+| `clipboard.readText` / `writeText` | `widget.clipboard.*` (needs the `clipboard` permission) |
+| `paths.named` | `widget.paths.named(name)`: `home` / `desktop` / `documents` / `downloads` / `music` / `pictures` / `videos` / `temp` / `appData` |
+| `screen.capture` | `widget.screen.capture()`: the whole virtual desktop as a PNG data URL (needs the `screen` permission) |
 | `text.chinese` | `widget.convertChinese(text, to)` |
-| `window.getSize` / `setSize` / `drag` / `resize` / `press` / `menu` / `devtools` | `widget.window.*`; the last four are sent by the SDK itself |
+| `window.getSize` / `setSize` / `drag` / `resize` / `press` / `menu` / `devtools` / `hide` / `show` | `widget.window.*`; `drag`, `resize`, `press`, `menu` and `devtools` are sent by the SDK itself |
 | `log` | `widget.log(...)` |
 
 `log` and `ready` get no answer; everything else does.
@@ -732,6 +789,7 @@ The SDK wraps all of these. The table shows the underlying names so you can matc
 | Address | Contents |
 |---|---|
 | `/__fw/widget-sdk.js` | the SDK (injected into every page) |
+| `/__fw/utools.js` | the uTools compatibility layer (injected into every page), see [Where uTools plugins stand](#where-utools-plugins-stand-how-far-compatibility-goes) |
 | `/__fw/base.css` | theme variables and the `w-*` classes (loaded on every page) |
 | `/__fw/places.js` | city lookup for the weather widgets; see [Cities and location](#cities-and-location-placesjs) |
 | `/__fw/themes/…` | theme CSS and fonts |
