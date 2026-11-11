@@ -26,6 +26,20 @@ pub fn launch(path: &str) -> Result<(), String> {
     shell_execute(&path)
 }
 
+/// Opens a folder (or a file) that is on this machine: a folder comes up in Explorer, a file in the
+/// app Windows associates with it. `open()` above takes links only, which is why the settings buttons
+/// for "widgets folder" and "data" reported a failure.
+pub fn open_path(path: &str) -> Result<(), String> {
+    let path = crate::core::paths::expand_env(path);
+    if path.trim().is_empty() {
+        return Err("missing path".into());
+    }
+    if !Path::new(&path).exists() {
+        return Err(format!("{path} does not exist"));
+    }
+    shell_execute(&path)
+}
+
 fn shell_execute(target: &str) -> Result<(), String> {
     use crate::platform::win32 as w;
     let op = w::wide("open");
@@ -80,11 +94,6 @@ pub fn reveal(path: &str) -> Result<(), String> {
             None => Err(format!("Windows could not show \"{path}\"")),
         }
     }
-}
-
-/// Runs a command line (used for the lock workstation verb).
-pub fn launch_shell(command: &str) -> Result<(), String> {
-    shell_execute(command)
 }
 
 /// Native open dialog; `kind` is "file" or "folder", `filter` narrows program/image picking.

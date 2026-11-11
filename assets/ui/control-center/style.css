@@ -46,7 +46,7 @@ button { cursor: pointer; }
 /* ── sidebar ── */
 .side { background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 18px 12px 14px; min-height: 0; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 2px 8px 18px; }
-.logo { width: 26px; height: 26px; flex: none; }
+.logo { width: 26px; height: 26px; flex: none; object-fit: contain; }
 .brand-name { font-weight: 600; font-size: 15px; letter-spacing: 0.01em; }
 .brand-ver { font-size: 11.5px; color: var(--faint); }
 
@@ -182,7 +182,9 @@ button { cursor: pointer; }
 .folder .btn { height: 32px; flex: none; }
 input[type="date"].field::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.55; }
 
-.range { display: flex; align-items: center; gap: 12px; width: 100%; }
+/* A fader keeps its own width, so the "reset" link beside it always has room instead of being
+   squeezed against the slider. */
+.range { display: flex; align-items: center; gap: 12px; width: auto; flex: 1 1 220px; max-width: 330px; min-width: 0; }
 .range input { flex: 1; appearance: none; height: 4px; border-radius: 99px; background: linear-gradient(var(--accent), var(--accent)) 0 / var(--p, 50%) 100% no-repeat, rgba(255, 255, 255, 0.1); outline-offset: 6px; }
 .range input::-webkit-slider-thumb { appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--fg); border: 3px solid var(--bg); box-shadow: 0 0 0 1px var(--line-strong); transition: transform 0.15s var(--click); }
 .range input:active::-webkit-slider-thumb { transform: scale(1.18); }

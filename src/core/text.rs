@@ -1,9 +1,12 @@
 //! Picks the right language from strings like "時鐘" or { "zh-TW": "時鐘", "en": "Clock" }.
 
 use serde_json::Value;
-use std::sync::OnceLock;
+use std::sync::RwLock;
 
-static LOCALE: OnceLock<String> = OnceLock::new();
+/// The language the app and every card is speaking right now. It is not a `OnceLock`: the user can
+/// pick another language in the settings, and that has to reach the menus, the control center and
+/// every page without a restart.
+static LOCALE: RwLock<Option<String>> = RwLock::new(None);
 
 pub fn set_locale(locale: &str) {
     let resolved = if locale.trim().is_empty() || locale.eq_ignore_ascii_case("auto") {
@@ -11,11 +14,17 @@ pub fn set_locale(locale: &str) {
     } else {
         locale.to_string()
     };
-    let _ = LOCALE.set(resolved);
+    if let Ok(mut slot) = LOCALE.write() {
+        *slot = Some(resolved);
+    }
 }
 
 pub fn locale() -> String {
-    LOCALE.get().cloned().unwrap_or_else(|| "en".to_string())
+    LOCALE
+        .read()
+        .ok()
+        .and_then(|slot| slot.clone())
+        .unwrap_or_else(|| "en".to_string())
 }
 
 /// The lookup order for this user: exact tag, aliases, then English.
@@ -111,4 +120,20 @@ pub fn all(value: Option<&Value>) -> Vec<String> {
         _ => {}
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{locale, set_locale};
+
+    #[test]
+    fn the_language_can_change_while_the_app_runs() {
+        let before = locale();
+        set_locale("en");
+        assert_eq!(locale(), "en");
+        // The old implementation only kept the first value, so a second choice never arrived.
+        set_locale("zh-CN");
+        assert_eq!(locale(), "zh-CN");
+        set_locale(&before);
+    }
 }

@@ -11,6 +11,10 @@ A widget is a folder: a `widget.json` file plus ordinary HTML, CSS and JavaScrip
 - [Permissions](#permissions)
 - [Debugging](#debugging)
 - [Packaging and sharing](#packaging-and-sharing)
+- [How a widget talks to the host (advanced)](#how-a-widget-talks-to-the-host-advanced)
+- [Every API on one page](#every-api-on-one-page)
+- [Three complete examples](#three-complete-examples)
+- [Checklist before you hand a widget out](#checklist-before-you-hand-a-widget-out)
 - [Questions](#questions)
 
 ---
@@ -644,6 +648,334 @@ A `.fwz` file is a widget folder zipped up with another extension.
 
 ---
 
+## How a widget talks to the host (advanced)
+
+Everything above is enough to build a complete widget. This chapter is for people who want to know how it actually runs: where the page comes from, what the host hands it, which messages exist, and where the data lives.
+
+### How the page is opened
+
+WinWidget does not open your `index.html` from `file://`. It runs a small HTTP server bound to `127.0.0.1` and serves the page:
+
+```
+http://127.0.0.1:<port>/__fw/<widget id>/index.html
+```
+
+- **The port changes on every start**, so always use relative paths (`style.css`, `main.js`, `img/a.png`) — never a hard-coded `127.0.0.1:8800`.
+- Each widget type has its own origin, `<widget id>.widgets.localhost`, so `localStorage`, `IndexedDB` and `Cache` are separated per widget type, shared by all its instances.
+- The page cannot navigate elsewhere or open a new window; use `widget.shell.open` for web pages.
+- Images, fonts and scripts the page loads are bound by the same `network:` permissions.
+
+### What the host hands you at startup
+
+Before any of your scripts run, the host puts this in `window.__FW_BOOT__`:
+
+| Field | Meaning |
+|---|---|
+| `settings` | every setting of this instance (language objects already folded) |
+| `appearance` | `theme`, `style`, `shadow`, `themeCss`, `themeHref`, `userCss`, … |
+| `locked` | whether the user locked it |
+| `layer` | `desktop` / `normal` / `top` |
+| `clickThrough` | click-through on or off |
+| `state` | `{ edit, label }`: arrange mode, the name label on the card |
+| `developer` | developer mode on or off |
+| `locale` | the user's language, e.g. `zh-TW` |
+| `permissions` | what is actually allowed right now |
+| `hostVersion` | WinWidget version, e.g. `1.0.0` |
+| `widgetId` / `instanceId` | the widget id, and this card's own id |
+| `size` | `{ width, height, grow }` — the default size |
+| `resizable` | whether the card can be resized |
+
+`widget-sdk.js` builds `window.widget` from that, which is why `widget` is already there in the first line of `main.js`.
+
+### The message protocol
+
+Every `widget.*` call is a message. When something behaves oddly, watching the messages is the fastest way to understand it:
+
+```js
+// call: { id, m, p }; the host answers { id, r } or { id, e: "error text" }
+chrome.webview.postMessage(JSON.stringify({ id: 7, m: "storage.get", p: { key: "todo" } }));
+
+// no answer needed (dragging, the context menu): { m, p }
+chrome.webview.postMessage(JSON.stringify({ m: "window.menu" }));
+
+// the host pushes: { ev: "settings" | "appearance" | "state" | "system" | "audio" | "media" | "identify", d: … }
+chrome.webview.addEventListener("message", (e) => console.log(e.data));
+```
+
+Day to day you use the SDK; this layer exists for debugging. SDK error messages carry their target, e.g. `HTTP 404 (https://api.example.com/x)`.
+
+### Every method the host offers
+
+The SDK wraps all of these. The table shows the underlying names so you can match them in DevTools:
+
+| Message `m` | Same as |
+|---|---|
+| `settings.set` | `widget.settings.set(key, value)` |
+| `storage.get` / `set` / `remove` / `keys` | `widget.storage.*` |
+| `system.subscribe` / `unsubscribe` / `history` / `info` / `adapters` / `ping` | `widget.system.*` |
+| `audio.get` / `set` / `subscribe` / `unsubscribe` | `widget.audio.*` |
+| `media.get` / `control` / `lyrics` / `subscribe` / `unsubscribe` | `widget.media.*` |
+| `files.list` / `info` / `pick` | `widget.files.*` |
+| `recycle.query` / `empty` / `open` | `widget.recycleBin.*` (built-in widgets only) |
+| `power.do` | `widget.power(action)` (built-in widgets only) |
+| `net.fetch` | `widget.fetch(url, options)` |
+| `notify.show` / `cancel` | `widget.notify(...)` |
+| `shell.open` / `launch` / `info` / `pick` / `paths` | `widget.shell.*` |
+| `text.chinese` | `widget.convertChinese(text, to)` |
+| `window.getSize` / `setSize` / `drag` / `resize` / `press` / `menu` / `devtools` | `widget.window.*`; the last four are sent by the SDK itself |
+| `log` | `widget.log(...)` |
+
+`log` and `ready` get no answer; everything else does.
+
+### Built-in resources
+
+| Address | Contents |
+|---|---|
+| `/__fw/widget-sdk.js` | the SDK (injected into every page) |
+| `/__fw/base.css` | theme variables and the `w-*` classes (loaded on every page) |
+| `/__fw/places.js` | city lookup for the weather widgets; see [Cities and location](#cities-and-location-placesjs) |
+| `/__fw/themes/…` | theme CSS and fonts |
+| `/__files/<instance>/<setting key>/<relative path>` | pictures in the folder the user chose (what `widget.files.url()` builds) |
+| `/__docs/` | this documentation |
+
+### Where the data lives
+
+| What | Where |
+|---|---|
+| Saved data (`widget.storage`) | `%AppData%\WinWidget\data\<instance id>.json`, 2 MB per instance |
+| Your widget folder | `%AppData%\WinWidget\widgets\` (Settings → "widgets folder") |
+| Settings and card positions | `%AppData%\Roaming\WinWidget\config.json` |
+| Log | `%LocalAppData%\WinWidget\logs\app.log` |
+
+Removing an instance deletes its saved data too; removing the widget folder leaves the cards on the desktop marked "widget is gone".
+
+### Cities and location: `places.js`
+
+The weather, forecast, air-quality and sunrise widgets all use it; you can too:
+
+```html
+<script src="/__fw/places.js"></script>
+<script src="main.js"></script>
+```
+
+```js
+// needs "network:geocoding-api.open-meteo.com"; locating by network also needs "network:get.geojs.io"
+const place = await places.locate(widget.settings.get("city"));   // "" → locate by IP
+// place: { name: "Nanchang", lat, lon, tz, at }
+// an unknown city throws places.NotFound, whose message is ready to show
+
+// Write the located city back into the settings so the control center shows it
+// (a city the user typed is left alone, so this cannot loop).
+places.echo(widget, settings, place);
+```
+
+Results are cached in `widget.storage` (`geo2:<city>`, or `geo2:ip` for the network location, re-checked every six hours), so one city is looked up once.
+
+---
+
+## Every API on one page
+
+Anything returning a Promise can be awaited; "sync" means it returns immediately.
+
+| API | Permission | Returns | Notes |
+|---|---|---|---|
+| `widget.apiVersion` | — | `1` | SDK version |
+| `widget.hostVersion` | — | string | WinWidget version |
+| `widget.id` | — | string | widget id |
+| `widget.instanceId` | — | string | this card's id |
+| `widget.locale` | — | string | the user's language |
+| `widget.developer` | — | bool | developer mode |
+| `widget.permissions` | — | array | permissions allowed now |
+| `widget.locked` | — | bool | live |
+| `widget.layer` | — | string | current layer |
+| `widget.theme` | — | string | current theme id |
+| `widget.t(dict)` | — | sync | pick the string for the user's language |
+| `widget.on(event, fn)` | — | unsubscribe | listen to host events |
+| `widget.settings.get(key?)` | — | sync | read settings |
+| `widget.settings.set(key, value)` | — | Promise | write a setting; the control center follows |
+| `widget.settings.onChange(fn)` | — | unsubscribe | settings changed |
+| `widget.storage.get/set/remove/keys` | — | Promise | saved data, 2 MB per instance |
+| `widget.system.subscribe(topics, cb, {interval})` | `system` | unsubscribe | periodic samples, first one right away |
+| `widget.system.history()` | `system` | Promise | the last 15 minutes (`{ now, points }`) |
+| `widget.system.info()` | `system` | Promise | OS, CPU, memory, GPUs, uptime |
+| `widget.system.adapters()` | `system` | Promise | adapters, IPs, gateways |
+| `widget.system.ping(host, {timeout})` | `system` | Promise | one ping, at most once a second |
+| `widget.audio.get()` | `audio` | Promise | volume, mute, device name |
+| `widget.audio.set({volume?, muted?})` | `audio` | Promise | change volume or mute |
+| `widget.audio.onChange(fn)` | `audio` | unsubscribe | volume keys, tray, new headphones |
+| `widget.media.get()` | `media` | Promise | what is playing |
+| `widget.media.onChange(fn)` | `media` | unsubscribe | new track, pause, another app |
+| `widget.media.play/pause/toggle/next/previous()` | `media` | Promise | transport buttons |
+| `widget.media.seek(ms)` | `media` | Promise | jump |
+| `widget.media.position(state)` | `media` | sync | where playback is now, in ms |
+| `widget.media.lyrics()` | `media` + `network:*` | Promise | timed lyrics |
+| `widget.files.list(key, {recursive})` | folder chosen | Promise | pictures in that folder |
+| `widget.files.url(file, {width})` | — | sync | picture URL, optionally a thumbnail |
+| `widget.files.info(key, path)` | — | Promise | size, taken-at |
+| `widget.files.pick(key)` | — | Promise | folder dialog, saved into the setting |
+| `widget.recycleBin.query/empty/open` | built-in | Promise | Recycle Bin |
+| `widget.power(action)` | built-in | Promise | `lock` / `sleep` / `restart` / `shutdown` / `signout` |
+| `widget.fetch(url, {method, headers, body, as})` | `network:` | Promise | no CORS, 8 MB per call |
+| `widget.shell.open(url)` | `shell.open` | Promise | open in the default browser |
+| `widget.shell.launch(path)` | `shell.launch` | Promise | program, shortcut, folder, document |
+| `widget.shell.info(path, {size})` | `shell.launch` | Promise | name, kind, icon |
+| `widget.shell.pick({type, filter, title})` | `shell.launch` | Promise | file or folder dialog |
+| `widget.shell.paths(files)` | `shell.launch` | Promise | paths of dropped files |
+| `widget.convertChinese(text, to)` | — | Promise | simplified ↔ traditional |
+| `widget.notify(o)` / `widget.notify.cancel(tag?)` | `notify` | Promise | Windows notifications, bookable |
+| `widget.window.getSize()` | — | Promise | current card size |
+| `widget.window.setSize(w, h)` | — | Promise | resize within min/max |
+| `widget.window.startDrag()` | — | sync | start dragging from your code |
+| `widget.appearance.get()` | — | sync | current appearance |
+| `widget.appearance.onChange(fn)` | — | unsubscribe | theme or appearance changed |
+| `widget.log(...args)` | — | sync | write to app.log |
+
+### Events
+
+| Event | When | Payload |
+|---|---|---|
+| `settings` | the user changed settings | all settings |
+| `appearance` | theme or appearance changed | the new appearance |
+| `state` | locked, layer or click-through changed | `{ locked, layer, clickThrough }` |
+| `summon` | the hotkey brought the widget up | none |
+| `identify` | "Locate" was pressed in the control center | none (the SDK draws the ring) |
+| anything else | a `ev` the SDK does not know | passed through as-is |
+
+### Folding of language objects
+
+A setting can carry one value per language; the host folds it to the user's language before you see it:
+
+```json
+{ "key": "city", "type": "text", "default": { "zh-TW": "台北", "zh-CN": "厦门", "en": "Taipei" } }
+```
+
+```js
+widget.settings.get("city");   // "厦门" for a Simplified Chinese user
+```
+
+---
+
+## Three complete examples
+
+### 1. A number from a web API on the desktop
+
+Show a GitHub project's star count, refresh every 30 minutes, and keep the last value when the network fails.
+
+`widget.json`: `"permissions": ["network:api.github.com"]`.
+
+```js
+const $ = (id) => document.getElementById(id);
+const KEY = "last";
+
+async function fetchOnce() {
+  const r = await widget.fetch("https://api.github.com/repos/Demon1110/WinWidget", {
+    headers: { accept: "application/vnd.github+json" },
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const repo = await r.json();
+  return { stars: repo.stargazers_count, at: Date.now() };
+}
+
+async function refresh() {
+  try {
+    const data = await fetchOnce();
+    show(data, false);
+    await widget.storage.set(KEY, data);
+  } catch (e) {
+    // Fall back to the last good value and mark it as stale.
+    const old = await widget.storage.get(KEY);
+    if (old) show(old, true);
+    else $("stars").textContent = "—";
+    widget.log(`stars: ${e.message}`);
+  }
+}
+
+function show(data, stale) {
+  $("stars").textContent = data.stars.toLocaleString(widget.locale);
+  $("at").textContent = new Date(data.at).toLocaleTimeString(widget.locale, { hour: "2-digit", minute: "2-digit" });
+  $("stale").hidden = !stale;
+}
+
+refresh();
+setInterval(refresh, 30 * 60 * 1000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+```
+
+- `permissions` needs `network:api.github.com`, not `*.github.com`: ask for as little as possible.
+- Something to show even before (or without) data, so the card is never blank.
+- `setInterval` is fine; never poll per second what has an event (`widget.media`, `widget.audio`).
+
+### 2. System figures once a second, cheaply
+
+```js
+const $ = (id) => document.getElementById(id);
+const bars = [];
+
+widget.system.subscribe(["cpu", "memory"], (d) => {
+  if (d.cpu) {
+    $("cpu").textContent = `${Math.round(d.cpu.usage)}%`;
+    push(bars[0], d.cpu.usage);
+  }
+  if (d.memory) {
+    $("mem").textContent = `${Math.round(d.memory.usage)}%`;
+    push(bars[1], d.memory.usage);
+  }
+}, { interval: 1000 });
+
+/** A 20-cell sparkline that updates every second, so no transition. */
+function push(bar, value) {
+  const cell = document.createElement("i");
+  cell.style.height = `${Math.max(4, Math.min(100, value))}%`;
+  bar.appendChild(cell);
+  if (bar.children.length > 20) bar.firstElementChild.remove();
+}
+```
+
+```css
+#cpu, #mem { font-variant-numeric: tabular-nums; }   /* digits stop jittering */
+.mini { display: flex; align-items: flex-end; gap: 1px; height: 1.6rem; }
+.mini i { width: 2px; background: var(--w-accent); } /* no transition, no animation */
+```
+
+- No `transition` or `animation` on anything that changes every second: a 0.5 s animation means the card repaints constantly.
+- `tabular-nums` keeps numbers from shifting sideways.
+- Unsubscribe when you no longer need it (`const stop = widget.system.subscribe(...); stop();`).
+
+### 3. Two copies of the same widget, separate data
+
+```js
+// The card is dragged and resized, but the instance id never changes: use it to separate data.
+const key = `state:${widget.instanceId}`;
+
+const saved = await widget.storage.get(key);
+index = saved ? saved.index : 0;
+
+function save() {
+  widget.storage.set(key, { index });   // no await needed, writes are quick
+}
+```
+
+`widget.storage` is per **widget type** (both copies share one file), so put `instanceId` in the key when they must not share; settings are per instance already.
+
+---
+
+## Checklist before you hand a widget out
+
+1. `id` uses only lowercase letters, digits and `. _ -`, 2–64 characters, and never changes afterwards.
+2. `entry` exists, and every resource is a relative path.
+3. Files are UTF-8 (a BOM will break `widget.json` parsing).
+4. Everything you use is declared in `permissions`; prefer `network:some.site` over `network:*`.
+5. Something is visible on first paint; when data fails, say so in plain words instead of leaving the card blank.
+6. Nothing that updates every second has an animation; nothing that has an event is polled.
+7. Numbers and dates go through `widget.locale`; words go through `widget.t()`.
+8. Only `--w-*` variables and `w-*` classes, checked on all three themes.
+9. It survives being resized: flex/grid, `@container` where needed, `grow` if the content should scale.
+10. No `window.open`, no navigation, no `document.write`; use `widget.shell.open`.
+11. No CDN scripts or fonts (they break offline) — bundle them in the widget folder.
+12. Look at the Console with F12 in developer mode before exporting the `.fwz`.
+
+---
+
 ## Questions
 
 **I changed a file and nothing happened on the desktop.**
@@ -663,3 +995,13 @@ Change `size.width` and `size.height`. Copies already on the desktop keep the si
 
 **How do I make it look right on the light Paper theme?**
 Use the `--w-*` variables for text and lines instead of hard-coded white or black, and check all three themes under **Themes**.
+
+
+**I changed the language and the widget still speaks the old one.**
+The language is read from `config.json` at startup, so restart WinWidget; the control center itself follows immediately, cards already open reload on the next launch. Always use `widget.locale` / `widget.t()` in a widget instead of detecting the system language.
+
+**"Widgets folder" and "data" in the settings do not open.**
+Those buttons hand a local folder to Windows (the same as double-clicking it in Explorer). Older builds passed it to the URL opener, which only accepts http/https/mailto, so it always failed; the current build opens it properly. If a click still does nothing, check that line in `%LocalAppData%\WinWidget\logs\app.log`.
+
+**Check for updates says there is no channel.**
+With an empty `update_url`, updates are read from this project's GitHub Releases (`api.github.com`). To use your own feed, point `update_url` at a JSON document `{"version": "1.2.0", "url": "download", "size": bytes, "notes": "notes", "page": "page"}`. Checks and downloads run in the background, and developer mode never updates itself.

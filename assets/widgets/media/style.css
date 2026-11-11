@@ -10,6 +10,9 @@ body { container-type: size; }
 /* the app's icon on the corner of the cover */
 .badge { position: absolute; right: -5px; bottom: -5px; width: 22px; height: 22px; padding: 3px; border-radius: 7px; background: var(--w-bg-solid); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3); }
 body.no-app .badge, body.none .badge { display: none; }
+/* The switch that hides "which app is playing" has to hide the words too. The line below is shown
+   by a container query further down (`min-height: 150px`), so this rule has to win over it. */
+body.no-app .app { display: none !important; }
 
 .main { flex: 1; min-width: 0; align-self: stretch; display: flex; flex-direction: column; justify-content: center; }
 .app { display: none; align-items: center; gap: 0.4rem; white-space: nowrap; overflow: hidden; margin-bottom: 0.35rem; font-size: 0.75rem; }

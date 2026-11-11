@@ -23,6 +23,12 @@ pub struct WidgetWin {
     pub margin: i32,
     /// The card rectangle in physical screen pixels (the window adds `margin` around it).
     pub card: w::RECT,
+    /// The window rectangle as this struct last set or read it. A card that is dragged by the page or
+    /// moved by Windows updates it through `sync_bounds`.
+    outer: w::RECT,
+    /// The size the web view was last told to lay out at. Resizing WebView2 is the expensive half of
+    /// every frame, so it only happens when the size really changed.
+    view: (i32, i32),
     pub visible: bool,
     pub frosted: bool,
     pub click_through: bool,
@@ -55,24 +61,49 @@ impl WidgetWin {
     }
 
     /// Moves the window so the card lands on `card`; `margin` is already in physical pixels.
+    ///
+    /// Only what actually changed is handed to Windows. `place` is called on every appearance
+    /// update and on every geometry change, and setting a window's size again — even to the same
+    /// size — makes Windows, DWM and WebView2 re-layout: with a handful of transparent cards that
+    /// is the flash the user sees while a card is dragged or enlarged.
     pub fn place(&mut self, card: w::RECT, inner: Option<(i32, i32)>) {
         self.card = card;
         let outer = w::inflate(card, self.margin);
-        let x = outer.left;
-        let y = outer.top;
         let width = outer.width().max(1);
         let height = outer.height().max(1);
-        self.window.set_outer_position(PhysicalPosition::new(x, y));
-        self.window.set_inner_size(PhysicalSize::new(width, height));
+        let moved = outer.left != self.outer.left || outer.top != self.outer.top;
+        let sized = width != self.outer.width() || height != self.outer.height();
+        if moved {
+            self.window
+                .set_outer_position(PhysicalPosition::new(outer.left, outer.top));
+        }
+        if sized {
+            self.window.set_inner_size(PhysicalSize::new(width, height));
+            self.set_view_size(width, height);
+        }
+        self.outer = w::RECT {
+            left: outer.left,
+            top: outer.top,
+            right: outer.left + width,
+            bottom: outer.top + height,
+        };
+        if let Some((_, _)) = inner {
+            // Kept for callers that need the window client size; nothing more to do.
+        }
+    }
+
+    /// Tells WebView2 the size to lay out at, unless it already has that size.
+    fn set_view_size(&mut self, width: i32, height: i32) {
+        if self.view == (width, height) {
+            return;
+        }
+        self.view = (width, height);
         self.webview
             .set_bounds(Rect {
                 position: wry::dpi::PhysicalPosition::new(0, 0).into(),
                 size: wry::dpi::PhysicalSize::new(width, height).into(),
             })
             .ok();
-        if let Some((_, _)) = inner {
-            // Kept for callers that need the window client size; nothing more to do.
-        }
     }
 
     /// Keeps the card fixed while the shadow margin changes.
@@ -97,13 +128,8 @@ impl WidgetWin {
             right: outer.right - margin,
             bottom: outer.bottom - margin,
         };
-        self.webview
-            .set_bounds(Rect {
-                position: wry::dpi::PhysicalPosition::new(0, 0).into(),
-                size: wry::dpi::PhysicalSize::new(outer.width().max(1), outer.height().max(1))
-                    .into(),
-            })
-            .ok();
+        self.outer = outer;
+        self.set_view_size(outer.width().max(1), outer.height().max(1));
     }
 
     pub fn show(&mut self) {
@@ -380,6 +406,8 @@ pub fn build(
         scale,
         margin,
         card,
+        outer,
+        view: (outer.width().max(1), outer.height().max(1)),
         visible: false,
         frosted: false,
         click_through: false,
@@ -430,6 +458,8 @@ fn old_procs() -> &'static Mutex<HashMap<usize, isize>> {
 struct WindowMeta {
     instance: String,
     proxy: tao::event_loop::EventLoopProxy<Ev>,
+    /// When this window last reported its size to the app (`WM_SIZE` throttling).
+    last_bounds: std::time::Instant,
 }
 
 fn meta() -> &'static Mutex<HashMap<usize, WindowMeta>> {
@@ -444,6 +474,8 @@ fn remember(hwnd: w::HWND, instance: &str, proxy: tao::event_loop::EventLoopProx
             WindowMeta {
                 instance: instance.to_string(),
                 proxy,
+                // The web view is already built at the right size, so the first report may wait a frame.
+                last_bounds: std::time::Instant::now(),
             },
         );
     }
@@ -614,11 +646,19 @@ unsafe extern "system" fn card_proc(hwnd: w::HWND, msg: u32, wp: usize, lp: isiz
             }
         }
         // Anything that changes the size (a resize, a DPI change, the user's own window command)
-        // has to reach the web view, which never follows the window on its own.
+        // has to reach the web view, which never follows the window on its own. Windows sends this
+        // once per `SetWindowPos` and the resize loop runs every 8 ms, so the reports are thinned
+        // out to one per frame: each report costs a WebView2 re-layout on the UI thread, and a
+        // thread kept busy that way is what makes the other cards blink too. The end of a resize
+        // always reports again (`begin_resize`), so nothing is lost.
         w::WM_SIZE => {
-            let todo = meta().lock().ok().and_then(|m| {
-                m.get(&(hwnd as usize))
-                    .map(|meta| (meta.instance.clone(), meta.proxy.clone()))
+            let todo = meta().lock().ok().and_then(|mut m| {
+                let meta = m.get_mut(&(hwnd as usize))?;
+                if meta.last_bounds.elapsed() < std::time::Duration::from_millis(16) {
+                    return None;
+                }
+                meta.last_bounds = std::time::Instant::now();
+                Some((meta.instance.clone(), meta.proxy.clone()))
             });
             if let Some((instance, proxy)) = todo {
                 let _ =

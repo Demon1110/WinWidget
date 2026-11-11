@@ -1,0 +1,2088 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WinWidget 组件开发指南</title>
+<style>
+:root {
+  --fg: #1d2129; --fg-muted: #5a6472; --fg-faint: #8b94a3;
+  --bg: #fbfbfd; --panel: #ffffff; --line: #e3e6ec; --accent: #2f6fd8;
+  --code-bg: #f4f6fa; --code-fg: #2a3140; --tag: #eef2fa;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: #e6e9ef; --fg-muted: #a7b0bf; --fg-faint: #7b8494;
+    --bg: #16181d; --panel: #1d2026; --line: #2c313a; --accent: #7aa8ff;
+    --code-bg: #22262e; --code-fg: #dde3ee; --tag: #262b34;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 15px/1.75 "Segoe UI", "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+header.top {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 12px 24px; background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border-bottom: 1px solid var(--line); backdrop-filter: blur(12px);
+}
+header.top .brand { font-weight: 600; font-size: 15px; letter-spacing: .01em; }
+header.top .brand span { color: var(--fg-muted); font-weight: 400; margin-left: 8px; }
+.spacer { flex: 1; }
+.langs { display: flex; gap: 4px; padding: 3px; background: var(--tag); border-radius: 8px; }
+.langs button {
+  border: 0; background: transparent; color: var(--fg-muted); cursor: pointer;
+  padding: 5px 11px; border-radius: 6px; font: inherit; font-size: 13px;
+}
+.langs button[aria-pressed="true"] { background: var(--panel); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.search {
+  width: 220px; padding: 6px 10px; font: inherit; font-size: 13px;
+  color: var(--fg); background: var(--tag); border: 1px solid transparent;
+  border-radius: 8px; outline: none;
+}
+.search:focus { border-color: var(--accent); background: var(--panel); }
+
+.layout { display: flex; align-items: flex-start; max-width: 1180px; margin: 0 auto; padding: 0 24px 80px; }
+nav.side {
+  position: sticky; top: 64px; width: 250px; flex: 0 0 250px;
+  max-height: calc(100vh - 80px); overflow: auto; padding: 22px 14px 22px 0;
+  font-size: 13px;
+}
+nav.side h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-faint); margin: 0 0 10px; font-weight: 600; }
+nav.side a { display: block; padding: 4px 8px; border-radius: 6px; color: var(--fg-muted); }
+nav.side a:hover { background: var(--tag); color: var(--fg); text-decoration: none; }
+nav.side a.sub { padding-left: 22px; font-size: 12.5px; color: var(--fg-faint); }
+nav.side a.hit { color: var(--accent); }
+
+main { flex: 1; min-width: 0; padding: 22px 0 0 30px; }
+article { max-width: 820px; }
+article h1 { font-size: 26px; line-height: 1.3; margin: 6px 0 14px; }
+article h1, article h2, article h3, article h4 { scroll-margin-top: 74px; }
+article h2 { font-size: 19px; margin: 38px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+article h3 { font-size: 16px; margin: 26px 0 8px; }
+article h4 { font-size: 15px; margin: 20px 0 6px; }
+article p { margin: 10px 0; }
+article ul.plain { margin: 8px 0; padding-left: 22px; }
+article li { margin: 4px 0; }
+article li.nested { margin-left: 20px; list-style: disc; opacity: .92; }
+blockquote { margin: 12px 0; padding: 8px 14px; border-left: 3px solid var(--accent); background: var(--tag); border-radius: 0 8px 8px 0; color: var(--fg-muted); }
+hr.sep { border: 0; border-top: 1px solid var(--line); margin: 34px 0; }
+
+code { font: 13px/1.6 "Cascadia Code", Consolas, "SF Mono", monospace; background: var(--code-bg); color: var(--code-fg); padding: 1px 5px; border-radius: 5px; }
+.code { position: relative; margin: 12px 0; }
+.code pre {
+  margin: 0; padding: 13px 14px; background: var(--code-bg); border: 1px solid var(--line);
+  border-radius: 10px; overflow: auto; font: 13px/1.65 "Cascadia Code", Consolas, "SF Mono", monospace;
+  tab-size: 2;
+}
+.code pre code { background: none; padding: 0; color: var(--code-fg); }
+.copy {
+  position: absolute; top: 7px; right: 7px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--fg-muted); border-radius: 6px;
+  padding: 3px 8px; font: inherit; font-size: 11px; cursor: pointer; opacity: 0; transition: opacity .15s;
+}
+.code:hover .copy { opacity: 1; }
+.copy.done { color: var(--accent); border-color: var(--accent); }
+
+.table-wrap { overflow-x: auto; margin: 12px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+th { background: var(--tag); font-weight: 600; }
+tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--tag) 45%, transparent); }
+img { max-width: 100%; border-radius: 8px; }
+
+footer { max-width: 820px; margin: 40px 0 0; padding-top: 18px; border-top: 1px solid var(--line); color: var(--fg-faint); font-size: 12.5px; }
+
+@media (max-width: 900px) {
+  nav.side { display: none; }
+  main { padding-left: 0; }
+  header.top { padding: 10px 16px; }
+  .search { width: 150px; }
+}
+@media print {
+  header.top, nav.side, .copy { display: none; }
+  body { background: #fff; }
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">WinWidget<span>· 组件开发指南</span></div>
+  <div class="spacer"></div>
+  <input class="search" id="search" type="search" placeholder="搜索目录…" autocomplete="off">
+  <div class="langs" id="langs">
+    <button data-lang="zh-CN" aria-pressed="false">简体</button>
+    <button data-lang="zh-TW" aria-pressed="false">繁體</button>
+    <button data-lang="en" aria-pressed="false">English</button>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="side" id="side">
+    <h2>目录</h2>
+    <div data-lang="zh-CN" hidden>
+  <a href="#十分钟写第一个组件" data-anchor="十分钟写第一个组件">十分钟写第一个组件</a>
+<a class="sub" href="#1-建立组件1-分钟" data-anchor="1-建立组件1-分钟">1. 建立组件（1 分钟）</a>
+<a class="sub" href="#2-加一个设置项1-分钟" data-anchor="2-加一个设置项1-分钟">2. 加一个设置项（1 分钟）</a>
+<a class="sub" href="#3-写画面3-分钟" data-anchor="3-写画面3-分钟">3. 写画面（3 分钟）</a>
+<a class="sub" href="#4-写逻辑3-分钟" data-anchor="4-写逻辑3-分钟">4. 写逻辑（3 分钟）</a>
+<a class="sub" href="#5-出错了怎么办1-分钟" data-anchor="5-出错了怎么办1-分钟">5. 出错了怎么办（1 分钟）</a>
+<a class="sub" href="#6-分享出去1-分钟" data-anchor="6-分享出去1-分钟">6. 分享出去（1 分钟）</a>
+  <a href="#文件夹里有什么" data-anchor="文件夹里有什么">文件夹里有什么</a>
+  <a href="#widgetjson" data-anchor="widgetjson">widget.json</a>
+<a class="sub" href="#settings设置项" data-anchor="settings设置项">settings：设置项</a>
+  <a href="#javascript-api" data-anchor="javascript-api">JavaScript API</a>
+<a class="sub" href="#基本数据" data-anchor="基本数据">基本数据</a>
+<a class="sub" href="#设置widgetsettings" data-anchor="设置widgetsettings">设置：widget.settings</a>
+<a class="sub" href="#保存数据widgetstorage" data-anchor="保存数据widgetstorage">保存数据：widget.storage</a>
+<a class="sub" href="#系统信息widgetsystem需要-system-权限" data-anchor="系统信息widgetsystem需要-system-权限">系统信息：widget.system（需要 system 权限）</a>
+<a class="sub" href="#音量widgetaudio需要-audio-权限" data-anchor="音量widgetaudio需要-audio-权限">音量：widget.audio（需要 audio 权限）</a>
+<a class="sub" href="#正在播放widgetmedia需要-media-权限" data-anchor="正在播放widgetmedia需要-media-权限">正在播放：widget.media（需要 media 权限）</a>
+<a class="sub" href="#读取用户选的文件夹widgetfiles" data-anchor="读取用户选的文件夹widgetfiles">读取用户选的文件夹：widget.files</a>
+<a class="sub" href="#连网widgetfetch需要-network-权限" data-anchor="连网widgetfetch需要-network-权限">连网：widget.fetch（需要 network: 权限）</a>
+<a class="sub" href="#打开网址widgetshellopen需要-shellopen-权限" data-anchor="打开网址widgetshellopen需要-shellopen-权限">打开网址：widget.shell.open（需要 shell.open 权限）</a>
+<a class="sub" href="#打开程序和文件widgetshelllaunch需要-shelllaunch-权限" data-anchor="打开程序和文件widgetshelllaunch需要-shelllaunch-权限">打开程序和文件：widget.shell.launch（需要 shell.launch 权限）</a>
+<a class="sub" href="#简繁转换widgetconvertchinese" data-anchor="简繁转换widgetconvertchinese">简繁转换：widget.convertChinese</a>
+<a class="sub" href="#通知widgetnotify需要-notify-权限" data-anchor="通知widgetnotify需要-notify-权限">通知：widget.notify（需要 notify 权限）</a>
+<a class="sub" href="#窗口widgetwindow" data-anchor="窗口widgetwindow">窗口：widget.window</a>
+<a class="sub" href="#外观和事件" data-anchor="外观和事件">外观和事件</a>
+  <a href="#外观跟着主题走" data-anchor="外观跟着主题走">外观：跟着主题走</a>
+<a class="sub" href="#版面" data-anchor="版面">版面</a>
+<a class="sub" href="#放大时内容跟着变大" data-anchor="放大时内容跟着变大">放大时内容跟着变大</a>
+<a class="sub" href="#css-变数" data-anchor="css-变数">CSS 变数</a>
+<a class="sub" href="#现成的样式" data-anchor="现成的样式">现成的样式</a>
+<a class="sub" href="#按主题微调" data-anchor="按主题微调">按主题微调</a>
+<a class="sub" href="#省电每秒更新的东西不要加动画" data-anchor="省电每秒更新的东西不要加动画">省电：每秒更新的东西不要加动画</a>
+  <a href="#拖动菜单和点击" data-anchor="拖动菜单和点击">拖动、菜单和点击</a>
+  <a href="#权限" data-anchor="权限">权限</a>
+  <a href="#调试" data-anchor="调试">调试</a>
+  <a href="#打包和分享" data-anchor="打包和分享">打包和分享</a>
+  <a href="#和外壳怎么对接进阶" data-anchor="和外壳怎么对接进阶">和外壳怎么对接（进阶）</a>
+<a class="sub" href="#页面是怎么被加载的" data-anchor="页面是怎么被加载的">页面是怎么被加载的</a>
+<a class="sub" href="#启动时外壳塞进来的东西" data-anchor="启动时外壳塞进来的东西">启动时外壳塞进来的东西</a>
+<a class="sub" href="#讯息协议" data-anchor="讯息协议">讯息协议</a>
+<a class="sub" href="#外壳提供的方法一览" data-anchor="外壳提供的方法一览">外壳提供的方法一览</a>
+<a class="sub" href="#内建资源" data-anchor="内建资源">内建资源</a>
+<a class="sub" href="#数据放在哪" data-anchor="数据放在哪">数据放在哪</a>
+<a class="sub" href="#城市与定位placesjs" data-anchor="城市与定位placesjs">城市与定位：places.js</a>
+  <a href="#完整-api-对照表" data-anchor="完整-api-对照表">完整 API 对照表</a>
+<a class="sub" href="#事件" data-anchor="事件">事件</a>
+<a class="sub" href="#设置值的语言折叠" data-anchor="设置值的语言折叠">设置值的语言折叠</a>
+  <a href="#三个完整例子" data-anchor="三个完整例子">三个完整例子</a>
+<a class="sub" href="#例-1把一个网络-api-的数字放上桌面" data-anchor="例-1把一个网络-api-的数字放上桌面">例 1：把一个网络 API 的数字放上桌面</a>
+<a class="sub" href="#例-2每秒更新的系统监控省电写法" data-anchor="例-2每秒更新的系统监控省电写法">例 2：每秒更新的系统监控（省电写法）</a>
+<a class="sub" href="#例-3同一个组件放两个各记各的" data-anchor="例-3同一个组件放两个各记各的">例 3：同一个组件放两个，各记各的</a>
+  <a href="#写组件的检查列表" data-anchor="写组件的检查列表">写组件的检查列表</a>
+  <a href="#常见问题" data-anchor="常见问题">常见问题</a>
+</div>
+<div data-lang="zh-TW" hidden>
+  <a href="#十分鐘寫第一個組件" data-anchor="十分鐘寫第一個組件">十分鐘寫第一個組件</a>
+<a class="sub" href="#1-建立組件1-分鐘" data-anchor="1-建立組件1-分鐘">1. 建立組件（1 分鐘）</a>
+<a class="sub" href="#2-加一個設定項1-分鐘" data-anchor="2-加一個設定項1-分鐘">2. 加一個設定項（1 分鐘）</a>
+<a class="sub" href="#3-寫畫面3-分鐘" data-anchor="3-寫畫面3-分鐘">3. 寫畫面（3 分鐘）</a>
+<a class="sub" href="#4-寫邏輯3-分鐘" data-anchor="4-寫邏輯3-分鐘">4. 寫邏輯（3 分鐘）</a>
+<a class="sub" href="#5-出錯了怎麼辦1-分鐘" data-anchor="5-出錯了怎麼辦1-分鐘">5. 出錯了怎麼辦（1 分鐘）</a>
+<a class="sub" href="#6-分享出去1-分鐘" data-anchor="6-分享出去1-分鐘">6. 分享出去（1 分鐘）</a>
+  <a href="#資料夾裏有什麼" data-anchor="資料夾裏有什麼">資料夾裏有什麼</a>
+  <a href="#widgetjson" data-anchor="widgetjson">widget.json</a>
+<a class="sub" href="#settings設定項" data-anchor="settings設定項">settings：設定項</a>
+  <a href="#javascript-api" data-anchor="javascript-api">JavaScript API</a>
+<a class="sub" href="#基本資料" data-anchor="基本資料">基本資料</a>
+<a class="sub" href="#設定widgetsettings" data-anchor="設定widgetsettings">設定：widget.settings</a>
+<a class="sub" href="#保存資料widgetstorage" data-anchor="保存資料widgetstorage">保存資料：widget.storage</a>
+<a class="sub" href="#系統資訊widgetsystem需要-system-權限" data-anchor="系統資訊widgetsystem需要-system-權限">系統資訊：widget.system（需要 system 權限）</a>
+<a class="sub" href="#音量widgetaudio需要-audio-權限" data-anchor="音量widgetaudio需要-audio-權限">音量：widget.audio（需要 audio 權限）</a>
+<a class="sub" href="#正在播放widgetmedia需要-media-權限" data-anchor="正在播放widgetmedia需要-media-權限">正在播放：widget.media（需要 media 權限）</a>
+<a class="sub" href="#讀取用戶選的資料夾widgetfiles" data-anchor="讀取用戶選的資料夾widgetfiles">讀取用戶選的資料夾：widget.files</a>
+<a class="sub" href="#連網widgetfetch需要-network-權限" data-anchor="連網widgetfetch需要-network-權限">連網：widget.fetch（需要 network: 權限）</a>
+<a class="sub" href="#打開網址widgetshellopen需要-shellopen-權限" data-anchor="打開網址widgetshellopen需要-shellopen-權限">打開網址：widget.shell.open（需要 shell.open 權限）</a>
+<a class="sub" href="#打開程式和檔案widgetshelllaunch需要-shelllaunch-權限" data-anchor="打開程式和檔案widgetshelllaunch需要-shelllaunch-權限">打開程式和檔案：widget.shell.launch（需要 shell.launch 權限）</a>
+<a class="sub" href="#簡繁轉換widgetconvertchinese" data-anchor="簡繁轉換widgetconvertchinese">簡繁轉換：widget.convertChinese</a>
+<a class="sub" href="#通知widgetnotify需要-notify-權限" data-anchor="通知widgetnotify需要-notify-權限">通知：widget.notify（需要 notify 權限）</a>
+<a class="sub" href="#視窗widgetwindow" data-anchor="視窗widgetwindow">視窗：widget.window</a>
+<a class="sub" href="#外觀和事件" data-anchor="外觀和事件">外觀和事件</a>
+  <a href="#外觀跟着主題走" data-anchor="外觀跟着主題走">外觀：跟着主題走</a>
+<a class="sub" href="#版面" data-anchor="版面">版面</a>
+<a class="sub" href="#放大時內容跟着變大" data-anchor="放大時內容跟着變大">放大時內容跟着變大</a>
+<a class="sub" href="#css-變數" data-anchor="css-變數">CSS 變數</a>
+<a class="sub" href="#現成的樣式" data-anchor="現成的樣式">現成的樣式</a>
+<a class="sub" href="#按主題微調" data-anchor="按主題微調">按主題微調</a>
+<a class="sub" href="#省電每秒更新的東西不要加動畫" data-anchor="省電每秒更新的東西不要加動畫">省電：每秒更新的東西不要加動畫</a>
+  <a href="#拖動選單和點擊" data-anchor="拖動選單和點擊">拖動、選單和點擊</a>
+  <a href="#權限" data-anchor="權限">權限</a>
+  <a href="#除錯" data-anchor="除錯">除錯</a>
+  <a href="#打包和分享" data-anchor="打包和分享">打包和分享</a>
+  <a href="#和外殼怎麼對接進階" data-anchor="和外殼怎麼對接進階">和外殼怎麼對接（進階）</a>
+<a class="sub" href="#頁面是怎麼被載入的" data-anchor="頁面是怎麼被載入的">頁面是怎麼被載入的</a>
+<a class="sub" href="#啟動時外殼塞進來的東西" data-anchor="啟動時外殼塞進來的東西">啟動時外殼塞進來的東西</a>
+<a class="sub" href="#訊息協議" data-anchor="訊息協議">訊息協議</a>
+<a class="sub" href="#外殼提供的方法一覽" data-anchor="外殼提供的方法一覽">外殼提供的方法一覽</a>
+<a class="sub" href="#內建資源" data-anchor="內建資源">內建資源</a>
+<a class="sub" href="#資料放在哪" data-anchor="資料放在哪">資料放在哪</a>
+<a class="sub" href="#城市與定位placesjs" data-anchor="城市與定位placesjs">城市與定位：places.js</a>
+  <a href="#完整-api-對照表" data-anchor="完整-api-對照表">完整 API 對照表</a>
+<a class="sub" href="#事件" data-anchor="事件">事件</a>
+<a class="sub" href="#設定值的語言折疊" data-anchor="設定值的語言折疊">設定值的語言折疊</a>
+  <a href="#三個完整例子" data-anchor="三個完整例子">三個完整例子</a>
+<a class="sub" href="#例-1把一個網路-api-的數字放上桌面" data-anchor="例-1把一個網路-api-的數字放上桌面">例 1：把一個網路 API 的數字放上桌面</a>
+<a class="sub" href="#例-2每秒更新的系統監控省電寫法" data-anchor="例-2每秒更新的系統監控省電寫法">例 2：每秒更新的系統監控（省電寫法）</a>
+<a class="sub" href="#例-3同一個組件放兩個各記各的" data-anchor="例-3同一個組件放兩個各記各的">例 3：同一個組件放兩個，各記各的</a>
+  <a href="#寫組件的檢查清單" data-anchor="寫組件的檢查清單">寫組件的檢查清單</a>
+  <a href="#常見問題" data-anchor="常見問題">常見問題</a>
+</div>
+<div data-lang="en" hidden>
+  <a href="#your-first-widget-in-ten-minutes" data-anchor="your-first-widget-in-ten-minutes">Your first widget in ten minutes</a>
+<a class="sub" href="#1-create-the-widget-1-minute" data-anchor="1-create-the-widget-1-minute">1. Create the widget (1 minute)</a>
+<a class="sub" href="#2-add-a-setting-1-minute" data-anchor="2-add-a-setting-1-minute">2. Add a setting (1 minute)</a>
+<a class="sub" href="#3-build-the-page-3-minutes" data-anchor="3-build-the-page-3-minutes">3. Build the page (3 minutes)</a>
+<a class="sub" href="#4-add-the-logic-3-minutes" data-anchor="4-add-the-logic-3-minutes">4. Add the logic (3 minutes)</a>
+<a class="sub" href="#5-when-something-breaks-1-minute" data-anchor="5-when-something-breaks-1-minute">5. When something breaks (1 minute)</a>
+<a class="sub" href="#6-share-it-1-minute" data-anchor="6-share-it-1-minute">6. Share it (1 minute)</a>
+  <a href="#whats-in-the-folder" data-anchor="whats-in-the-folder">What&#x27;s in the folder</a>
+  <a href="#widgetjson" data-anchor="widgetjson">widget.json</a>
+<a class="sub" href="#settings" data-anchor="settings">settings</a>
+  <a href="#javascript-api" data-anchor="javascript-api">JavaScript API</a>
+<a class="sub" href="#basics" data-anchor="basics">Basics</a>
+<a class="sub" href="#settings-widgetsettings" data-anchor="settings-widgetsettings">Settings: widget.settings</a>
+<a class="sub" href="#saved-data-widgetstorage" data-anchor="saved-data-widgetstorage">Saved data: widget.storage</a>
+<a class="sub" href="#system-figures-widgetsystem-needs-system" data-anchor="system-figures-widgetsystem-needs-system">System figures: widget.system (needs system)</a>
+<a class="sub" href="#volume-widgetaudio-needs-audio" data-anchor="volume-widgetaudio-needs-audio">Volume: widget.audio (needs audio)</a>
+<a class="sub" href="#now-playing-widgetmedia-needs-media" data-anchor="now-playing-widgetmedia-needs-media">Now playing: widget.media (needs media)</a>
+<a class="sub" href="#a-folder-the-user-chose-widgetfiles" data-anchor="a-folder-the-user-chose-widgetfiles">A folder the user chose: widget.files</a>
+<a class="sub" href="#network-widgetfetch-needs-network-permissions" data-anchor="network-widgetfetch-needs-network-permissions">Network: widget.fetch (needs network: permissions)</a>
+<a class="sub" href="#opening-links-widgetshellopen-needs-shellopen" data-anchor="opening-links-widgetshellopen-needs-shellopen">Opening links: widget.shell.open (needs shell.open)</a>
+<a class="sub" href="#opening-programs-and-files-widgetshelllaunch-needs-shelllaunch" data-anchor="opening-programs-and-files-widgetshelllaunch-needs-shelllaunch">Opening programs and files: widget.shell.launch (needs shell.launch)</a>
+<a class="sub" href="#simplified--traditional-chinese-widgetconvertchinese" data-anchor="simplified--traditional-chinese-widgetconvertchinese">Simplified ↔ Traditional Chinese: widget.convertChinese</a>
+<a class="sub" href="#notifications-widgetnotify-needs-notify" data-anchor="notifications-widgetnotify-needs-notify">Notifications: widget.notify (needs notify)</a>
+<a class="sub" href="#the-window-widgetwindow" data-anchor="the-window-widgetwindow">The window: widget.window</a>
+<a class="sub" href="#looks-and-events" data-anchor="looks-and-events">Looks and events</a>
+  <a href="#looks-follow-the-theme" data-anchor="looks-follow-the-theme">Looks: follow the theme</a>
+<a class="sub" href="#layout" data-anchor="layout">Layout</a>
+<a class="sub" href="#content-that-grows-with-the-card" data-anchor="content-that-grows-with-the-card">Content that grows with the card</a>
+<a class="sub" href="#css-variables" data-anchor="css-variables">CSS variables</a>
+<a class="sub" href="#ready-made-classes" data-anchor="ready-made-classes">Ready-made classes</a>
+<a class="sub" href="#per-theme-touches" data-anchor="per-theme-touches">Per-theme touches</a>
+<a class="sub" href="#saving-power-dont-animate-what-updates-every-second" data-anchor="saving-power-dont-animate-what-updates-every-second">Saving power: don&#x27;t animate what updates every second</a>
+  <a href="#dragging-menus-and-clicks" data-anchor="dragging-menus-and-clicks">Dragging, menus and clicks</a>
+  <a href="#permissions" data-anchor="permissions">Permissions</a>
+  <a href="#debugging" data-anchor="debugging">Debugging</a>
+  <a href="#packaging-and-sharing" data-anchor="packaging-and-sharing">Packaging and sharing</a>
+  <a href="#how-a-widget-talks-to-the-host-advanced" data-anchor="how-a-widget-talks-to-the-host-advanced">How a widget talks to the host (advanced)</a>
+<a class="sub" href="#how-the-page-is-opened" data-anchor="how-the-page-is-opened">How the page is opened</a>
+<a class="sub" href="#what-the-host-hands-you-at-startup" data-anchor="what-the-host-hands-you-at-startup">What the host hands you at startup</a>
+<a class="sub" href="#the-message-protocol" data-anchor="the-message-protocol">The message protocol</a>
+<a class="sub" href="#every-method-the-host-offers" data-anchor="every-method-the-host-offers">Every method the host offers</a>
+<a class="sub" href="#built-in-resources" data-anchor="built-in-resources">Built-in resources</a>
+<a class="sub" href="#where-the-data-lives" data-anchor="where-the-data-lives">Where the data lives</a>
+<a class="sub" href="#cities-and-location-placesjs" data-anchor="cities-and-location-placesjs">Cities and location: places.js</a>
+  <a href="#every-api-on-one-page" data-anchor="every-api-on-one-page">Every API on one page</a>
+<a class="sub" href="#events" data-anchor="events">Events</a>
+<a class="sub" href="#folding-of-language-objects" data-anchor="folding-of-language-objects">Folding of language objects</a>
+  <a href="#three-complete-examples" data-anchor="three-complete-examples">Three complete examples</a>
+<a class="sub" href="#1-a-number-from-a-web-api-on-the-desktop" data-anchor="1-a-number-from-a-web-api-on-the-desktop">1. A number from a web API on the desktop</a>
+<a class="sub" href="#2-system-figures-once-a-second-cheaply" data-anchor="2-system-figures-once-a-second-cheaply">2. System figures once a second, cheaply</a>
+<a class="sub" href="#3-two-copies-of-the-same-widget-separate-data" data-anchor="3-two-copies-of-the-same-widget-separate-data">3. Two copies of the same widget, separate data</a>
+  <a href="#checklist-before-you-hand-a-widget-out" data-anchor="checklist-before-you-hand-a-widget-out">Checklist before you hand a widget out</a>
+  <a href="#questions" data-anchor="questions">Questions</a>
+</div>
+  </nav>
+  <main>
+    <article data-lang="zh-CN" lang="zh-CN" hidden>
+<h1 id="winwidget-组件开发指南">WinWidget 组件开发指南</h1>
+<p>一个组件就是一个文件夹：一个 <code>widget.json</code> 说明文件，加上普通的 HTML、CSS 和 JavaScript。会写网页，就会写组件。</p>
+
+<hr class="sep">
+<h2 id="十分钟写第一个组件">十分钟写第一个组件</h2>
+<p>我们来做一个“每日一句”：每天显示一句话，按一下换下一句，句子可以在控制中心改。</p>
+<h3 id="1-建立组件1-分钟">1. 建立组件（1 分钟）</h3>
+<ul class="plain">
+<li>左键点托盘图标，打开控制中心。</li>
+<li>到控制中心“添加组件”页，按右上角的 <strong>新建组件…</strong>（窗口窄时只显示“＋”图标）。也可以右键系统托盘图标 →“添加组件”→“新建组件…”。</li>
+<li>名称输入 <code>每日一句</code>，按 <strong>建立</strong>。</li>
+</ul>
+<p>WinWidget 会：</p>
+<ul class="plain">
+<li>在组件目录建立一个文件夹（例如 <code>%AppData%\WinWidget\widgets\my-widget</code>），里面是一个能用的模板；</li>
+<li>把它放到桌面；</li>
+<li>打开 <strong>开发者模式</strong>：之后改了文件夹里的文件，一保存，桌面上的组件就会自动重新加载；</li>
+<li>用资源管理器打开这个文件夹。</li>
+</ul>
+<p>用你习惯的编辑器打开这个文件夹。推荐 <a href="https://code.visualstudio.com/">VS Code</a>：文件夹里的 <code>widget.d.ts</code> 会让它在你打 <code>widget.</code> 时列出所有可用的功能和说明。</p>
+<h3 id="2-加一个设置项1-分钟">2. 加一个设置项（1 分钟）</h3>
+<p>打开 <code>widget.json</code>，把 <code>settings</code> 整段换成：</p>
+<div class="code"><pre><code class="lang-json">&quot;settings&quot;: [
+  { &quot;key&quot;: &quot;quotes&quot;, &quot;type&quot;: &quot;textarea&quot;, &quot;label&quot;: &quot;句子（一行一句）&quot;,
+    &quot;default&quot;: &quot;慢慢来，比较快。\n今天也要好好吃饭。\n先完成，再完美。&quot; }
+]</code></pre></div>
+<p>保存。打开控制中心 →“我的组件”→ 选“每日一句”→“内容”，会看到一个多行文字框，里面是这三句话。这个表单是 WinWidget 照 <code>settings</code> 自动生成的。</p>
+<h3 id="3-写画面3-分钟">3. 写画面（3 分钟）</h3>
+<p>把 <code>index.html</code> 换成：</p>
+<div class="code"><pre><code class="lang-html">&lt;!doctype html&gt;
+&lt;html&gt;
+&lt;head&gt;
+  &lt;meta charset=&quot;utf-8&quot;&gt;
+  &lt;link rel=&quot;stylesheet&quot; href=&quot;style.css&quot;&gt;
+&lt;/head&gt;
+&lt;body&gt;
+  &lt;div class=&quot;w-label&quot; id=&quot;day&quot;&gt;&lt;/div&gt;
+  &lt;p class=&quot;quote&quot; id=&quot;quote&quot;&gt;&lt;/p&gt;
+  &lt;button class=&quot;w-btn&quot; id=&quot;next&quot;&gt;换一句&lt;/button&gt;
+  &lt;script src=&quot;main.js&quot;&gt;&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;</code></pre></div>
+<p>把 <code>style.css</code> 换成：</p>
+<div class="code"><pre><code class="lang-css">body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quote {
+  flex: 1;
+  margin: 0;
+  font-size: 1.3rem;
+  line-height: 1.5;
+}
+
+#next {
+  align-self: flex-end;
+}</code></pre></div>
+<p><code>&lt;body&gt;</code> 就是那张卡片。<code>w-label</code>、<code>w-btn</code> 是 WinWidget 自带的样式，背景、圆角、字体和颜色由主题提供，你不用写。</p>
+<h3 id="4-写逻辑3-分钟">4. 写逻辑（3 分钟）</h3>
+<p>把 <code>main.js</code> 换成：</p>
+<div class="code"><pre><code class="lang-js">const $ = (id) =&gt; document.getElementById(id);
+let quotes = [];
+let index = 0;
+
+function show() {
+  const quote = quotes.length ? quotes[index % quotes.length] : &quot;到控制中心加几句话吧&quot;;
+  $(&quot;quote&quot;).textContent = quote;
+  $(&quot;day&quot;).textContent = new Date().toLocaleDateString(widget.locale, {
+    month: &quot;long&quot;, day: &quot;numeric&quot;, weekday: &quot;long&quot;,
+  });
+}
+
+// 读设置：一行一句
+function load(settings) {
+  quotes = settings.quotes.split(&quot;\n&quot;).map((s) =&gt; s.trim()).filter(Boolean);
+  show();
+}
+
+// 每天自动换一句；按过“换一句”的话，记住今天换到哪一句
+const today = new Date().toDateString();
+widget.storage.get(&quot;pick&quot;).then((pick) =&gt; {
+  const dayNumber = Math.floor(Date.now() / 86400000);
+  index = pick &amp;&amp; pick.day === today ? pick.index : dayNumber;
+  load(widget.settings.get());
+});
+
+// 用户在控制中心改了句子，马上更新
+widget.settings.onChange(load);
+
+$(&quot;next&quot;).addEventListener(&quot;click&quot;, () =&gt; {
+  index++;
+  widget.storage.set(&quot;pick&quot;, { day: today, index });
+  show();
+});</code></pre></div>
+<p>保存，桌面上的组件马上变成新的样子。试试：</p>
+<ul class="plain">
+<li>按“换一句”；</li>
+<li>在控制中心改句子，桌面上即时更新；</li>
+<li>到“主题”换一套主题，组件的字体和颜色会跟着变；</li>
+<li>重新启动 WinWidget，今天换到的那一句还在（<code>widget.storage</code> 会一直保存）。</li>
+</ul>
+<h3 id="5-出错了怎么办1-分钟">5. 出错了怎么办（1 分钟）</h3>
+<p>开发者模式下，脚本出错时卡片底部会出现一条红色提示，写着错误和位置（例如 <code>main.js:12</code>）。点一下它就会打开开发者工具；也可以在组件上按 <strong>F12</strong>。改好保存，提示就会消失。</p>
+<h3 id="6-分享出去1-分钟">6. 分享出去（1 分钟）</h3>
+<p>控制中心 →“添加组件”→ 你的组件卡片 →“导出 .fwz”。别人双击这个 <code>.fwz</code> 文件就能安装（也可以拖到控制中心窗口上）。</p>
+<p>想让所有人都能在控制中心的“线上”里找到它，可以投稿到<a href="https://hmgvibe.github.io/fullwidget-market/">组件市场</a>：把组件文件夹放进 GitHub 上 <a href="https://github.com/hmgvibe/fullwidget-market">fullwidget-market</a> 保存库的 <code>widgets/你的账号.组件名/</code>，开一个 pull request。自动检查通过、维护者看过后就会上架，详细步骤见那里的 CONTRIBUTING.md。</p>
+<hr class="sep">
+<h2 id="文件夹里有什么">文件夹里有什么</h2>
+<div class="table-wrap"><table><thead><tr><th>文件</th><th>用途</th></tr></thead><tbody><tr><td><code>widget.json</code></td><td>说明文件：名称、尺寸、权限、设置项。<strong>必须有。</strong></td></tr><tr><td><code>index.html</code></td><td>组件的页面（可以在 <code>widget.json</code> 的 <code>entry</code> 改成别的档名）。</td></tr><tr><td><code>style.css</code>、<code>main.js</code></td><td>样式和逻辑。档名随意，在 HTML 里用相对路径引用即可。</td></tr><tr><td><code>icon.svg</code></td><td>在组件库、托盘菜单和控制中心显示的图标（建议 24×24 的 SVG）。</td></tr><tr><td><code>widget.d.ts</code>、<code>jsconfig.json</code></td><td>只给编辑器用，让它提示 <code>widget.</code> 的写法。</td></tr></tbody></table></div>
+<p>组件目录：<code>%AppData%\WinWidget\widgets\</code>。在控制中心“设置”→“组件目录”可以直接打开。把一个组件文件夹放进去，它就会出现在“添加组件”里（开发者模式下自动出现，否则按“重新扫描”）。</p>
+<p>文件请存成 <strong>UTF-8</strong>。</p>
+<hr class="sep">
+<h2 id="widgetjson">widget.json</h2>
+<p>可以写 <code>//</code> 注解，最后一项后面多一个逗号也没关系。</p>
+<div class="code"><pre><code class="lang-json">{
+  &quot;id&quot;: &quot;me.daily-quote&quot;,
+  &quot;name&quot;: { &quot;zh-TW&quot;: &quot;每日一句&quot;, &quot;zh-CN&quot;: &quot;每日一句&quot;, &quot;en&quot;: &quot;Daily Quote&quot; },
+  &quot;description&quot;: &quot;每天一句话&quot;,
+  &quot;version&quot;: &quot;1.0.0&quot;,
+  &quot;author&quot;: &quot;你的名字&quot;,
+  &quot;entry&quot;: &quot;index.html&quot;,
+  &quot;icon&quot;: &quot;icon.svg&quot;,
+  &quot;category&quot;: &quot;info&quot;,
+  &quot;size&quot;: {
+    &quot;width&quot;: 280, &quot;height&quot;: 160,
+    &quot;minWidth&quot;: 200, &quot;minHeight&quot;: 120, &quot;maxWidth&quot;: 600, &quot;maxHeight&quot;: 400,
+    &quot;resizable&quot;: true
+  },
+  &quot;layer&quot;: &quot;desktop&quot;,
+  &quot;permissions&quot;: [],
+  &quot;settings&quot;: []
+}</code></pre></div>
+<div class="table-wrap"><table><thead><tr><th>字段</th><th>必填</th><th>说明</th></tr></thead><tbody><tr><td><code>id</code></td><td>是</td><td>唯一标识。小写英文、数字和 <code>. _ -</code>，2–64 个字元，例如 <code>me.daily-quote</code>。之后不要改：保存的数据和更新都靠它。<code>winwidget.</code> 开头的留给内建组件。</td></tr><tr><td><code>name</code></td><td>建议</td><td>显示的名称。可以是文字，也可以按语言给：<code>{ &quot;zh-TW&quot;: &quot;…&quot;, &quot;en&quot;: &quot;…&quot; }</code>。</td></tr><tr><td><code>description</code></td><td></td><td>一句话介绍，显示在组件库。同样可以按语言给。</td></tr><tr><td><code>version</code></td><td>建议</td><td>版本号，例如 <code>1.2.0</code>。安装 <code>.fwz</code> 时用它判断是更新、重新安装还是旧版本。</td></tr><tr><td><code>author</code></td><td></td><td>作者。</td></tr><tr><td><code>entry</code></td><td></td><td>页面档，默认 <code>index.html</code>。</td></tr><tr><td><code>icon</code></td><td></td><td>图标档。没有的话显示名称的第一个字。</td></tr><tr><td><code>category</code></td><td></td><td>在组件库里放在哪一类：<code>time</code>（时间）、<code>weather</code>（天气）、<code>system</code>（系统）、<code>productivity</code>（效率）、<code>info</code>（信息）、<code>media</code>（媒体与装饰）。不写或写别的，放在“其他”。</td></tr><tr><td><code>preview</code></td><td></td><td>组件库卡片上的预览图，例如 <code>&quot;preview.png&quot;</code>。可以按主题和语言各放一张：<code>&quot;preview/{theme}.{lang}.webp&quot;</code>，<code>{theme}</code> 换成主题 id（<code>instrument</code>、<code>type</code>、<code>paper</code>），<code>{lang}</code> 换成 <code>zh-TW</code>、<code>zh-CN</code> 或 <code>en</code>；缺的那张会用同主题的其他语言，或其他主题代替。图片建议用透明背景的 PNG 或 WebP，宽 300 像素左右。没有的话卡片显示图标。</td></tr><tr><td><code>size</code></td><td></td><td>卡片尺寸（不含阴影），单位是像素。<code>width</code>/<code>height</code> 是第一次放上桌面的大小；<code>min*</code>/<code>max*</code> 限制用户拖动缩放的范围；<code>resizable: false</code> 不让缩放；<code>grow</code>（0–1）决定用户把卡片拉得比默认大时，内容要不要跟着放大，见<a href="#放大时内容跟着变大">放大时内容跟着变大</a>。</td></tr><tr><td><code>layer</code></td><td></td><td>第一次放上桌面时的层级：<code>desktop</code>（默认，在所有窗口下面，Win+D 也看得到）、<code>normal</code>、<code>top</code>（置顶）。用户之后可以改。</td></tr><tr><td><code>permissions</code></td><td></td><td>要用到的权限，见<a href="#权限">权限</a>。</td></tr><tr><td><code>settings</code></td><td></td><td>设置项。控制中心会照这里自动生成表单。</td></tr></tbody></table></div>
+<h3 id="settings设置项">settings：设置项</h3>
+<p>每一项：</p>
+<div class="code"><pre><code class="lang-json">{
+  &quot;key&quot;: &quot;city&quot;,
+  &quot;type&quot;: &quot;text&quot;,
+  &quot;label&quot;: &quot;城市&quot;,
+  &quot;description&quot;: &quot;留空就自动定位&quot;,
+  &quot;default&quot;: &quot;&quot;
+}</code></pre></div>
+<div class="table-wrap"><table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody><tr><td><code>key</code></td><td>程序里用的名字：<code>widget.settings.get(&quot;city&quot;)</code>。</td></tr><tr><td><code>type</code></td><td>见下表。</td></tr><tr><td><code>label</code></td><td>表单上的名称。可以按语言给。</td></tr><tr><td><code>description</code></td><td>名称下面的一行小字说明。</td></tr><tr><td><code>default</code></td><td>默认值。任何类型都可以按语言给，例如 <code>{ &quot;zh-TW&quot;: &quot;google&quot;, &quot;zh-CN&quot;: &quot;baidu&quot;, &quot;en&quot;: &quot;google&quot; }</code>。</td></tr><tr><td><code>placeholder</code></td><td>输入框里的提示文字。</td></tr><tr><td><code>min</code> <code>max</code> <code>step</code></td><td><code>number</code> 和 <code>slider</code> 用。</td></tr><tr><td><code>options</code></td><td><code>select</code> 用：<code>[{ &quot;value&quot;: &quot;c&quot;, &quot;label&quot;: &quot;摄氏&quot; }, { &quot;value&quot;: &quot;f&quot;, &quot;label&quot;: &quot;华氏&quot; }]</code>。</td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>type</th><th>表单</th><th>值</th></tr></thead><tbody><tr><td><code>toggle</code></td><td>开关</td><td><code>true</code> / <code>false</code></td></tr><tr><td><code>text</code></td><td>单行文字</td><td>字串</td></tr><tr><td><code>textarea</code></td><td>多行文字</td><td>字串（换行是 <code>\n</code>）</td></tr><tr><td><code>number</code></td><td>数字框</td><td>数字</td></tr><tr><td><code>slider</code></td><td>滑块</td><td>数字</td></tr><tr><td><code>select</code></td><td>下拉菜单（三个以内的短选项会显示成分段按钮）</td><td>选项的 <code>value</code></td></tr><tr><td><code>color</code></td><td>颜色</td><td><code>&quot;#rrggbb&quot;</code></td></tr><tr><td><code>font</code></td><td>字体（可从系统字体中选）</td><td>字体名称；用户清空时是 <code>null</code>（通常就用主题的字体）</td></tr><tr><td><code>date</code></td><td>日期</td><td><code>&quot;2026-12-31&quot;</code></td></tr><tr><td><code>folder</code></td><td>文件夹（显示路径和“选择…”按钮）</td><td>完整路径；默认值可以写环境变数，例如 <code>&quot;%USERPROFILE%\\Pictures&quot;</code>。见 [<code>widget.files</code>](#读取用户选的文件夹widgetfiles)</td></tr></tbody></table></div>
+<hr class="sep">
+<h2 id="javascript-api">JavaScript API</h2>
+<p>WinWidget 会在你的脚本执行前准备好全局的 <code>widget</code>，不用 import。完整的型别和说明在 <code>widget.d.ts</code>。</p>
+<p>需要等待的功能（读写数据、连网等）都回传 Promise，可以用 <code>await</code>。</p>
+<h3 id="基本数据">基本数据</h3>
+<div class="code"><pre><code class="lang-js">widget.id          // &quot;me.daily-quote&quot;
+widget.instanceId  // 桌面上这一个的标识（同一个组件可以放几个）
+widget.locale      // 用户的语言，例如 &quot;zh-TW&quot;，格式化日期和数字用
+widget.theme       // 目前的主题：&quot;instrument&quot;、&quot;type&quot;、&quot;paper&quot;
+widget.developer   // 是否在开发者模式
+widget.permissions // 现在能用的权限
+
+// 按用户的语言挑文字
+widget.t({ &quot;zh-TW&quot;: &quot;早安&quot;, &quot;zh-CN&quot;: &quot;早安&quot;, en: &quot;Good morning&quot; })</code></pre></div>
+<h3 id="设置widgetsettings">设置：<code>widget.settings</code></h3>
+<div class="code"><pre><code class="lang-js">// 读设置：同步的，不用 await
+const all = widget.settings.get();         // { quotes: &quot;…&quot;, … }
+const one = widget.settings.get(&quot;quotes&quot;);
+
+// 用户在控制中心改了设置
+widget.settings.onChange((all) =&gt; { /* … */ });
+
+// 程序也可以改，控制中心会同步显示
+await widget.settings.set(&quot;quotes&quot;, &quot;…&quot;);</code></pre></div>
+<h3 id="保存数据widgetstorage">保存数据：<code>widget.storage</code></h3>
+<p>保存的东西重开电脑也在；用户移除这个组件时一起删除。桌面上每一个组件各有自己的一份。上限每个 2 MB。</p>
+<div class="code"><pre><code class="lang-js">// 可以存任何 JSON 数据
+await widget.storage.set(&quot;todo&quot;, [{ text: &quot;买牛奶&quot;, done: false }]);
+
+// 没存过的是 null
+const todo = (await widget.storage.get(&quot;todo&quot;)) || [];
+
+await widget.storage.remove(&quot;todo&quot;);
+const keys = await widget.storage.keys();</code></pre></div>
+<h3 id="系统信息widgetsystem需要-system-权限">系统信息：<code>widget.system</code>（需要 <code>system</code> 权限）</h3>
+<div class="code"><pre><code class="lang-js">const stop = widget.system.subscribe([&quot;cpu&quot;, &quot;memory&quot;], (d) =&gt; {
+  cpu.textContent = Math.round(d.cpu.usage) + &quot;%&quot;;
+  mem.textContent = Math.round(d.memory.usage) + &quot;%&quot;;
+}, { interval: 2000 });  // 每 2 秒一次，默认 1 秒；第一笔会马上到
+
+stop(); // 不需要时停止</code></pre></div>
+<div class="table-wrap"><table><thead><tr><th>主题</th><th>内容</th></tr></thead><tbody><tr><td><code>cpu</code></td><td><code>usage</code>（%）、<code>cores</code></td></tr><tr><td><code>memory</code></td><td><code>usage</code>（%）、<code>total</code>、<code>used</code>、<code>available</code>（字节）</td></tr><tr><td><code>network</code></td><td><code>down</code>、<code>up</code>（每秒字节）、<code>totalDown</code>、<code>totalUp</code></td></tr><tr><td><code>disk</code></td><td>每个磁盘一项（含随身碟）：<code>name</code>（&quot;C:&quot;）、<code>label</code>、<code>type</code>（<code>fixed</code> / <code>removable</code>）、<code>total</code>、<code>free</code>、<code>usage</code>（%）</td></tr><tr><td><code>battery</code></td><td><code>present</code>、<code>percent</code>、<code>charging</code>、<code>pluggedIn</code>、<code>secondsLeft</code>、<code>saver</code>（省电模式）</td></tr></tbody></table></div>
+<p>多个组件订阅同一个数据时，WinWidget 只取样一次，不会多耗资源。</p>
+<p>不常变的数据用一次性的呼叫：</p>
+<div class="code"><pre><code class="lang-js">const pc = await widget.system.info();
+// pc.os.name &quot;Windows 11 Pro&quot;、pc.os.version &quot;25H2&quot;、pc.cpu.name、pc.memory.installed（字节）、
+// pc.gpus（显卡名称）、pc.computer（电脑名称）、pc.uptime（已开机的毫秒数）
+
+const net = await widget.system.adapters();
+// net.online；net.adapters[0] 是连上网络的那个：name &quot;Wi-Fi&quot;、type &quot;wifi&quot;、ipv4、gateways、dns
+
+const r = await widget.system.ping(&quot;1.1.1.1&quot;);   // { ok, ms, status }；每个组件每秒最多一次</code></pre></div>
+<h3 id="音量widgetaudio需要-audio-权限">音量：<code>widget.audio</code>（需要 <code>audio</code> 权限）</h3>
+<div class="code"><pre><code class="lang-js">const stop = widget.audio.onChange((a) =&gt; {
+  // a.volume 0–100、a.muted、a.device（&quot;喇叭 (Realtek Audio)&quot;）
+  // 按键盘的音量键、工作列调音量、换成耳机时都会马上通知
+});
+await widget.audio.set({ volume: 40 });
+await widget.audio.set({ muted: true });</code></pre></div>
+<h3 id="正在播放widgetmedia需要-media-权限">正在播放：<code>widget.media</code>（需要 <code>media</code> 权限）</h3>
+<p>读取 Windows 媒体控制里正在播放的内容（Spotify、浏览器、媒体播放器……，和音量面板上看到的一样），并控制它：</p>
+<div class="code"><pre><code class="lang-js">widget.media.onChange((m) =&gt; {
+  if (!m.available) return;          // 没有程序在播放
+  // m.title、m.artist、m.album、m.app.name（&quot;Spotify&quot;）、m.app.icon
+  // m.playing、m.position、m.duration（毫秒）、m.cover（封面图片的网址，可直接放进 &lt;img&gt;）
+  // m.can.next、m.can.previous、m.can.seek：那个程序现在接受哪些按钮
+});
+const now = widget.media.position(m);   // 现在播到哪里（播放中会自己往前走）
+await widget.media.toggle();            // 播放 / 暂停；也有 play()、pause()、next()、previous()
+await widget.media.seek(60000);         // 跳到 1:00
+// 目前这首歌的时间轴歌词，在网易云音乐、QQ 音乐、酷狗上查找
+const { title, lyrics } = await widget.media.lyrics();
+if (lyrics.found) lyrics.lines;         // [{ t: 毫秒, text, tr?: 翻译 }]，按时间排好</code></pre></div>
+<p>Windows 有变化时会马上通知（换歌、暂停、换了一个程序在播放），不用自己轮询。</p>
+<h3 id="读取用户选的文件夹widgetfiles">读取用户选的文件夹：<code>widget.files</code></h3>
+<p>在设置项里放一个 <code>folder</code> 类型的设置，用户选了文件夹，组件就能读取里面的图片。<strong>选文件夹本身就是允许</strong>，不用在 <code>permissions</code> 声明：</p>
+<div class="code"><pre><code class="lang-json">{ &quot;key&quot;: &quot;folder&quot;, &quot;type&quot;: &quot;folder&quot;, &quot;label&quot;: &quot;照片文件夹&quot;, &quot;default&quot;: &quot;%USERPROFILE%\\Pictures&quot; }</code></pre></div>
+<div class="code"><pre><code class="lang-js">const { files } = await widget.files.list(&quot;folder&quot;, { recursive: true });
+// files: [{ path: &quot;2025/海边.jpg&quot;, name: &quot;海边&quot;, size, modified, url }]
+img.src = widget.files.url(files[0], { width: 800 });   // Windows 做的缩小版，大照片也很快、很省内存
+const { taken } = await widget.files.info(&quot;folder&quot;, files[0]);  // 拍摄时间（相机记录的），没有时是 null
+await widget.files.pick(&quot;folder&quot;);      // 在组件里直接打开选文件夹的窗口，选好后存进设置</code></pre></div>
+<ul class="plain">
+<li>只能读那个文件夹（和里面的子文件夹）里的图片：jpg、png、gif、webp、bmp、avif、heic、tif，最多 5000 张。</li>
+<li>别人写的组件，<code>default</code> 里写的文件夹不算数，要等用户自己选过才能读。内建组件和自己写的组件可以用默认值。</li>
+<li>文件夹的设置值里可以写环境变数，例如 <code>%USERPROFILE%</code>。</li>
+</ul>
+<h3 id="连网widgetfetch需要-network-权限">连网：<code>widget.fetch</code>（需要 <code>network:</code> 权限）</h3>
+<p>和浏览器的 <code>fetch</code> 很像，但由 WinWidget 代为发送，所以不受 CORS 限制：</p>
+<div class="code"><pre><code class="lang-js">const r = await widget.fetch(
+  &quot;https://api.open-meteo.com/v1/forecast?latitude=25&amp;longitude=121&amp;current=temperature_2m&quot;
+);
+if (r.ok) {
+  const data = await r.json();
+}
+
+await widget.fetch(&quot;https://example.com/api&quot;, {
+  method: &quot;POST&quot;,
+  headers: { &quot;content-type&quot;: &quot;application/json&quot; },
+  body: { hello: &quot;world&quot; },   // 物件会自动转成 JSON
+});</code></pre></div>
+<p>回应有 <code>ok</code>、<code>status</code>、<code>statusText</code>、<code>url</code>、<code>headers</code>、<code>body</code>（文字）、<code>text()</code>、<code>json()</code>。图片等二进制内容用 <code>{ as: &quot;base64&quot; }</code>，<code>body</code> 就是 base64 文字。每次最多 8 MB，会自动跟随转址（每一跳都要在权限内）。</p>
+<h3 id="打开网址widgetshellopen需要-shellopen-权限">打开网址：<code>widget.shell.open</code>（需要 <code>shell.open</code> 权限）</h3>
+<div class="code"><pre><code class="lang-js">// 用默认浏览器打开；也接受 mailto:
+widget.shell.open(&quot;https://example.com&quot;);</code></pre></div>
+<p>组件页面本身不能跳转到别的网址，也不能开新窗口；要打开网页请用这个。</p>
+<h3 id="打开程序和文件widgetshelllaunch需要-shelllaunch-权限">打开程序和文件：<code>widget.shell.launch</code>（需要 <code>shell.launch</code> 权限）</h3>
+<div class="code"><pre><code class="lang-js">await widget.shell.launch(&quot;C:\\Windows\\notepad.exe&quot;);    // 程序、捷径、文件夹、文件都可以；不能带参数
+
+const path = await widget.shell.pick({ type: &quot;file&quot;, filter: &quot;programs&quot; }); // 让用户选；取消时是 null
+const info = await widget.shell.info(path);  // { name: &quot;记事本&quot;, kind: &quot;app&quot;, icon: &quot;data:image/png;…&quot; }
+
+// 文件拖到组件上时取得完整路径
+document.addEventListener(&quot;dragover&quot;, (e) =&gt; e.preventDefault());
+document.addEventListener(&quot;drop&quot;, async (e) =&gt; {
+  e.preventDefault();
+  const paths = await widget.shell.paths(e.dataTransfer.files);
+});</code></pre></div>
+<p><code>pick</code> 的 <code>type</code> 可以是 <code>file</code> 或 <code>folder</code>，<code>filter</code> 可以是 <code>programs</code>、<code>images</code> 或 <code>all</code>。</p>
+<h3 id="简繁转换widgetconvertchinese">简繁转换：<code>widget.convertChinese</code></h3>
+<div class="code"><pre><code class="lang-js">await widget.convertChinese(&quot;北极熊和幼崽&quot;, &quot;traditional&quot;);  // &quot;北极熊和幼崽&quot;</code></pre></div>
+<p>用 Windows 内建的字表逐字转换，适合短句（例如网上取得的简体标题），不处理“软件 / 软件”这类用词差异。不需要权限。</p>
+<h3 id="通知widgetnotify需要-notify-权限">通知：<code>widget.notify</code>（需要 <code>notify</code> 权限）</h3>
+<div class="code"><pre><code class="lang-js">// 马上弹出一则 Windows 通知（标题默认是组件名称）
+widget.notify(&quot;下载完成&quot;);
+
+// 预约在某个时间；同一个 tag 的新预约会取代旧的
+widget.notify({ title: &quot;番茄钟&quot;, body: &quot;休息一下&quot;, at: Date.now() + 25 * 60 * 1000, tag: &quot;end&quot; });
+
+widget.notify.cancel(&quot;end&quot;); // 取消这个预约；不给 tag 就取消这个组件的全部预约</code></pre></div>
+<p>预约由 WinWidget 计时，所以就算组件因为全屏幕或“隐藏全部组件”暂停了，通知也会准时出现。最多预约 7 天以内、每个组件 20 则；电脑睡眠醒来时，迟了超过 15 分钟的预约不再显示。</p>
+<h3 id="窗口widgetwindow">窗口：<code>widget.window</code></h3>
+<div class="code"><pre><code class="lang-js">const { width, height } = await widget.window.getSize();
+await widget.window.setSize(320, 200);   // 会被限制在 size 的 min/max 之内</code></pre></div>
+<h3 id="外观和事件">外观和事件</h3>
+<div class="code"><pre><code class="lang-js">// 目前的主题和外观值
+widget.appearance.get();
+
+// 换主题或改外观时（CSS 变数已经更新好了）
+widget.appearance.onChange((a) =&gt; {});
+
+// 锁定、层级、鼠标穿透改变时：{ locked, layer, clickThrough }
+widget.on(&quot;state&quot;, (s) =&gt; {});
+
+// 被快捷键叫出来时（目前是便签和待办列表的快捷键，叫出 winwidget.notes、winwidget.todo）：把游标放进主要的输入框
+widget.on(&quot;summon&quot;, () =&gt; {});
+
+// 写进 WinWidget 的日志
+widget.log(&quot;讯息&quot;, { any: &quot;data&quot; });</code></pre></div>
+<hr class="sep">
+<h2 id="外观跟着主题走">外观：跟着主题走</h2>
+<p>WinWidget 有几套主题，用户也能在控制中心调整背景、文字颜色、强调色、字体、字号、圆角、内边距和透明度。只要你的组件用下面这些变数和样式，这一切都会自动生效。</p>
+<h3 id="版面">版面</h3>
+<ul class="plain">
+<li><code>&lt;body&gt;</code> 就是卡片：背景、圆角、边框、内边距都已经设好。内容直接放进 <code>&lt;body&gt;</code>。</li>
+<li><code>&lt;html&gt;</code> 是透明的窗口，四周留了给阴影的空白，不要给它加背景。</li>
+<li>字号用 <code>rem</code>：用户调“字号”时，<code>1rem</code> 会跟着变（默认 14px）。</li>
+<li>卡片可能被缩放。用 flex/grid 排版；要按大小调整，可以在 <code>body</code> 上设 <code>container-type: size</code>，再用 <code>@container (max-height: 100px) { … }</code>。注意 <code>@container</code> 只能改 <code>body</code> 里面的元素，改不了 <code>body</code> 本身。</li>
+</ul>
+<h3 id="放大时内容跟着变大">放大时内容跟着变大</h3>
+<p>在 <code>widget.json</code> 的 <code>size</code> 加上 <code>&quot;grow&quot;: 1</code>，用户把卡片拉得比默认大时，整张卡片的内容会一起放大，字、图标、间距都按比例变大，不会只是多出空白：</p>
+<div class="code"><pre><code class="lang-json">&quot;size&quot;: { &quot;width&quot;: 260, &quot;height&quot;: 150, &quot;minWidth&quot;: 180, &quot;minHeight&quot;: 110, &quot;grow&quot;: 1 }</code></pre></div>
+<ul class="plain">
+<li>放大的倍数是“宽放大几倍”和“高放大几倍”中较小的那个，最多 3 倍。例如拉到两倍宽、1.3 倍高，内容放大 1.3 倍，多出来的宽度交给你的排版。</li>
+<li>比默认小时不会缩小，小尺寸要靠你自己的排版（上面的 <code>@container</code>）。</li>
+<li><code>grow</code> 可以是 0 到 1 之间：列表类的组件写 <code>0.5</code>，拉大时字变大一点，同时多显示几项。</li>
+<li>不写或写 <code>0</code>：和以前一样，只是多出空间。</li>
+<li>卡片的圆角、边框和阴影不会跟着放大。目前的倍数在 CSS 变数 <code>--w-size-scale</code>。</li>
+</ul>
+<h3 id="css-变数">CSS 变数</h3>
+<div class="table-wrap"><table><thead><tr><th>变数</th><th>用途</th></tr></thead><tbody><tr><td><code>--w-fg</code></td><td>主要文字颜色</td></tr><tr><td><code>--w-fg-muted</code></td><td>次要文字（标签、说明）</td></tr><tr><td><code>--w-fg-faint</code></td><td>很淡的文字、分隔</td></tr><tr><td><code>--w-accent</code></td><td>强调色：进度、选中、重点数字</td></tr><tr><td><code>--w-on-accent</code></td><td>放在强调色上面的文字</td></tr><tr><td><code>--w-warn</code> <code>--w-danger</code></td><td>警告、危险</td></tr><tr><td><code>--w-bg</code></td><td>卡片背景（已用在 body 上）</td></tr><tr><td><code>--w-bg-solid</code></td><td>卡片的颜色，但不透明：用在要挡住后面内容的地方，例如弹出的列表</td></tr><tr><td><code>--w-border</code> <code>--w-rule</code></td><td>边框、分隔线</td></tr><tr><td><code>--w-track</code></td><td>进度条的底</td></tr><tr><td><code>--w-control-bg</code> <code>--w-hover</code></td><td>输入框底色、滑过时的底色</td></tr><tr><td><code>--w-font</code></td><td>内文字体</td></tr><tr><td><code>--w-font-num</code></td><td>数字的字体</td></tr><tr><td><code>--w-font-display</code></td><td>组件里那个最大的数字（时间、温度）的字体</td></tr><tr><td><code>--w-font-title</code></td><td>标题字体</td></tr><tr><td><code>--w-radius</code> <code>--w-padding</code></td><td>卡片圆角、内边距</td></tr></tbody></table></div>
+<h3 id="现成的样式">现成的样式</h3>
+<div class="table-wrap"><table><thead><tr><th>class</th><th>用途</th></tr></thead><tbody><tr><td><code>w-label</code></td><td>小号、次要颜色的标签文字</td></tr><tr><td><code>w-title</code></td><td>标题</td></tr><tr><td><code>w-num</code></td><td>数字（等宽、主题的数字字体）</td></tr><tr><td><code>w-display</code></td><td>最大的那个数字</td></tr><tr><td><code>w-rule</code></td><td>分隔线（用在 <code>&lt;hr&gt;</code> 或 <code>&lt;div&gt;</code>）</td></tr><tr><td><code>w-bar</code></td><td>进度条：<code>&lt;div class=&quot;w-bar&quot;&gt;&lt;i style=&quot;width:40%&quot;&gt;&lt;/i&gt;&lt;/div&gt;</code>；加 <code>is-warn</code> 变成警告色</td></tr><tr><td><code>w-input</code></td><td>输入框</td></tr><tr><td><code>w-btn</code></td><td>按钮；加 <code>is-primary</code> 变成强调色按钮</td></tr><tr><td><code>w-check</code></td><td>圆形勾选框：<code>&lt;button class=&quot;w-check&quot; aria-pressed=&quot;true&quot;&gt;</code></td></tr></tbody></table></div>
+<h3 id="按主题微调">按主题微调</h3>
+<p><code>&lt;html&gt;</code> 上有这些属性，可以写专门的样式：</p>
+<div class="code"><pre><code class="lang-css">/* 某一套主题 */
+html[data-theme=&quot;paper&quot;] .quote { font-style: italic; }
+
+/* 用户选了毛玻璃卡片 */
+html[data-style=&quot;frosted&quot;] .quote { letter-spacing: 0.02em; }
+
+/* 组件被锁定时 */
+html[data-locked=&quot;true&quot;] #next { display: none; }</code></pre></div>
+<p>用户也可以在控制中心“外观 → 自订 CSS”给单一组件加样式，它会排在你的 CSS 之后。</p>
+<h3 id="省电每秒更新的东西不要加动画">省电：每秒更新的东西不要加动画</h3>
+<p>组件整天开着，每一帧画面都要算。每秒更新一次的数字或进度条，如果加了 0.5 秒的 <code>transition</code>，画面就几乎一直在动，一个组件可以吃掉 20% 的处理器核心；不加的话只要 1%。</p>
+<ul class="plain">
+<li>每秒或更频繁更新的元素，不要 <code>transition</code> 和 <code>animation</code>。<code>w-bar</code> 默认有 0.5 秒的宽度动画，每秒更新时写 <code>.w-bar &gt; i { transition: none; }</code>。</li>
+<li>不要 <code>animation: … infinite</code>；要闪烁提示，给一个次数（例如 <code>8</code>）。</li>
+<li>指针、转盘这类要转的东西，放在独立的元素上用 CSS <code>transform</code> 转，不要每秒重画整个 SVG。</li>
+<li>每分钟才变的东西，就每分钟才更新（<code>setTimeout</code> 对准下一分钟）。</li>
+</ul>
+<hr class="sep">
+<h2 id="拖动菜单和点击">拖动、菜单和点击</h2>
+<p>WinWidget 已经帮你处理好：</p>
+<ul class="plain">
+<li><strong>拖动</strong>：在卡片任何地方按住拖动，就能移动组件。按钮、链接、输入框不会触发拖动；其他元素不想被拖动时，加上 <code>data-no-drag</code>。</li>
+<li><strong>右键</strong>：显示 WinWidget 的组件菜单。某个区域要自己处理右键时，加上 <code>data-no-menu</code>。</li>
+<li><strong>缩放</strong>：<code>size.resizable</code> 不是 <code>false</code> 时，右下角会有缩放手把。</li>
+<li><strong>锁定</strong>：用户锁定组件后不能拖动和缩放；你可以用 <code>widget.locked</code> 和 <code>html[data-locked]</code> 知道。</li>
+</ul>
+<hr class="sep">
+<h2 id="权限">权限</h2>
+<p>组件默认只能显示自己的内容：不能连网、读不到系统信息、也碰不到你电脑上的文件。要用到这些，在 <code>widget.json</code> 的 <code>permissions</code> 里声明：</p>
+<div class="table-wrap"><table><thead><tr><th>权限</th><th>允许</th></tr></thead><tbody><tr><td><code>system</code></td><td><code>widget.system</code>：处理器、内存、网速、磁盘、电池</td></tr><tr><td><code>network:api.example.com</code></td><td>连到这个网站</td></tr><tr><td><code>network:*.example.com</code></td><td>连到 example.com 和它所有的子网域</td></tr><tr><td><code>network:*</code></td><td>连到任何网站（用户安装时会看到明显的提示，能不用就不用）</td></tr><tr><td><code>shell.open</code></td><td><code>widget.shell.open</code>：用浏览器打开网址</td></tr><tr><td><code>notify</code></td><td><code>widget.notify</code>：显示 Windows 通知</td></tr><tr><td><code>audio</code></td><td><code>widget.audio</code>：读取和调整系统音量、静音</td></tr><tr><td><code>media</code></td><td><code>widget.media</code>：读取正在播放的歌名、封面，播放、暂停、切换曲目</td></tr><tr><td><code>shell.launch</code></td><td><code>widget.shell.launch</code>、<code>pick</code>、<code>info</code>、<code>paths</code>：打开程序和文件、选文件、读取名称和图标（用户允许时会看到明显的提示）</td></tr></tbody></table></div>
+<p>读取文件夹不用声明权限：用户在设置里选了哪个文件夹，组件就只能读那个文件夹里的图片，见 [<code>widget.files</code>](#读取用户选的文件夹widgetfiles)。</p>
+<p><strong>谁来允许：</strong></p>
+<ul class="plain">
+<li>用“新建组件”建立的组件是你自己写的，声明的权限直接生效。</li>
+<li>别人的组件，安装时会列出它要的权限，用户按“安装”才算允许。更新后多要了权限，用户要再允许一次，在那之前新权限用不了。</li>
+<li>把别人的组件文件夹直接放进组件目录的话，第一次放上桌面时会先请用户允许。</li>
+</ul>
+<p><strong>连网的规则：</strong> 不只 <code>widget.fetch</code>，页面里直接加载的图片、字体、脚本、<code>fetch()</code> 和 WebSocket 也只能连到允许的网站。差别是：直接 <code>fetch()</code> 要对方网站支持 CORS，<code>widget.fetch</code> 不用。</p>
+<hr class="sep">
+<h2 id="调试">调试</h2>
+<p>在控制中心“设置”打开 <strong>开发者模式</strong>（用“新建组件”时会自动打开）。打开后：</p>
+<ul class="plain">
+<li><strong>保存即重新加载</strong>：组件文件夹里任何文件保存后，用到它的组件会自动重新加载；改了 <code>widget.json</code>，新的尺寸和设置项也会立即生效。</li>
+<li><strong>错误提示</strong>：脚本出错时，卡片底部会显示错误和位置，点一下打开开发者工具。</li>
+<li><strong>开发者工具</strong>：在组件上按 F12，或控制中心“我的组件 → 位置与行为 → 开发者工具”。F5 重新加载。</li>
+<li><strong>日志</strong>：<code>widget.log()</code> 的内容和组件的错误，都写在 <code>%LocalAppData%\WinWidget\logs\app.log</code>。</li>
+<li><strong>没有加载的组件</strong>：<code>widget.json</code> 写错（例如少了逗号、id 不合规则、找不到入口档），“添加组件”页顶部会列出是哪个文件夹、哪一行、什么问题。</li>
+</ul>
+<p><strong>命令列</strong>（在终端机执行，作用在正在运行的 WinWidget 上）：</p>
+<div class="code"><pre><code class="lang-bat">WinWidget.exe --cmd=&quot;reload me.daily-quote&quot;
+WinWidget.exe --cmd=&quot;devtools me.daily-quote&quot;
+WinWidget.exe --cmd=&quot;add me.daily-quote&quot;
+WinWidget.exe --cmd=&quot;rescan&quot;
+WinWidget.exe --cmd=&quot;export me.daily-quote D:\out\daily-quote.fwz&quot;
+WinWidget.exe D:\downloads\daily-quote.fwz</code></pre></div>
+<p><code>reload</code>、<code>devtools</code> 也可以用桌面上某一个的标识（控制中心“位置与行为”里的“标识”）。</p>
+<hr class="sep">
+<h2 id="打包和分享">打包和分享</h2>
+<p><code>.fwz</code> 就是把组件文件夹压成 zip、改了副档名。</p>
+<ul class="plain">
+<li><strong>导出</strong>：控制中心“添加组件”→ 你的组件卡片 →“导出 .fwz”。隐藏的文件和文件夹（例如 <code>.git</code>）以及 <code>node_modules</code> 不会被打包。</li>
+<li><strong>安装</strong>：双击 <code>.fwz</code> 文件、把它拖到控制中心窗口上，或在“添加组件”按“安装 .fwz 文件…”。安装前会显示名称、作者、版本和需要的权限。</li>
+<li><strong>更新</strong>：改大 <code>version</code> 再导出。<code>id</code> 相同的组件会被替换，桌面上的组件、设置和保存的数据都会保留；旧版本移到资源回收筒。</li>
+<li><strong>用框架写</strong>：React、Vue、Svelte 都可以，只要输出静态文件。把建置结果（例如 <code>dist/</code>）和 <code>widget.json</code> 放在一起，<code>entry</code> 指向它的 <code>index.html</code>；资源路径要用相对路径（例如 Vite 设 <code>base: &quot;./&quot;</code>）。</li>
+<li><strong>大小限制</strong>：<code>.fwz</code> 最大 64 MB，解压后最多 256 MB、5000 个文件。</li>
+</ul>
+<hr class="sep">
+<h2 id="和外壳怎么对接进阶">和外壳怎么对接（进阶）</h2>
+<p>前面几章的写法已经能做出完整的组件。这一章写给想知道“它到底怎么跑起来”的人：页面从哪来、外壳塞了什么进来、有哪些讯息、数据放在哪。看清楚这些，调试和做进阶功能都会快很多。</p>
+<h3 id="页面是怎么被加载的">页面是怎么被加载的</h3>
+<p>WinWidget 不是用 <code>file://</code> 打开你的 <code>index.html</code>，而是启动一个只绑定 <code>127.0.0.1</code> 的小型 HTTP 服务，页面由它提供：</p>
+<div class="code"><pre><code>http://127.0.0.1:&lt;端口&gt;/__fw/&lt;组件 id&gt;/index.html</code></pre></div>
+<ul class="plain">
+<li><strong>端口每次启动都可能不同</strong>，所以永远写相对路径（<code>style.css</code>、<code>main.js</code>、<code>img/a.png</code>），不要写死 <code>127.0.0.1:8800</code>。</li>
+<li>每一种组件有自己的 origin：<code>&lt;组件id&gt;.widgets.localhost</code>。<code>localStorage</code>、<code>IndexedDB</code>、<code>Cache</code> 都按 origin 隔离，同一种组件的多个实例共用这一份。</li>
+<li>页面不能自行跳转到别的网址，也不能开新窗口；要开网页请用 <code>widget.shell.open</code>。</li>
+<li>页面里加载的图片、字体、脚本，同样受 <code>permissions</code> 的 <code>network:</code> 限制。</li>
+</ul>
+<h3 id="启动时外壳塞进来的东西">启动时外壳塞进来的东西</h3>
+<p>在你的任何脚本执行之前，外壳会把这些放在 <code>window.__FW_BOOT__</code>：</p>
+<div class="table-wrap"><table><thead><tr><th>字段</th><th>内容</th></tr></thead><tbody><tr><td><code>settings</code></td><td>这个实例的全部设置值（已按语言折叠，见下）</td></tr><tr><td><code>appearance</code></td><td>目前外观：<code>theme</code>、<code>style</code>、<code>shadow</code>、<code>themeCss</code>、<code>themeHref</code>、<code>userCss</code> 等</td></tr><tr><td><code>locked</code></td><td>是否被用户锁定</td></tr><tr><td><code>layer</code></td><td>目前的层级：<code>desktop</code> / <code>normal</code> / <code>top</code></td></tr><tr><td><code>clickThrough</code></td><td>是否开着鼠标穿透</td></tr><tr><td><code>state</code></td><td><code>{ edit, label }</code>：排列模式、卡片上那个名称标签</td></tr><tr><td><code>developer</code></td><td>是否在开发者模式</td></tr><tr><td><code>locale</code></td><td>用户语言，例如 <code>zh-TW</code></td></tr><tr><td><code>permissions</code></td><td>现在真的能用的权限（已声明且用户已允许的）</td></tr><tr><td><code>hostVersion</code></td><td>WinWidget 版本，例如 <code>1.0.0</code></td></tr><tr><td><code>widgetId</code> / <code>instanceId</code></td><td>组件 id、桌面上这一个的标识</td></tr><tr><td><code>size</code></td><td><code>{ width, height, grow }</code>，<code>width</code>/<code>height</code> 是默认尺寸</td></tr><tr><td><code>resizable</code></td><td>是否允许缩放</td></tr></tbody></table></div>
+<p><code>widget-sdk.js</code> 读完这一份才建立 <code>window.widget</code>，所以你在 <code>main.js</code> 第一行就能用 <code>widget</code>。</p>
+<h3 id="讯息协议">讯息协议</h3>
+<p><code>widget.*</code> 的每一个方法，最后都是一则讯息。想不通某个行为时，直接在开发者工具里看讯息最有效：</p>
+<div class="code"><pre><code class="lang-js">// 呼叫：{ id, m, p }；外壳回：{ id, r } 或 { id, e: &quot;错误讯息&quot; }
+chrome.webview.postMessage(JSON.stringify({ id: 7, m: &quot;storage.get&quot;, p: { key: &quot;todo&quot; } }));
+
+// 不需要回应的（拖动、开菜单）：{ m, p }
+chrome.webview.postMessage(JSON.stringify({ m: &quot;window.menu&quot; }));
+
+// 外壳主动推：{ ev: &quot;settings&quot; | &quot;appearance&quot; | &quot;state&quot; | &quot;system&quot; | &quot;audio&quot; | &quot;media&quot; | &quot;identify&quot;, d: … }
+chrome.webview.addEventListener(&quot;message&quot;, (e) =&gt; console.log(e.data));</code></pre></div>
+<p>日常用 SDK 就好，这一层是给你排查问题的：SDK 的错误讯息会前后带上目标，例如 <code>HTTP 404 (https://api.example.com/x)</code>。</p>
+<h3 id="外壳提供的方法一览">外壳提供的方法一览</h3>
+<p>SDK 已经包好，下表是底层名称，方便你在开发者工具里对照：</p>
+<div class="table-wrap"><table><thead><tr><th>讯息 <code>m</code></th><th>等于</th></tr></thead><tbody><tr><td><code>settings.set</code></td><td><code>widget.settings.set(key, value)</code></td></tr><tr><td><code>storage.get</code> / <code>set</code> / <code>remove</code> / <code>keys</code></td><td><code>widget.storage.*</code></td></tr><tr><td><code>system.subscribe</code> / <code>unsubscribe</code> / <code>history</code> / <code>info</code> / <code>adapters</code> / <code>ping</code></td><td><code>widget.system.*</code></td></tr><tr><td><code>audio.get</code> / <code>set</code> / <code>subscribe</code> / <code>unsubscribe</code></td><td><code>widget.audio.*</code></td></tr><tr><td><code>media.get</code> / <code>control</code> / <code>lyrics</code> / <code>subscribe</code> / <code>unsubscribe</code></td><td><code>widget.media.*</code></td></tr><tr><td><code>files.list</code> / <code>info</code> / <code>pick</code></td><td><code>widget.files.*</code></td></tr><tr><td><code>recycle.query</code> / <code>empty</code> / <code>open</code></td><td><code>widget.recycleBin.*</code>（只有内建组件能用）</td></tr><tr><td><code>power.do</code></td><td><code>widget.power(action)</code>（只有内建组件能用）</td></tr><tr><td><code>net.fetch</code></td><td><code>widget.fetch(url, options)</code></td></tr><tr><td><code>notify.show</code> / <code>cancel</code></td><td><code>widget.notify(...)</code></td></tr><tr><td><code>shell.open</code> / <code>launch</code> / <code>info</code> / <code>pick</code> / <code>paths</code></td><td><code>widget.shell.*</code></td></tr><tr><td><code>text.chinese</code></td><td><code>widget.convertChinese(text, to)</code></td></tr><tr><td><code>window.getSize</code> / <code>setSize</code> / <code>drag</code> / <code>resize</code> / <code>press</code> / <code>menu</code> / <code>devtools</code></td><td><code>widget.window.*</code>；后四个由 SDK 自己发</td></tr><tr><td><code>log</code></td><td><code>widget.log(...)</code></td></tr></tbody></table></div>
+<p><code>log</code> 和 <code>ready</code> 没有回应，其余都会回。</p>
+<h3 id="内建资源">内建资源</h3>
+<div class="table-wrap"><table><thead><tr><th>位址</th><th>内容</th></tr></thead><tbody><tr><td><code>/__fw/widget-sdk.js</code></td><td>SDK（每个页面自动注入）</td></tr><tr><td><code>/__fw/base.css</code></td><td>主题变数和 <code>w-*</code> 样式（每个页面自动加载）</td></tr><tr><td><code>/__fw/places.js</code></td><td>城市定位与天气用的地名查询，见<a href="#城市与定位placesjs">城市与定位</a></td></tr><tr><td><code>/__fw/themes/…</code></td><td>主题的 CSS 和字体</td></tr><tr><td><code>/__files/&lt;实例&gt;/&lt;设置key&gt;/&lt;相对路径&gt;</code></td><td>用户选的文件夹里的图片（<code>widget.files.url()</code> 生成的就是这个）</td></tr><tr><td><code>/__docs/</code></td><td>说明文件（就是你在看的这一份）</td></tr></tbody></table></div>
+<h3 id="数据放在哪">数据放在哪</h3>
+<div class="table-wrap"><table><thead><tr><th>内容</th><th>位置</th></tr></thead><tbody><tr><td>保存的数据（<code>widget.storage</code>）</td><td><code>%AppData%\WinWidget\data\&lt;实例标识&gt;.json</code>，每个实例 2 MB</td></tr><tr><td>你的组件文件夹</td><td><code>%AppData%\WinWidget\widgets\</code>（控制中心“设置 → 组件目录”可直接打开）</td></tr><tr><td>设置与卡片位置</td><td><code>%AppData%\Roaming\WinWidget\config.json</code></td></tr><tr><td>日志</td><td><code>%LocalAppData%\WinWidget\logs\app.log</code></td></tr></tbody></table></div>
+<p>移除一个实例时，它的保存数据一起删除；移除组件文件夹不影响已经在桌面上的卡片（会标成“组件已不存在”）。</p>
+<h3 id="城市与定位placesjs">城市与定位：<code>places.js</code></h3>
+<p>内建的天气、一周天气、空气质量、日出日落都用它，你也可以直接用：</p>
+<div class="code"><pre><code class="lang-html">&lt;script src=&quot;/__fw/places.js&quot;&gt;&lt;/script&gt;
+&lt;script src=&quot;main.js&quot;&gt;&lt;/script&gt;</code></pre></div>
+<div class="code"><pre><code class="lang-js">// 需要 &quot;network:geocoding-api.open-meteo.com&quot;，按网络定位还要 &quot;network:get.geojs.io&quot;
+const place = await places.locate(widget.settings.get(&quot;city&quot;));   // &quot;&quot; → 按 IP 定位
+// place: { name: &quot;南昌&quot;, lat, lon, tz, at }
+// 城市不存在时丢 places.NotFound，message 已经是可以直接显示的一句话
+
+// 把定位结果写回设置，让控制中心的城市框显示目前是哪个城市（用户自己填过就不动）
+places.echo(widget, settings, place);</code></pre></div>
+<p>结果会存进 <code>widget.storage</code>（<code>geo2:&lt;城市&gt;</code>、IP 定位是 <code>geo2:ip</code>，6 小时后重查一次），所以同一个城市只查一次。</p>
+<hr class="sep">
+<h2 id="完整-api-对照表">完整 API 对照表</h2>
+<p>一页看完。所有回传 Promise 的都可以 <code>await</code>；标“同步”的不用。</p>
+<div class="table-wrap"><table><thead><tr><th>API</th><th>权限</th><th>回传</th><th>说明</th></tr></thead><tbody><tr><td><code>widget.apiVersion</code></td><td>—</td><td><code>1</code></td><td>SDK 版本</td></tr><tr><td><code>widget.hostVersion</code></td><td>—</td><td>字串</td><td>WinWidget 版本</td></tr><tr><td><code>widget.id</code></td><td>—</td><td>字串</td><td>组件 id</td></tr><tr><td><code>widget.instanceId</code></td><td>—</td><td>字串</td><td>这个实例的标识</td></tr><tr><td><code>widget.locale</code></td><td>—</td><td>字串</td><td>用户语言</td></tr><tr><td><code>widget.developer</code></td><td>—</td><td>布林</td><td>开发者模式</td></tr><tr><td><code>widget.permissions</code></td><td>—</td><td>阵列</td><td>现在可用的权限</td></tr><tr><td><code>widget.locked</code></td><td>—</td><td>布林</td><td>是否锁定（会即时更新）</td></tr><tr><td><code>widget.layer</code></td><td>—</td><td>字串</td><td>目前层级</td></tr><tr><td><code>widget.theme</code></td><td>—</td><td>字串</td><td>目前主题 id</td></tr><tr><td><code>widget.t(dict)</code></td><td>—</td><td>同步</td><td>按语言挑字串</td></tr><tr><td><code>widget.on(event, fn)</code></td><td>—</td><td>退订函式</td><td>监听事件</td></tr><tr><td><code>widget.settings.get(key?)</code></td><td>—</td><td>同步</td><td>读设置</td></tr><tr><td><code>widget.settings.set(key, value)</code></td><td>—</td><td>Promise</td><td>写设置，控制中心同步显示</td></tr><tr><td><code>widget.settings.onChange(fn)</code></td><td>—</td><td>退订函式</td><td>设置变更</td></tr><tr><td><code>widget.storage.get/set/remove/keys</code></td><td>—</td><td>Promise</td><td>保存数据，每个实例 2 MB</td></tr><tr><td><code>widget.system.subscribe(topics, cb, {interval})</code></td><td><code>system</code></td><td>退订函式</td><td>周期取样，第一笔马上到</td></tr><tr><td><code>widget.system.history()</code></td><td><code>system</code></td><td>Promise</td><td>最近 15 分钟的取样（<code>{ now, points }</code>）</td></tr><tr><td><code>widget.system.info()</code></td><td><code>system</code></td><td>Promise</td><td>系统、处理器、内存、显卡、开机时长</td></tr><tr><td><code>widget.system.adapters()</code></td><td><code>system</code></td><td>Promise</td><td>网络卡、IP、闸道</td></tr><tr><td><code>widget.system.ping(host, {timeout})</code></td><td><code>system</code></td><td>Promise</td><td>一次 ping，每秒最多一次</td></tr><tr><td><code>widget.audio.get()</code></td><td><code>audio</code></td><td>Promise</td><td>音量、静音、装置名</td></tr><tr><td><code>widget.audio.set({volume?, muted?})</code></td><td><code>audio</code></td><td>Promise</td><td>调整音量</td></tr><tr><td><code>widget.audio.onChange(fn)</code></td><td><code>audio</code></td><td>退订函式</td><td>音量键、系统托盘、换耳机都会通知</td></tr><tr><td><code>widget.media.get()</code></td><td><code>media</code></td><td>Promise</td><td>目前播放的内容</td></tr><tr><td><code>widget.media.onChange(fn)</code></td><td><code>media</code></td><td>退订函式</td><td>换歌、暂停、换程序</td></tr><tr><td><code>widget.media.play/pause/toggle/next/previous()</code></td><td><code>media</code></td><td>Promise</td><td>控制播放</td></tr><tr><td><code>widget.media.seek(ms)</code></td><td><code>media</code></td><td>Promise</td><td>跳到某个位置</td></tr><tr><td><code>widget.media.position(state)</code></td><td><code>media</code></td><td>同步</td><td>依 state 推算现在播到哪（毫秒）</td></tr><tr><td><code>widget.media.lyrics()</code></td><td><code>media</code> + <code>network:*</code></td><td>Promise</td><td>时间轴歌词</td></tr><tr><td><code>widget.files.list(key, {recursive})</code></td><td>用户选过文件夹</td><td>Promise</td><td>文件夹里的图片</td></tr><tr><td><code>widget.files.url(file, {width})</code></td><td>—</td><td>同步</td><td>图片网址，可要求缩图</td></tr><tr><td><code>widget.files.info(key, path)</code></td><td>—</td><td>Promise</td><td>尺寸、拍摄时间</td></tr><tr><td><code>widget.files.pick(key)</code></td><td>—</td><td>Promise</td><td>开文件夹窗口，选好存进设置</td></tr><tr><td><code>widget.recycleBin.query/empty/open</code></td><td>内建</td><td>Promise</td><td>资源回收筒</td></tr><tr><td><code>widget.power(action)</code></td><td>内建</td><td>Promise</td><td><code>lock</code> / <code>sleep</code> / <code>restart</code> / <code>shutdown</code> / <code>signout</code></td></tr><tr><td><code>widget.fetch(url, {method, headers, body, as})</code></td><td><code>network:</code></td><td>Promise</td><td>不受 CORS 限制，最多 8 MB</td></tr><tr><td><code>widget.shell.open(url)</code></td><td><code>shell.open</code></td><td>Promise</td><td>用浏览器打开</td></tr><tr><td><code>widget.shell.launch(path)</code></td><td><code>shell.launch</code></td><td>Promise</td><td>打开程序、捷径、文件夹、文件</td></tr><tr><td><code>widget.shell.info(path, {size})</code></td><td><code>shell.launch</code></td><td>Promise</td><td>名称、类型、图标</td></tr><tr><td><code>widget.shell.pick({type, filter, title})</code></td><td><code>shell.launch</code></td><td>Promise</td><td>选文件或文件夹</td></tr><tr><td><code>widget.shell.paths(files)</code></td><td><code>shell.launch</code></td><td>Promise</td><td>拖进来的文件路径</td></tr><tr><td><code>widget.convertChinese(text, to)</code></td><td>—</td><td>Promise</td><td>简繁逐字转换</td></tr><tr><td><code>widget.notify(o)</code> / <code>widget.notify.cancel(tag?)</code></td><td><code>notify</code></td><td>Promise</td><td>Windows 通知，可预约</td></tr><tr><td><code>widget.window.getSize()</code></td><td>—</td><td>Promise</td><td>卡片目前的宽高</td></tr><tr><td><code>widget.window.setSize(w, h)</code></td><td>—</td><td>Promise</td><td>改大小（受 min/max 限制）</td></tr><tr><td><code>widget.window.startDrag()</code></td><td>—</td><td>同步</td><td>由你的程序码开始拖动</td></tr><tr><td><code>widget.appearance.get()</code></td><td>—</td><td>同步</td><td>目前外观</td></tr><tr><td><code>widget.appearance.onChange(fn)</code></td><td>—</td><td>退订函式</td><td>换主题、改外观</td></tr><tr><td><code>widget.log(...args)</code></td><td>—</td><td>同步</td><td>写进 app.log</td></tr></tbody></table></div>
+<h3 id="事件">事件</h3>
+<div class="table-wrap"><table><thead><tr><th>事件</th><th>什么时候来</th><th>内容</th></tr></thead><tbody><tr><td><code>settings</code></td><td>用户在控制中心改了设置</td><td>全部设置值</td></tr><tr><td><code>appearance</code></td><td>换主题、改外观</td><td>新的外观值</td></tr><tr><td><code>state</code></td><td>锁定、层级、穿透改变</td><td><code>{ locked, layer, clickThrough }</code></td></tr><tr><td><code>summon</code></td><td>快捷键叫出组件（便签、待办）</td><td>无</td></tr><tr><td><code>identify</code></td><td>控制中心按“定位”</td><td>无（SDK 自己画光环）</td></tr><tr><td>其他</td><td>外壳推来没认得的 <code>ev</code></td><td>原样转给你</td></tr></tbody></table></div>
+<h3 id="设置值的语言折叠">设置值的语言折叠</h3>
+<p>设置值可以按语言各写一份，外壳在交给你的那一刻已经折叠成“用户语言的那一个字串”：</p>
+<div class="code"><pre><code class="lang-json">{ &quot;key&quot;: &quot;city&quot;, &quot;type&quot;: &quot;text&quot;, &quot;default&quot;: { &quot;zh-TW&quot;: &quot;台北&quot;, &quot;zh-CN&quot;: &quot;厦门&quot;, &quot;en&quot;: &quot;Taipei&quot; } }</code></pre></div>
+<div class="code"><pre><code class="lang-js">widget.settings.get(&quot;city&quot;);   // &quot;厦门&quot;（用户是简体中文）</code></pre></div>
+<hr class="sep">
+<h2 id="三个完整例子">三个完整例子</h2>
+<h3 id="例-1把一个网络-api-的数字放上桌面">例 1：把一个网络 API 的数字放上桌面</h3>
+<p>需求：显示某个 GitHub 专案的 star 数，每 30 分钟更新，断网时显示上次的值。</p>
+<p><code>widget.json</code> 重点：<code>&quot;permissions&quot;: [&quot;network:api.github.com&quot;]</code>。</p>
+<div class="code"><pre><code class="lang-js">const $ = (id) =&gt; document.getElementById(id);
+const KEY = &quot;last&quot;;
+
+async function fetchOnce() {
+  const r = await widget.fetch(&quot;https://api.github.com/repos/Demon1110/WinWidget&quot;, {
+    headers: { accept: &quot;application/vnd.github+json&quot; },
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const repo = await r.json();
+  return { stars: repo.stargazers_count, at: Date.now() };
+}
+
+async function refresh() {
+  try {
+    const data = await fetchOnce();
+    show(data, false);
+    await widget.storage.set(KEY, data);
+  } catch (e) {
+    // 失败时退回上次的值，并在角落标一下“旧数据”
+    const old = await widget.storage.get(KEY);
+    if (old) show(old, true);
+    else $(&quot;stars&quot;).textContent = &quot;—&quot;;
+    widget.log(`stars: ${e.message}`);
+  }
+}
+
+function show(data, stale) {
+  $(&quot;stars&quot;).textContent = data.stars.toLocaleString(widget.locale);
+  $(&quot;at&quot;).textContent = new Date(data.at).toLocaleTimeString(widget.locale, { hour: &quot;2-digit&quot;, minute: &quot;2-digit&quot; });
+  $(&quot;stale&quot;).hidden = !stale;
+}
+
+refresh();
+setInterval(refresh, 30 * 60 * 1000);   // 30 分钟
+document.addEventListener(&quot;visibilitychange&quot;, () =&gt; { if (!document.hidden) refresh(); });</code></pre></div>
+<p>要点：</p>
+<ul class="plain">
+<li><code>permissions</code> 要写 <code>network:api.github.com</code>（不是 <code>*.github.com</code>：能少就少）。</li>
+<li>先写画面再写数据，或像上面一样“失败也有东西可显示”，卡片不会一片空白。</li>
+<li>定时器用 <code>setInterval</code> 就好；不要每秒轮询，<code>widget.media</code>、<code>widget.audio</code> 这类有事件的就用 <code>onChange</code>。</li>
+</ul>
+<h3 id="例-2每秒更新的系统监控省电写法">例 2：每秒更新的系统监控（省电写法）</h3>
+<div class="code"><pre><code class="lang-js">const $ = (id) =&gt; document.getElementById(id);
+const bars = [];
+
+// 一次订阅两个主题；WinWidget 会合成一笔数据给你
+widget.system.subscribe([&quot;cpu&quot;, &quot;memory&quot;], (d) =&gt; {
+  if (d.cpu) {
+    $(&quot;cpu&quot;).textContent = `${Math.round(d.cpu.usage)}%`;
+    push(bars[0], d.cpu.usage);
+  }
+  if (d.memory) {
+    $(&quot;mem&quot;).textContent = `${Math.round(d.memory.usage)}%`;
+    push(bars[1], d.memory.usage);
+  }
+}, { interval: 1000 });
+
+/** 20 格的迷你曲线；每秒更新，所以不加 transition。 */
+function push(bar, value) {
+  const cell = document.createElement(&quot;i&quot;);
+  cell.style.height = `${Math.max(4, Math.min(100, value))}%`;
+  bar.appendChild(cell);
+  if (bar.children.length &gt; 20) bar.firstElementChild.remove();
+}</code></pre></div>
+<div class="code"><pre><code class="lang-css">#cpu, #mem { font-variant-numeric: tabular-nums; }   /* 数字不会左右跳 */
+.mini { display: flex; align-items: flex-end; gap: 1px; height: 1.6rem; }
+.mini i { width: 2px; background: var(--w-accent); } /* 不要 transition / animation */</code></pre></div>
+<p>要点：</p>
+<ul class="plain">
+<li>每秒更新的元素不要 <code>transition</code>、不要 <code>animation</code>：一个 0.5 秒的动画等于整张卡片一直在重画，处理器会一直有负担。</li>
+<li>数字用 <code>font-variant-numeric: tabular-nums</code>，宽度不会随数字变动而抖。</li>
+<li>订阅用完要退订（<code>const stop = widget.system.subscribe(...); stop()</code>），否则卡片一直有取样成本。</li>
+</ul>
+<h3 id="例-3同一个组件放两个各记各的">例 3：同一个组件放两个，各记各的</h3>
+<div class="code"><pre><code class="lang-js">// 卡片自己在拖动和缩放时会变，实例标识不会变：用它当数据分界
+const key = `state:${widget.instanceId}`;
+
+const saved = await widget.storage.get(key);
+index = saved ? saved.index : 0;
+
+function save() {
+  widget.storage.set(key, { index });   // 不用 await，写入很快
+}</code></pre></div>
+<p>要点：<code>widget.storage</code> 的键是<strong>组件</strong>级别的（同一组件的两个实例共用一个文件），要分开保存就在键里带上 <code>instanceId</code>；设置值（<code>settings</code>）则是每个实例各自一份。</p>
+<hr class="sep">
+<h2 id="写组件的检查列表">写组件的检查列表</h2>
+<p>交付前逐条看一眼，能省掉九成的“装上去怪怪的”：</p>
+<ul class="plain">
+<li><code>widget.json</code> 的 <code>id</code> 只用小写英文、数字和 <code>. _ -</code>，2–64 字元，之后不再改。</li>
+<li><code>entry</code> 指向的文件真的存在；所有资源都用<strong>相对路径</strong>。</li>
+<li>文件存成 UTF-8（没有 BOM 也可以，有 BOM 会让 JSON 解析失败）。</li>
+<li>用到的能力都在 <code>permissions</code> 里声明；能用 <code>network:某个网站</code> 就不要 <code>network:*</code>。</li>
+<li>第一次加载就有东西看：先画版面，再等数据；取不到时给一句人话，不要空白。</li>
+<li>每秒更新的元素不加动画；不定时轮询已经有事件的功能。</li>
+<li>数字和日期用 <code>widget.locale</code> 格式化，文字用 <code>widget.t()</code>。</li>
+<li>只用 <code>--w-*</code> 变数和 <code>w-*</code> 样式，三套主题切一遍都不会看不到字。</li>
+<li>卡片可以被拉大缩小：用 flex/grid，必要时 <code>@container</code>；想让内容跟着放大就设 <code>grow</code>。</li>
+<li>不要写 <code>window.open</code>、页面跳转、<code>document.write</code>；要开网页用 <code>widget.shell.open</code>。</li>
+<li>不要引用 CDN 上的脚本或字体（离线就坏了），要打包进组件文件夹。</li>
+<li>送出前在开发者模式按 F12 看一遍 Console，没有红色错误再导出 <code>.fwz</code>。</li>
+</ul>
+<hr class="sep">
+<h2 id="常见问题">常见问题</h2>
+<p><strong>改了文件，桌面上没变化。</strong> 确认“设置”里开发者模式是开的。没开的话，在组件上右键 →“重新加载”。如果改的是 <code>widget.json</code> 而组件不见了，看“添加组件”页顶部是不是列出了错误。</p>
+<p>**<code>widget.fetch</code> 失败，说 permission denied。** 把那个网站加进 <code>permissions</code>，例如 <code>&quot;network:api.example.com&quot;</code>。错误讯息里会写出要加的那一行。如果说 &quot;not allowed yet&quot;，表示已经声明但用户还没允许：到控制中心“我的组件”选这个组件，按“查看并允许”。</p>
+<p>**直接用 <code>fetch()</code> 或 <code>&lt;img&gt;</code> 加载网络上的东西失败。** 网站要在 <code>permissions</code> 里。<code>fetch()</code> 还要对方支持 CORS；不支持的话改用 <code>widget.fetch</code>。</p>
+<p><strong>中文变成乱码。</strong> 把文件存成 UTF-8。</p>
+<p><strong>想让组件第一次出现时大一点或小一点。</strong> 改 <code>size.width</code> 和 <code>size.height</code>。已经在桌面上的组件会保留用户调过的大小，可以从“添加组件”再放一个新的来看效果。</p>
+<p><strong>怎样让组件在浅色主题（纸本）下也好看？</strong> 文字和线条都用 <code>--w-*</code> 变数，不要写死白色或黑色。到控制中心“主题”切换三套主题看一遍。</p>
+<p><strong>改了“语言”设置，组件还是原本的语言。</strong> 语言在<strong>启动时</strong>读 <code>config.json</code>，改了要重新启动 WinWidget（控制中心“设置”里的语言会立即影响控制中心本身，桌面上已经开着的组件要重新加载才会换）。组件里请一律用 <code>widget.locale</code> / <code>widget.t()</code>，不要自己判断系统语言。</p>
+<p><strong>控制中心按“组件目录”“数据位置”没反应，提示“没有成功”。</strong> 这两个按钮由 WinWidget 用系统的方式打开文件夹（等同在资源管理器里双击）。如果完全没反应：先确认路径存在（按钮会自动建立目录），再看 <code>%LocalAppData%\WinWidget\logs\app.log</code> 里那一行错误。旧版本把文件夹当成网址开启，所以一定会失败，更新到最新版即可。</p>
+<p><strong>“检查更新”说没有更新通道 / 检查不到。</strong> <code>config.json</code> 的 <code>update_url</code> 留空时，默认读本专案 GitHub Releases 的最新版本（<code>api.github.com</code>）。要换成自己的通道，就在 <code>update_url</code> 填一个 JSON 位址，内容是 <code>{&quot;version&quot;: &quot;1.2.0&quot;, &quot;url&quot;: &quot;下载位址&quot;, &quot;size&quot;: 文件大小, &quot;notes&quot;: &quot;更新说明&quot;, &quot;page&quot;: &quot;介绍页&quot;}</code>。检查和下载都在背景执行，不会让界面卡住；开发者模式不允许自我更新。</p>
+<p><strong>媒体组件里“显示是哪个程序在播放”关掉还有字。</strong> 那是组件页面自己的显示逻辑，最新版已修好。若还留着，确认组件文件夹里的 <code>style.css</code> 是最新的（<code>body.no-app .app { display: none }</code>）。</p>
+</article>
+<article data-lang="zh-TW" lang="zh-TW" hidden>
+<h1 id="winwidget-組件開發指南">WinWidget 組件開發指南</h1>
+<p>一個組件就是一個資料夾：一個 <code>widget.json</code> 說明檔，加上普通的 HTML、CSS 和 JavaScript。會寫網頁，就會寫組件。</p>
+
+<hr class="sep">
+<h2 id="十分鐘寫第一個組件">十分鐘寫第一個組件</h2>
+<p>我們來做一個「每日一句」：每天顯示一句話，按一下換下一句，句子可以在控制中心改。</p>
+<h3 id="1-建立組件1-分鐘">1. 建立組件（1 分鐘）</h3>
+<ul class="plain">
+<li>左鍵點托盤圖標，打開控制中心。</li>
+<li>到控制中心「添加組件」頁，按右上角的 <strong>新建組件…</strong>（視窗窄時只顯示「＋」圖標）。也可以右鍵系統匣圖標 →「添加組件」→「新建組件…」。</li>
+<li>名稱輸入 <code>每日一句</code>，按 <strong>建立</strong>。</li>
+</ul>
+<p>WinWidget 會：</p>
+<ul class="plain">
+<li>在組件目錄建立一個資料夾（例如 <code>%AppData%\WinWidget\widgets\my-widget</code>），裏面是一個能用的模板；</li>
+<li>把它放到桌面；</li>
+<li>打開 <strong>開發者模式</strong>：之後改了資料夾裏的檔案，一存檔，桌面上的組件就會自動重新載入；</li>
+<li>用檔案總管打開這個資料夾。</li>
+</ul>
+<p>用你習慣的編輯器打開這個資料夾。推薦 <a href="https://code.visualstudio.com/">VS Code</a>：資料夾裏的 <code>widget.d.ts</code> 會讓它在你打 <code>widget.</code> 時列出所有可用的功能和說明。</p>
+<h3 id="2-加一個設定項1-分鐘">2. 加一個設定項（1 分鐘）</h3>
+<p>打開 <code>widget.json</code>，把 <code>settings</code> 整段換成：</p>
+<div class="code"><pre><code class="lang-json">&quot;settings&quot;: [
+  { &quot;key&quot;: &quot;quotes&quot;, &quot;type&quot;: &quot;textarea&quot;, &quot;label&quot;: &quot;句子（一行一句）&quot;,
+    &quot;default&quot;: &quot;慢慢來，比較快。\n今天也要好好吃飯。\n先完成，再完美。&quot; }
+]</code></pre></div>
+<p>存檔。打開控制中心 →「我的組件」→ 選「每日一句」→「內容」，會看到一個多行文字框，裏面是這三句話。這個表單是 WinWidget 照 <code>settings</code> 自動生成的。</p>
+<h3 id="3-寫畫面3-分鐘">3. 寫畫面（3 分鐘）</h3>
+<p>把 <code>index.html</code> 換成：</p>
+<div class="code"><pre><code class="lang-html">&lt;!doctype html&gt;
+&lt;html&gt;
+&lt;head&gt;
+  &lt;meta charset=&quot;utf-8&quot;&gt;
+  &lt;link rel=&quot;stylesheet&quot; href=&quot;style.css&quot;&gt;
+&lt;/head&gt;
+&lt;body&gt;
+  &lt;div class=&quot;w-label&quot; id=&quot;day&quot;&gt;&lt;/div&gt;
+  &lt;p class=&quot;quote&quot; id=&quot;quote&quot;&gt;&lt;/p&gt;
+  &lt;button class=&quot;w-btn&quot; id=&quot;next&quot;&gt;換一句&lt;/button&gt;
+  &lt;script src=&quot;main.js&quot;&gt;&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;</code></pre></div>
+<p>把 <code>style.css</code> 換成：</p>
+<div class="code"><pre><code class="lang-css">body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quote {
+  flex: 1;
+  margin: 0;
+  font-size: 1.3rem;
+  line-height: 1.5;
+}
+
+#next {
+  align-self: flex-end;
+}</code></pre></div>
+<p><code>&lt;body&gt;</code> 就是那張卡片。<code>w-label</code>、<code>w-btn</code> 是 WinWidget 自帶的樣式，背景、圓角、字體和顏色由主題提供，你不用寫。</p>
+<h3 id="4-寫邏輯3-分鐘">4. 寫邏輯（3 分鐘）</h3>
+<p>把 <code>main.js</code> 換成：</p>
+<div class="code"><pre><code class="lang-js">const $ = (id) =&gt; document.getElementById(id);
+let quotes = [];
+let index = 0;
+
+function show() {
+  const quote = quotes.length ? quotes[index % quotes.length] : &quot;到控制中心加幾句話吧&quot;;
+  $(&quot;quote&quot;).textContent = quote;
+  $(&quot;day&quot;).textContent = new Date().toLocaleDateString(widget.locale, {
+    month: &quot;long&quot;, day: &quot;numeric&quot;, weekday: &quot;long&quot;,
+  });
+}
+
+// 讀設定：一行一句
+function load(settings) {
+  quotes = settings.quotes.split(&quot;\n&quot;).map((s) =&gt; s.trim()).filter(Boolean);
+  show();
+}
+
+// 每天自動換一句；按過「換一句」的話，記住今天換到哪一句
+const today = new Date().toDateString();
+widget.storage.get(&quot;pick&quot;).then((pick) =&gt; {
+  const dayNumber = Math.floor(Date.now() / 86400000);
+  index = pick &amp;&amp; pick.day === today ? pick.index : dayNumber;
+  load(widget.settings.get());
+});
+
+// 用戶在控制中心改了句子，馬上更新
+widget.settings.onChange(load);
+
+$(&quot;next&quot;).addEventListener(&quot;click&quot;, () =&gt; {
+  index++;
+  widget.storage.set(&quot;pick&quot;, { day: today, index });
+  show();
+});</code></pre></div>
+<p>存檔，桌面上的組件馬上變成新的樣子。試試：</p>
+<ul class="plain">
+<li>按「換一句」；</li>
+<li>在控制中心改句子，桌面上即時更新；</li>
+<li>到「主題」換一套主題，組件的字體和顏色會跟着變；</li>
+<li>重新啟動 WinWidget，今天換到的那一句還在（<code>widget.storage</code> 會一直保存）。</li>
+</ul>
+<h3 id="5-出錯了怎麼辦1-分鐘">5. 出錯了怎麼辦（1 分鐘）</h3>
+<p>開發者模式下，腳本出錯時卡片底部會出現一條紅色提示，寫着錯誤和位置（例如 <code>main.js:12</code>）。點一下它就會打開開發者工具；也可以在組件上按 <strong>F12</strong>。改好存檔，提示就會消失。</p>
+<h3 id="6-分享出去1-分鐘">6. 分享出去（1 分鐘）</h3>
+<p>控制中心 →「添加組件」→ 你的組件卡片 →「匯出 .fwz」。別人雙擊這個 <code>.fwz</code> 檔案就能安裝（也可以拖到控制中心視窗上）。</p>
+<p>想讓所有人都能在控制中心的「線上」裏找到它，可以投稿到<a href="https://hmgvibe.github.io/fullwidget-market/">組件市場</a>：把組件資料夾放進 GitHub 上 <a href="https://github.com/hmgvibe/fullwidget-market">fullwidget-market</a> 儲存庫的 <code>widgets/你的帳號.組件名/</code>，開一個 pull request。自動檢查通過、維護者看過後就會上架，詳細步驟見那裏的 CONTRIBUTING.md。</p>
+<hr class="sep">
+<h2 id="資料夾裏有什麼">資料夾裏有什麼</h2>
+<div class="table-wrap"><table><thead><tr><th>檔案</th><th>用途</th></tr></thead><tbody><tr><td><code>widget.json</code></td><td>說明檔：名稱、尺寸、權限、設定項。<strong>必須有。</strong></td></tr><tr><td><code>index.html</code></td><td>組件的頁面（可以在 <code>widget.json</code> 的 <code>entry</code> 改成別的檔名）。</td></tr><tr><td><code>style.css</code>、<code>main.js</code></td><td>樣式和邏輯。檔名隨意，在 HTML 裏用相對路徑引用即可。</td></tr><tr><td><code>icon.svg</code></td><td>在組件庫、托盤選單和控制中心顯示的圖標（建議 24×24 的 SVG）。</td></tr><tr><td><code>widget.d.ts</code>、<code>jsconfig.json</code></td><td>只給編輯器用，讓它提示 <code>widget.</code> 的寫法。</td></tr></tbody></table></div>
+<p>組件目錄：<code>%AppData%\WinWidget\widgets\</code>。在控制中心「設定」→「組件目錄」可以直接打開。把一個組件資料夾放進去，它就會出現在「添加組件」裏（開發者模式下自動出現，否則按「重新掃描」）。</p>
+<p>檔案請存成 <strong>UTF-8</strong>。</p>
+<hr class="sep">
+<h2 id="widgetjson">widget.json</h2>
+<p>可以寫 <code>//</code> 註解，最後一項後面多一個逗號也沒關係。</p>
+<div class="code"><pre><code class="lang-json">{
+  &quot;id&quot;: &quot;me.daily-quote&quot;,
+  &quot;name&quot;: { &quot;zh-TW&quot;: &quot;每日一句&quot;, &quot;zh-CN&quot;: &quot;每日一句&quot;, &quot;en&quot;: &quot;Daily Quote&quot; },
+  &quot;description&quot;: &quot;每天一句話&quot;,
+  &quot;version&quot;: &quot;1.0.0&quot;,
+  &quot;author&quot;: &quot;你的名字&quot;,
+  &quot;entry&quot;: &quot;index.html&quot;,
+  &quot;icon&quot;: &quot;icon.svg&quot;,
+  &quot;category&quot;: &quot;info&quot;,
+  &quot;size&quot;: {
+    &quot;width&quot;: 280, &quot;height&quot;: 160,
+    &quot;minWidth&quot;: 200, &quot;minHeight&quot;: 120, &quot;maxWidth&quot;: 600, &quot;maxHeight&quot;: 400,
+    &quot;resizable&quot;: true
+  },
+  &quot;layer&quot;: &quot;desktop&quot;,
+  &quot;permissions&quot;: [],
+  &quot;settings&quot;: []
+}</code></pre></div>
+<div class="table-wrap"><table><thead><tr><th>欄位</th><th>必填</th><th>說明</th></tr></thead><tbody><tr><td><code>id</code></td><td>是</td><td>唯一識別碼。小寫英文、數字和 <code>. _ -</code>，2–64 個字元，例如 <code>me.daily-quote</code>。之後不要改：保存的資料和更新都靠它。<code>winwidget.</code> 開頭的留給內建組件。</td></tr><tr><td><code>name</code></td><td>建議</td><td>顯示的名稱。可以是文字，也可以按語言給：<code>{ &quot;zh-TW&quot;: &quot;…&quot;, &quot;en&quot;: &quot;…&quot; }</code>。</td></tr><tr><td><code>description</code></td><td></td><td>一句話介紹，顯示在組件庫。同樣可以按語言給。</td></tr><tr><td><code>version</code></td><td>建議</td><td>版本號，例如 <code>1.2.0</code>。安裝 <code>.fwz</code> 時用它判斷是更新、重新安裝還是舊版本。</td></tr><tr><td><code>author</code></td><td></td><td>作者。</td></tr><tr><td><code>entry</code></td><td></td><td>頁面檔，預設 <code>index.html</code>。</td></tr><tr><td><code>icon</code></td><td></td><td>圖標檔。沒有的話顯示名稱的第一個字。</td></tr><tr><td><code>category</code></td><td></td><td>在組件庫裏放在哪一類：<code>time</code>（時間）、<code>weather</code>（天氣）、<code>system</code>（系統）、<code>productivity</code>（效率）、<code>info</code>（資訊）、<code>media</code>（媒體與裝飾）。不寫或寫別的，放在「其他」。</td></tr><tr><td><code>preview</code></td><td></td><td>組件庫卡片上的預覽圖，例如 <code>&quot;preview.png&quot;</code>。可以按主題和語言各放一張：<code>&quot;preview/{theme}.{lang}.webp&quot;</code>，<code>{theme}</code> 換成主題 id（<code>instrument</code>、<code>type</code>、<code>paper</code>），<code>{lang}</code> 換成 <code>zh-TW</code>、<code>zh-CN</code> 或 <code>en</code>；缺的那張會用同主題的其他語言，或其他主題代替。圖片建議用透明背景的 PNG 或 WebP，寬 300 像素左右。沒有的話卡片顯示圖標。</td></tr><tr><td><code>size</code></td><td></td><td>卡片尺寸（不含陰影），單位是像素。<code>width</code>/<code>height</code> 是第一次放上桌面的大小；<code>min*</code>/<code>max*</code> 限制用戶拖動縮放的範圍；<code>resizable: false</code> 不讓縮放；<code>grow</code>（0–1）決定用戶把卡片拉得比預設大時，內容要不要跟着放大，見<a href="#放大時內容跟着變大">放大時內容跟着變大</a>。</td></tr><tr><td><code>layer</code></td><td></td><td>第一次放上桌面時的層級：<code>desktop</code>（預設，在所有視窗下面，Win+D 也看得到）、<code>normal</code>、<code>top</code>（置頂）。用戶之後可以改。</td></tr><tr><td><code>permissions</code></td><td></td><td>要用到的權限，見<a href="#權限">權限</a>。</td></tr><tr><td><code>settings</code></td><td></td><td>設定項。控制中心會照這裏自動生成表單。</td></tr></tbody></table></div>
+<h3 id="settings設定項">settings：設定項</h3>
+<p>每一項：</p>
+<div class="code"><pre><code class="lang-json">{
+  &quot;key&quot;: &quot;city&quot;,
+  &quot;type&quot;: &quot;text&quot;,
+  &quot;label&quot;: &quot;城市&quot;,
+  &quot;description&quot;: &quot;留空就自動定位&quot;,
+  &quot;default&quot;: &quot;&quot;
+}</code></pre></div>
+<div class="table-wrap"><table><thead><tr><th>欄位</th><th>說明</th></tr></thead><tbody><tr><td><code>key</code></td><td>程式裏用的名字：<code>widget.settings.get(&quot;city&quot;)</code>。</td></tr><tr><td><code>type</code></td><td>見下表。</td></tr><tr><td><code>label</code></td><td>表單上的名稱。可以按語言給。</td></tr><tr><td><code>description</code></td><td>名稱下面的一行小字說明。</td></tr><tr><td><code>default</code></td><td>預設值。任何類型都可以按語言給，例如 <code>{ &quot;zh-TW&quot;: &quot;google&quot;, &quot;zh-CN&quot;: &quot;baidu&quot;, &quot;en&quot;: &quot;google&quot; }</code>。</td></tr><tr><td><code>placeholder</code></td><td>輸入框裏的提示文字。</td></tr><tr><td><code>min</code> <code>max</code> <code>step</code></td><td><code>number</code> 和 <code>slider</code> 用。</td></tr><tr><td><code>options</code></td><td><code>select</code> 用：<code>[{ &quot;value&quot;: &quot;c&quot;, &quot;label&quot;: &quot;攝氏&quot; }, { &quot;value&quot;: &quot;f&quot;, &quot;label&quot;: &quot;華氏&quot; }]</code>。</td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>type</th><th>表單</th><th>值</th></tr></thead><tbody><tr><td><code>toggle</code></td><td>開關</td><td><code>true</code> / <code>false</code></td></tr><tr><td><code>text</code></td><td>單行文字</td><td>字串</td></tr><tr><td><code>textarea</code></td><td>多行文字</td><td>字串（換行是 <code>\n</code>）</td></tr><tr><td><code>number</code></td><td>數字框</td><td>數字</td></tr><tr><td><code>slider</code></td><td>滑桿</td><td>數字</td></tr><tr><td><code>select</code></td><td>下拉選單（三個以內的短選項會顯示成分段按鈕）</td><td>選項的 <code>value</code></td></tr><tr><td><code>color</code></td><td>顏色</td><td><code>&quot;#rrggbb&quot;</code></td></tr><tr><td><code>font</code></td><td>字體（可從系統字體中選）</td><td>字體名稱；用戶清空時是 <code>null</code>（通常就用主題的字體）</td></tr><tr><td><code>date</code></td><td>日期</td><td><code>&quot;2026-12-31&quot;</code></td></tr><tr><td><code>folder</code></td><td>資料夾（顯示路徑和「選擇…」按鈕）</td><td>完整路徑；預設值可以寫環境變數，例如 <code>&quot;%USERPROFILE%\\Pictures&quot;</code>。見 [<code>widget.files</code>](#讀取用戶選的資料夾widgetfiles)</td></tr></tbody></table></div>
+<hr class="sep">
+<h2 id="javascript-api">JavaScript API</h2>
+<p>WinWidget 會在你的腳本執行前準備好全局的 <code>widget</code>，不用 import。完整的型別和說明在 <code>widget.d.ts</code>。</p>
+<p>需要等待的功能（讀寫資料、連網等）都回傳 Promise，可以用 <code>await</code>。</p>
+<h3 id="基本資料">基本資料</h3>
+<div class="code"><pre><code class="lang-js">widget.id          // &quot;me.daily-quote&quot;
+widget.instanceId  // 桌面上這一個的識別碼（同一個組件可以放幾個）
+widget.locale      // 用戶的語言，例如 &quot;zh-TW&quot;，格式化日期和數字用
+widget.theme       // 目前的主題：&quot;instrument&quot;、&quot;type&quot;、&quot;paper&quot;
+widget.developer   // 是否在開發者模式
+widget.permissions // 現在能用的權限
+
+// 按用戶的語言挑文字
+widget.t({ &quot;zh-TW&quot;: &quot;早安&quot;, &quot;zh-CN&quot;: &quot;早安&quot;, en: &quot;Good morning&quot; })</code></pre></div>
+<h3 id="設定widgetsettings">設定：<code>widget.settings</code></h3>
+<div class="code"><pre><code class="lang-js">// 讀設定：同步的，不用 await
+const all = widget.settings.get();         // { quotes: &quot;…&quot;, … }
+const one = widget.settings.get(&quot;quotes&quot;);
+
+// 用戶在控制中心改了設定
+widget.settings.onChange((all) =&gt; { /* … */ });
+
+// 程式也可以改，控制中心會同步顯示
+await widget.settings.set(&quot;quotes&quot;, &quot;…&quot;);</code></pre></div>
+<h3 id="保存資料widgetstorage">保存資料：<code>widget.storage</code></h3>
+<p>保存的東西重開電腦也在；用戶移除這個組件時一起刪除。桌面上每一個組件各有自己的一份。上限每個 2 MB。</p>
+<div class="code"><pre><code class="lang-js">// 可以存任何 JSON 資料
+await widget.storage.set(&quot;todo&quot;, [{ text: &quot;買牛奶&quot;, done: false }]);
+
+// 沒存過的是 null
+const todo = (await widget.storage.get(&quot;todo&quot;)) || [];
+
+await widget.storage.remove(&quot;todo&quot;);
+const keys = await widget.storage.keys();</code></pre></div>
+<h3 id="系統資訊widgetsystem需要-system-權限">系統資訊：<code>widget.system</code>（需要 <code>system</code> 權限）</h3>
+<div class="code"><pre><code class="lang-js">const stop = widget.system.subscribe([&quot;cpu&quot;, &quot;memory&quot;], (d) =&gt; {
+  cpu.textContent = Math.round(d.cpu.usage) + &quot;%&quot;;
+  mem.textContent = Math.round(d.memory.usage) + &quot;%&quot;;
+}, { interval: 2000 });  // 每 2 秒一次，預設 1 秒；第一筆會馬上到
+
+stop(); // 不需要時停止</code></pre></div>
+<div class="table-wrap"><table><thead><tr><th>主題</th><th>內容</th></tr></thead><tbody><tr><td><code>cpu</code></td><td><code>usage</code>（%）、<code>cores</code></td></tr><tr><td><code>memory</code></td><td><code>usage</code>（%）、<code>total</code>、<code>used</code>、<code>available</code>（位元組）</td></tr><tr><td><code>network</code></td><td><code>down</code>、<code>up</code>（每秒位元組）、<code>totalDown</code>、<code>totalUp</code></td></tr><tr><td><code>disk</code></td><td>每個磁碟一項（含隨身碟）：<code>name</code>（&quot;C:&quot;）、<code>label</code>、<code>type</code>（<code>fixed</code> / <code>removable</code>）、<code>total</code>、<code>free</code>、<code>usage</code>（%）</td></tr><tr><td><code>battery</code></td><td><code>present</code>、<code>percent</code>、<code>charging</code>、<code>pluggedIn</code>、<code>secondsLeft</code>、<code>saver</code>（省電模式）</td></tr></tbody></table></div>
+<p>多個組件訂閱同一個數據時，WinWidget 只取樣一次，不會多耗資源。</p>
+<p>不常變的資料用一次性的呼叫：</p>
+<div class="code"><pre><code class="lang-js">const pc = await widget.system.info();
+// pc.os.name &quot;Windows 11 Pro&quot;、pc.os.version &quot;25H2&quot;、pc.cpu.name、pc.memory.installed（位元組）、
+// pc.gpus（顯示卡名稱）、pc.computer（電腦名稱）、pc.uptime（已開機的毫秒數）
+
+const net = await widget.system.adapters();
+// net.online；net.adapters[0] 是連上網路的那個：name &quot;Wi-Fi&quot;、type &quot;wifi&quot;、ipv4、gateways、dns
+
+const r = await widget.system.ping(&quot;1.1.1.1&quot;);   // { ok, ms, status }；每個組件每秒最多一次</code></pre></div>
+<h3 id="音量widgetaudio需要-audio-權限">音量：<code>widget.audio</code>（需要 <code>audio</code> 權限）</h3>
+<div class="code"><pre><code class="lang-js">const stop = widget.audio.onChange((a) =&gt; {
+  // a.volume 0–100、a.muted、a.device（&quot;喇叭 (Realtek Audio)&quot;）
+  // 按鍵盤的音量鍵、工作列調音量、換成耳機時都會馬上通知
+});
+await widget.audio.set({ volume: 40 });
+await widget.audio.set({ muted: true });</code></pre></div>
+<h3 id="正在播放widgetmedia需要-media-權限">正在播放：<code>widget.media</code>（需要 <code>media</code> 權限）</h3>
+<p>讀取 Windows 媒體控制裏正在播放的內容（Spotify、瀏覽器、媒體播放器……，和音量面板上看到的一樣），並控制它：</p>
+<div class="code"><pre><code class="lang-js">widget.media.onChange((m) =&gt; {
+  if (!m.available) return;          // 沒有程式在播放
+  // m.title、m.artist、m.album、m.app.name（&quot;Spotify&quot;）、m.app.icon
+  // m.playing、m.position、m.duration（毫秒）、m.cover（封面圖片的網址，可直接放進 &lt;img&gt;）
+  // m.can.next、m.can.previous、m.can.seek：那個程式現在接受哪些按鈕
+});
+const now = widget.media.position(m);   // 現在播到哪裏（播放中會自己往前走）
+await widget.media.toggle();            // 播放 / 暫停；也有 play()、pause()、next()、previous()
+await widget.media.seek(60000);         // 跳到 1:00
+// 目前這首歌的時間軸歌詞，在網易雲音樂、QQ 音樂、酷狗上查找
+const { title, lyrics } = await widget.media.lyrics();
+if (lyrics.found) lyrics.lines;         // [{ t: 毫秒, text, tr?: 翻譯 }]，按時間排好</code></pre></div>
+<p>Windows 有變化時會馬上通知（換歌、暫停、換了一個程式在播放），不用自己輪詢。</p>
+<h3 id="讀取用戶選的資料夾widgetfiles">讀取用戶選的資料夾：<code>widget.files</code></h3>
+<p>在設定項裏放一個 <code>folder</code> 類型的設定，用戶選了資料夾，組件就能讀取裏面的圖片。<strong>選資料夾本身就是允許</strong>，不用在 <code>permissions</code> 聲明：</p>
+<div class="code"><pre><code class="lang-json">{ &quot;key&quot;: &quot;folder&quot;, &quot;type&quot;: &quot;folder&quot;, &quot;label&quot;: &quot;照片資料夾&quot;, &quot;default&quot;: &quot;%USERPROFILE%\\Pictures&quot; }</code></pre></div>
+<div class="code"><pre><code class="lang-js">const { files } = await widget.files.list(&quot;folder&quot;, { recursive: true });
+// files: [{ path: &quot;2025/海邊.jpg&quot;, name: &quot;海邊&quot;, size, modified, url }]
+img.src = widget.files.url(files[0], { width: 800 });   // Windows 做的縮小版，大照片也很快、很省記憶體
+const { taken } = await widget.files.info(&quot;folder&quot;, files[0]);  // 拍攝時間（相機記錄的），沒有時是 null
+await widget.files.pick(&quot;folder&quot;);      // 在組件裏直接打開選資料夾的視窗，選好後存進設定</code></pre></div>
+<ul class="plain">
+<li>只能讀那個資料夾（和裏面的子資料夾）裏的圖片：jpg、png、gif、webp、bmp、avif、heic、tif，最多 5000 張。</li>
+<li>別人寫的組件，<code>default</code> 裏寫的資料夾不算數，要等用戶自己選過才能讀。內建組件和自己寫的組件可以用預設值。</li>
+<li>資料夾的設定值裏可以寫環境變數，例如 <code>%USERPROFILE%</code>。</li>
+</ul>
+<h3 id="連網widgetfetch需要-network-權限">連網：<code>widget.fetch</code>（需要 <code>network:</code> 權限）</h3>
+<p>和瀏覽器的 <code>fetch</code> 很像，但由 WinWidget 代為發送，所以不受 CORS 限制：</p>
+<div class="code"><pre><code class="lang-js">const r = await widget.fetch(
+  &quot;https://api.open-meteo.com/v1/forecast?latitude=25&amp;longitude=121&amp;current=temperature_2m&quot;
+);
+if (r.ok) {
+  const data = await r.json();
+}
+
+await widget.fetch(&quot;https://example.com/api&quot;, {
+  method: &quot;POST&quot;,
+  headers: { &quot;content-type&quot;: &quot;application/json&quot; },
+  body: { hello: &quot;world&quot; },   // 物件會自動轉成 JSON
+});</code></pre></div>
+<p>回應有 <code>ok</code>、<code>status</code>、<code>statusText</code>、<code>url</code>、<code>headers</code>、<code>body</code>（文字）、<code>text()</code>、<code>json()</code>。圖片等二進位內容用 <code>{ as: &quot;base64&quot; }</code>，<code>body</code> 就是 base64 文字。每次最多 8 MB，會自動跟隨轉址（每一跳都要在權限內）。</p>
+<h3 id="打開網址widgetshellopen需要-shellopen-權限">打開網址：<code>widget.shell.open</code>（需要 <code>shell.open</code> 權限）</h3>
+<div class="code"><pre><code class="lang-js">// 用預設瀏覽器打開；也接受 mailto:
+widget.shell.open(&quot;https://example.com&quot;);</code></pre></div>
+<p>組件頁面本身不能跳轉到別的網址，也不能開新視窗；要打開網頁請用這個。</p>
+<h3 id="打開程式和檔案widgetshelllaunch需要-shelllaunch-權限">打開程式和檔案：<code>widget.shell.launch</code>（需要 <code>shell.launch</code> 權限）</h3>
+<div class="code"><pre><code class="lang-js">await widget.shell.launch(&quot;C:\\Windows\\notepad.exe&quot;);    // 程式、捷徑、資料夾、文件都可以；不能帶參數
+
+const path = await widget.shell.pick({ type: &quot;file&quot;, filter: &quot;programs&quot; }); // 讓用戶選；取消時是 null
+const info = await widget.shell.info(path);  // { name: &quot;記事本&quot;, kind: &quot;app&quot;, icon: &quot;data:image/png;…&quot; }
+
+// 檔案拖到組件上時取得完整路徑
+document.addEventListener(&quot;dragover&quot;, (e) =&gt; e.preventDefault());
+document.addEventListener(&quot;drop&quot;, async (e) =&gt; {
+  e.preventDefault();
+  const paths = await widget.shell.paths(e.dataTransfer.files);
+});</code></pre></div>
+<p><code>pick</code> 的 <code>type</code> 可以是 <code>file</code> 或 <code>folder</code>，<code>filter</code> 可以是 <code>programs</code>、<code>images</code> 或 <code>all</code>。</p>
+<h3 id="簡繁轉換widgetconvertchinese">簡繁轉換：<code>widget.convertChinese</code></h3>
+<div class="code"><pre><code class="lang-js">await widget.convertChinese(&quot;北极熊和幼崽&quot;, &quot;traditional&quot;);  // &quot;北極熊和幼崽&quot;</code></pre></div>
+<p>用 Windows 內建的字表逐字轉換，適合短句（例如網上取得的簡體標題），不處理「軟件 / 軟體」這類用詞差異。不需要權限。</p>
+<h3 id="通知widgetnotify需要-notify-權限">通知：<code>widget.notify</code>（需要 <code>notify</code> 權限）</h3>
+<div class="code"><pre><code class="lang-js">// 馬上彈出一則 Windows 通知（標題預設是組件名稱）
+widget.notify(&quot;下載完成&quot;);
+
+// 預約在某個時間；同一個 tag 的新預約會取代舊的
+widget.notify({ title: &quot;番茄鐘&quot;, body: &quot;休息一下&quot;, at: Date.now() + 25 * 60 * 1000, tag: &quot;end&quot; });
+
+widget.notify.cancel(&quot;end&quot;); // 取消這個預約；不給 tag 就取消這個組件的全部預約</code></pre></div>
+<p>預約由 WinWidget 計時，所以就算組件因為全螢幕或「隱藏全部組件」暫停了，通知也會準時出現。最多預約 7 天以內、每個組件 20 則；電腦睡眠醒來時，遲了超過 15 分鐘的預約不再顯示。</p>
+<h3 id="視窗widgetwindow">視窗：<code>widget.window</code></h3>
+<div class="code"><pre><code class="lang-js">const { width, height } = await widget.window.getSize();
+await widget.window.setSize(320, 200);   // 會被限制在 size 的 min/max 之內</code></pre></div>
+<h3 id="外觀和事件">外觀和事件</h3>
+<div class="code"><pre><code class="lang-js">// 目前的主題和外觀值
+widget.appearance.get();
+
+// 換主題或改外觀時（CSS 變數已經更新好了）
+widget.appearance.onChange((a) =&gt; {});
+
+// 鎖定、層級、滑鼠穿透改變時：{ locked, layer, clickThrough }
+widget.on(&quot;state&quot;, (s) =&gt; {});
+
+// 被快捷鍵叫出來時（目前是便籤和待辦清單的快捷鍵，叫出 winwidget.notes、winwidget.todo）：把游標放進主要的輸入框
+widget.on(&quot;summon&quot;, () =&gt; {});
+
+// 寫進 WinWidget 的日誌
+widget.log(&quot;訊息&quot;, { any: &quot;data&quot; });</code></pre></div>
+<hr class="sep">
+<h2 id="外觀跟着主題走">外觀：跟着主題走</h2>
+<p>WinWidget 有幾套主題，用戶也能在控制中心調整背景、文字顏色、強調色、字體、字號、圓角、內距和透明度。只要你的組件用下面這些變數和樣式，這一切都會自動生效。</p>
+<h3 id="版面">版面</h3>
+<ul class="plain">
+<li><code>&lt;body&gt;</code> 就是卡片：背景、圓角、邊框、內距都已經設好。內容直接放進 <code>&lt;body&gt;</code>。</li>
+<li><code>&lt;html&gt;</code> 是透明的視窗，四周留了給陰影的空白，不要給它加背景。</li>
+<li>字號用 <code>rem</code>：用戶調「字號」時，<code>1rem</code> 會跟着變（預設 14px）。</li>
+<li>卡片可能被縮放。用 flex/grid 排版；要按大小調整，可以在 <code>body</code> 上設 <code>container-type: size</code>，再用 <code>@container (max-height: 100px) { … }</code>。注意 <code>@container</code> 只能改 <code>body</code> 裏面的元素，改不了 <code>body</code> 本身。</li>
+</ul>
+<h3 id="放大時內容跟着變大">放大時內容跟着變大</h3>
+<p>在 <code>widget.json</code> 的 <code>size</code> 加上 <code>&quot;grow&quot;: 1</code>，用戶把卡片拉得比預設大時，整張卡片的內容會一起放大，字、圖標、間距都按比例變大，不會只是多出空白：</p>
+<div class="code"><pre><code class="lang-json">&quot;size&quot;: { &quot;width&quot;: 260, &quot;height&quot;: 150, &quot;minWidth&quot;: 180, &quot;minHeight&quot;: 110, &quot;grow&quot;: 1 }</code></pre></div>
+<ul class="plain">
+<li>放大的倍數是「寬放大幾倍」和「高放大幾倍」中較小的那個，最多 3 倍。例如拉到兩倍寬、1.3 倍高，內容放大 1.3 倍，多出來的寬度交給你的排版。</li>
+<li>比預設小時不會縮小，小尺寸要靠你自己的排版（上面的 <code>@container</code>）。</li>
+<li><code>grow</code> 可以是 0 到 1 之間：清單類的組件寫 <code>0.5</code>，拉大時字變大一點，同時多顯示幾項。</li>
+<li>不寫或寫 <code>0</code>：和以前一樣，只是多出空間。</li>
+<li>卡片的圓角、邊框和陰影不會跟着放大。目前的倍數在 CSS 變數 <code>--w-size-scale</code>。</li>
+</ul>
+<h3 id="css-變數">CSS 變數</h3>
+<div class="table-wrap"><table><thead><tr><th>變數</th><th>用途</th></tr></thead><tbody><tr><td><code>--w-fg</code></td><td>主要文字顏色</td></tr><tr><td><code>--w-fg-muted</code></td><td>次要文字（標籤、說明）</td></tr><tr><td><code>--w-fg-faint</code></td><td>很淡的文字、分隔</td></tr><tr><td><code>--w-accent</code></td><td>強調色：進度、選中、重點數字</td></tr><tr><td><code>--w-on-accent</code></td><td>放在強調色上面的文字</td></tr><tr><td><code>--w-warn</code> <code>--w-danger</code></td><td>警告、危險</td></tr><tr><td><code>--w-bg</code></td><td>卡片背景（已用在 body 上）</td></tr><tr><td><code>--w-bg-solid</code></td><td>卡片的顏色，但不透明：用在要擋住後面內容的地方，例如彈出的清單</td></tr><tr><td><code>--w-border</code> <code>--w-rule</code></td><td>邊框、分隔線</td></tr><tr><td><code>--w-track</code></td><td>進度條的底</td></tr><tr><td><code>--w-control-bg</code> <code>--w-hover</code></td><td>輸入框底色、滑過時的底色</td></tr><tr><td><code>--w-font</code></td><td>內文字體</td></tr><tr><td><code>--w-font-num</code></td><td>數字的字體</td></tr><tr><td><code>--w-font-display</code></td><td>組件裏那個最大的數字（時間、溫度）的字體</td></tr><tr><td><code>--w-font-title</code></td><td>標題字體</td></tr><tr><td><code>--w-radius</code> <code>--w-padding</code></td><td>卡片圓角、內距</td></tr></tbody></table></div>
+<h3 id="現成的樣式">現成的樣式</h3>
+<div class="table-wrap"><table><thead><tr><th>class</th><th>用途</th></tr></thead><tbody><tr><td><code>w-label</code></td><td>小號、次要顏色的標籤文字</td></tr><tr><td><code>w-title</code></td><td>標題</td></tr><tr><td><code>w-num</code></td><td>數字（等寬、主題的數字字體）</td></tr><tr><td><code>w-display</code></td><td>最大的那個數字</td></tr><tr><td><code>w-rule</code></td><td>分隔線（用在 <code>&lt;hr&gt;</code> 或 <code>&lt;div&gt;</code>）</td></tr><tr><td><code>w-bar</code></td><td>進度條：<code>&lt;div class=&quot;w-bar&quot;&gt;&lt;i style=&quot;width:40%&quot;&gt;&lt;/i&gt;&lt;/div&gt;</code>；加 <code>is-warn</code> 變成警告色</td></tr><tr><td><code>w-input</code></td><td>輸入框</td></tr><tr><td><code>w-btn</code></td><td>按鈕；加 <code>is-primary</code> 變成強調色按鈕</td></tr><tr><td><code>w-check</code></td><td>圓形勾選框：<code>&lt;button class=&quot;w-check&quot; aria-pressed=&quot;true&quot;&gt;</code></td></tr></tbody></table></div>
+<h3 id="按主題微調">按主題微調</h3>
+<p><code>&lt;html&gt;</code> 上有這些屬性，可以寫專門的樣式：</p>
+<div class="code"><pre><code class="lang-css">/* 某一套主題 */
+html[data-theme=&quot;paper&quot;] .quote { font-style: italic; }
+
+/* 用戶選了毛玻璃卡片 */
+html[data-style=&quot;frosted&quot;] .quote { letter-spacing: 0.02em; }
+
+/* 組件被鎖定時 */
+html[data-locked=&quot;true&quot;] #next { display: none; }</code></pre></div>
+<p>用戶也可以在控制中心「外觀 → 自訂 CSS」給單一組件加樣式，它會排在你的 CSS 之後。</p>
+<h3 id="省電每秒更新的東西不要加動畫">省電：每秒更新的東西不要加動畫</h3>
+<p>組件整天開着，每一幀畫面都要算。每秒更新一次的數字或進度條，如果加了 0.5 秒的 <code>transition</code>，畫面就幾乎一直在動，一個組件可以吃掉 20% 的處理器核心；不加的話只要 1%。</p>
+<ul class="plain">
+<li>每秒或更頻繁更新的元素，不要 <code>transition</code> 和 <code>animation</code>。<code>w-bar</code> 預設有 0.5 秒的寬度動畫，每秒更新時寫 <code>.w-bar &gt; i { transition: none; }</code>。</li>
+<li>不要 <code>animation: … infinite</code>；要閃爍提示，給一個次數（例如 <code>8</code>）。</li>
+<li>指針、轉盤這類要轉的東西，放在獨立的元素上用 CSS <code>transform</code> 轉，不要每秒重畫整個 SVG。</li>
+<li>每分鐘才變的東西，就每分鐘才更新（<code>setTimeout</code> 對準下一分鐘）。</li>
+</ul>
+<hr class="sep">
+<h2 id="拖動選單和點擊">拖動、選單和點擊</h2>
+<p>WinWidget 已經幫你處理好：</p>
+<ul class="plain">
+<li><strong>拖動</strong>：在卡片任何地方按住拖動，就能移動組件。按鈕、連結、輸入框不會觸發拖動；其他元素不想被拖動時，加上 <code>data-no-drag</code>。</li>
+<li><strong>右鍵</strong>：顯示 WinWidget 的組件選單。某個區域要自己處理右鍵時，加上 <code>data-no-menu</code>。</li>
+<li><strong>縮放</strong>：<code>size.resizable</code> 不是 <code>false</code> 時，右下角會有縮放手把。</li>
+<li><strong>鎖定</strong>：用戶鎖定組件後不能拖動和縮放；你可以用 <code>widget.locked</code> 和 <code>html[data-locked]</code> 知道。</li>
+</ul>
+<hr class="sep">
+<h2 id="權限">權限</h2>
+<p>組件預設只能顯示自己的內容：不能連網、讀不到系統資訊、也碰不到你電腦上的檔案。要用到這些，在 <code>widget.json</code> 的 <code>permissions</code> 裏聲明：</p>
+<div class="table-wrap"><table><thead><tr><th>權限</th><th>允許</th></tr></thead><tbody><tr><td><code>system</code></td><td><code>widget.system</code>：處理器、記憶體、網速、磁碟、電池</td></tr><tr><td><code>network:api.example.com</code></td><td>連到這個網站</td></tr><tr><td><code>network:*.example.com</code></td><td>連到 example.com 和它所有的子網域</td></tr><tr><td><code>network:*</code></td><td>連到任何網站（用戶安裝時會看到明顯的提示，能不用就不用）</td></tr><tr><td><code>shell.open</code></td><td><code>widget.shell.open</code>：用瀏覽器打開網址</td></tr><tr><td><code>notify</code></td><td><code>widget.notify</code>：顯示 Windows 通知</td></tr><tr><td><code>audio</code></td><td><code>widget.audio</code>：讀取和調整系統音量、靜音</td></tr><tr><td><code>media</code></td><td><code>widget.media</code>：讀取正在播放的歌名、封面，播放、暫停、切換曲目</td></tr><tr><td><code>shell.launch</code></td><td><code>widget.shell.launch</code>、<code>pick</code>、<code>info</code>、<code>paths</code>：打開程式和檔案、選檔案、讀取名稱和圖標（用戶允許時會看到明顯的提示）</td></tr></tbody></table></div>
+<p>讀取資料夾不用聲明權限：用戶在設定裏選了哪個資料夾，組件就只能讀那個資料夾裏的圖片，見 [<code>widget.files</code>](#讀取用戶選的資料夾widgetfiles)。</p>
+<p><strong>誰來允許：</strong></p>
+<ul class="plain">
+<li>用「新建組件」建立的組件是你自己寫的，聲明的權限直接生效。</li>
+<li>別人的組件，安裝時會列出它要的權限，用戶按「安裝」才算允許。更新後多要了權限，用戶要再允許一次，在那之前新權限用不了。</li>
+<li>把別人的組件資料夾直接放進組件目錄的話，第一次放上桌面時會先請用戶允許。</li>
+</ul>
+<p><strong>連網的規則：</strong> 不只 <code>widget.fetch</code>，頁面裏直接載入的圖片、字體、腳本、<code>fetch()</code> 和 WebSocket 也只能連到允許的網站。差別是：直接 <code>fetch()</code> 要對方網站支援 CORS，<code>widget.fetch</code> 不用。</p>
+<hr class="sep">
+<h2 id="除錯">除錯</h2>
+<p>在控制中心「設定」打開 <strong>開發者模式</strong>（用「新建組件」時會自動打開）。打開後：</p>
+<ul class="plain">
+<li><strong>存檔即重新載入</strong>：組件資料夾裏任何檔案存檔後，用到它的組件會自動重新載入；改了 <code>widget.json</code>，新的尺寸和設定項也會立即生效。</li>
+<li><strong>錯誤提示</strong>：腳本出錯時，卡片底部會顯示錯誤和位置，點一下打開開發者工具。</li>
+<li><strong>開發者工具</strong>：在組件上按 F12，或控制中心「我的組件 → 位置與行為 → 開發者工具」。F5 重新載入。</li>
+<li><strong>日誌</strong>：<code>widget.log()</code> 的內容和組件的錯誤，都寫在 <code>%LocalAppData%\WinWidget\logs\app.log</code>。</li>
+<li><strong>沒有載入的組件</strong>：<code>widget.json</code> 寫錯（例如少了逗號、id 不合規則、找不到入口檔），「添加組件」頁頂部會列出是哪個資料夾、哪一行、什麼問題。</li>
+</ul>
+<p><strong>命令列</strong>（在終端機執行，作用在正在運行的 WinWidget 上）：</p>
+<div class="code"><pre><code class="lang-bat">WinWidget.exe --cmd=&quot;reload me.daily-quote&quot;
+WinWidget.exe --cmd=&quot;devtools me.daily-quote&quot;
+WinWidget.exe --cmd=&quot;add me.daily-quote&quot;
+WinWidget.exe --cmd=&quot;rescan&quot;
+WinWidget.exe --cmd=&quot;export me.daily-quote D:\out\daily-quote.fwz&quot;
+WinWidget.exe D:\downloads\daily-quote.fwz</code></pre></div>
+<p><code>reload</code>、<code>devtools</code> 也可以用桌面上某一個的識別碼（控制中心「位置與行為」裏的「識別碼」）。</p>
+<hr class="sep">
+<h2 id="打包和分享">打包和分享</h2>
+<p><code>.fwz</code> 就是把組件資料夾壓成 zip、改了副檔名。</p>
+<ul class="plain">
+<li><strong>匯出</strong>：控制中心「添加組件」→ 你的組件卡片 →「匯出 .fwz」。隱藏的檔案和資料夾（例如 <code>.git</code>）以及 <code>node_modules</code> 不會被打包。</li>
+<li><strong>安裝</strong>：雙擊 <code>.fwz</code> 檔案、把它拖到控制中心視窗上，或在「添加組件」按「安裝 .fwz 檔案…」。安裝前會顯示名稱、作者、版本和需要的權限。</li>
+<li><strong>更新</strong>：改大 <code>version</code> 再匯出。<code>id</code> 相同的組件會被替換，桌面上的組件、設定和保存的資料都會保留；舊版本移到資源回收筒。</li>
+<li><strong>用框架寫</strong>：React、Vue、Svelte 都可以，只要輸出靜態檔案。把建置結果（例如 <code>dist/</code>）和 <code>widget.json</code> 放在一起，<code>entry</code> 指向它的 <code>index.html</code>；資源路徑要用相對路徑（例如 Vite 設 <code>base: &quot;./&quot;</code>）。</li>
+<li><strong>大小限制</strong>：<code>.fwz</code> 最大 64 MB，解壓後最多 256 MB、5000 個檔案。</li>
+</ul>
+<hr class="sep">
+<h2 id="和外殼怎麼對接進階">和外殼怎麼對接（進階）</h2>
+<p>前面幾章的寫法已經能做出完整的組件。這一章寫給想知道「它到底怎麼跑起來」的人：頁面從哪來、外殼塞了什麼進來、有哪些訊息、資料放在哪。看清楚這些，除錯和做進階功能都會快很多。</p>
+<h3 id="頁面是怎麼被載入的">頁面是怎麼被載入的</h3>
+<p>WinWidget 不是用 <code>file://</code> 打開你的 <code>index.html</code>，而是啟動一個只綁定 <code>127.0.0.1</code> 的小型 HTTP 服務，頁面由它提供：</p>
+<div class="code"><pre><code>http://127.0.0.1:&lt;連接埠&gt;/__fw/&lt;組件 id&gt;/index.html</code></pre></div>
+<ul class="plain">
+<li><strong>連接埠每次啟動都可能不同</strong>，所以永遠寫相對路徑（<code>style.css</code>、<code>main.js</code>、<code>img/a.png</code>），不要寫死 <code>127.0.0.1:8800</code>。</li>
+<li>每一種組件有自己的 origin：<code>&lt;組件id&gt;.widgets.localhost</code>。<code>localStorage</code>、<code>IndexedDB</code>、<code>Cache</code> 都按 origin 隔離，同一種組件的多個實例共用這一份。</li>
+<li>頁面不能自行跳轉到別的網址，也不能開新視窗；要開網頁請用 <code>widget.shell.open</code>。</li>
+<li>頁面裏載入的圖片、字體、腳本，同樣受 <code>permissions</code> 的 <code>network:</code> 限制。</li>
+</ul>
+<h3 id="啟動時外殼塞進來的東西">啟動時外殼塞進來的東西</h3>
+<p>在你的任何腳本執行之前，外殼會把這些放在 <code>window.__FW_BOOT__</code>：</p>
+<div class="table-wrap"><table><thead><tr><th>欄位</th><th>內容</th></tr></thead><tbody><tr><td><code>settings</code></td><td>這個實例的全部設定值（已按語言折疊，見下）</td></tr><tr><td><code>appearance</code></td><td>目前外觀：<code>theme</code>、<code>style</code>、<code>shadow</code>、<code>themeCss</code>、<code>themeHref</code>、<code>userCss</code> 等</td></tr><tr><td><code>locked</code></td><td>是否被用戶鎖定</td></tr><tr><td><code>layer</code></td><td>目前的層級：<code>desktop</code> / <code>normal</code> / <code>top</code></td></tr><tr><td><code>clickThrough</code></td><td>是否開着滑鼠穿透</td></tr><tr><td><code>state</code></td><td><code>{ edit, label }</code>：排列模式、卡片上那個名稱標籤</td></tr><tr><td><code>developer</code></td><td>是否在開發者模式</td></tr><tr><td><code>locale</code></td><td>用戶語言，例如 <code>zh-TW</code></td></tr><tr><td><code>permissions</code></td><td>現在真的能用的權限（已聲明且用戶已允許的）</td></tr><tr><td><code>hostVersion</code></td><td>WinWidget 版本，例如 <code>1.0.0</code></td></tr><tr><td><code>widgetId</code> / <code>instanceId</code></td><td>組件 id、桌面上這一個的識別碼</td></tr><tr><td><code>size</code></td><td><code>{ width, height, grow }</code>，<code>width</code>/<code>height</code> 是預設尺寸</td></tr><tr><td><code>resizable</code></td><td>是否允許縮放</td></tr></tbody></table></div>
+<p><code>widget-sdk.js</code> 讀完這一份才建立 <code>window.widget</code>，所以你在 <code>main.js</code> 第一行就能用 <code>widget</code>。</p>
+<h3 id="訊息協議">訊息協議</h3>
+<p><code>widget.*</code> 的每一個方法，最後都是一則訊息。想不通某個行為時，直接在開發者工具裏看訊息最有效：</p>
+<div class="code"><pre><code class="lang-js">// 呼叫：{ id, m, p }；外殼回：{ id, r } 或 { id, e: &quot;錯誤訊息&quot; }
+chrome.webview.postMessage(JSON.stringify({ id: 7, m: &quot;storage.get&quot;, p: { key: &quot;todo&quot; } }));
+
+// 不需要回應的（拖動、開選單）：{ m, p }
+chrome.webview.postMessage(JSON.stringify({ m: &quot;window.menu&quot; }));
+
+// 外殼主動推：{ ev: &quot;settings&quot; | &quot;appearance&quot; | &quot;state&quot; | &quot;system&quot; | &quot;audio&quot; | &quot;media&quot; | &quot;identify&quot;, d: … }
+chrome.webview.addEventListener(&quot;message&quot;, (e) =&gt; console.log(e.data));</code></pre></div>
+<p>日常用 SDK 就好，這一層是給你排查問題的：SDK 的錯誤訊息會前後帶上目標，例如 <code>HTTP 404 (https://api.example.com/x)</code>。</p>
+<h3 id="外殼提供的方法一覽">外殼提供的方法一覽</h3>
+<p>SDK 已經包好，下表是底層名稱，方便你在開發者工具裏對照：</p>
+<div class="table-wrap"><table><thead><tr><th>訊息 <code>m</code></th><th>等於</th></tr></thead><tbody><tr><td><code>settings.set</code></td><td><code>widget.settings.set(key, value)</code></td></tr><tr><td><code>storage.get</code> / <code>set</code> / <code>remove</code> / <code>keys</code></td><td><code>widget.storage.*</code></td></tr><tr><td><code>system.subscribe</code> / <code>unsubscribe</code> / <code>history</code> / <code>info</code> / <code>adapters</code> / <code>ping</code></td><td><code>widget.system.*</code></td></tr><tr><td><code>audio.get</code> / <code>set</code> / <code>subscribe</code> / <code>unsubscribe</code></td><td><code>widget.audio.*</code></td></tr><tr><td><code>media.get</code> / <code>control</code> / <code>lyrics</code> / <code>subscribe</code> / <code>unsubscribe</code></td><td><code>widget.media.*</code></td></tr><tr><td><code>files.list</code> / <code>info</code> / <code>pick</code></td><td><code>widget.files.*</code></td></tr><tr><td><code>recycle.query</code> / <code>empty</code> / <code>open</code></td><td><code>widget.recycleBin.*</code>（只有內建組件能用）</td></tr><tr><td><code>power.do</code></td><td><code>widget.power(action)</code>（只有內建組件能用）</td></tr><tr><td><code>net.fetch</code></td><td><code>widget.fetch(url, options)</code></td></tr><tr><td><code>notify.show</code> / <code>cancel</code></td><td><code>widget.notify(...)</code></td></tr><tr><td><code>shell.open</code> / <code>launch</code> / <code>info</code> / <code>pick</code> / <code>paths</code></td><td><code>widget.shell.*</code></td></tr><tr><td><code>text.chinese</code></td><td><code>widget.convertChinese(text, to)</code></td></tr><tr><td><code>window.getSize</code> / <code>setSize</code> / <code>drag</code> / <code>resize</code> / <code>press</code> / <code>menu</code> / <code>devtools</code></td><td><code>widget.window.*</code>；後四個由 SDK 自己發</td></tr><tr><td><code>log</code></td><td><code>widget.log(...)</code></td></tr></tbody></table></div>
+<p><code>log</code> 和 <code>ready</code> 沒有回應，其餘都會回。</p>
+<h3 id="內建資源">內建資源</h3>
+<div class="table-wrap"><table><thead><tr><th>位址</th><th>內容</th></tr></thead><tbody><tr><td><code>/__fw/widget-sdk.js</code></td><td>SDK（每個頁面自動注入）</td></tr><tr><td><code>/__fw/base.css</code></td><td>主題變數和 <code>w-*</code> 樣式（每個頁面自動載入）</td></tr><tr><td><code>/__fw/places.js</code></td><td>城市定位與天氣用的地名查詢，見<a href="#城市與定位placesjs">城市與定位</a></td></tr><tr><td><code>/__fw/themes/…</code></td><td>主題的 CSS 和字體</td></tr><tr><td><code>/__files/&lt;實例&gt;/&lt;設定key&gt;/&lt;相對路徑&gt;</code></td><td>用戶選的資料夾裏的圖片（<code>widget.files.url()</code> 生成的就是這個）</td></tr><tr><td><code>/__docs/</code></td><td>說明文件（就是你在看的這一份）</td></tr></tbody></table></div>
+<h3 id="資料放在哪">資料放在哪</h3>
+<div class="table-wrap"><table><thead><tr><th>內容</th><th>位置</th></tr></thead><tbody><tr><td>保存的資料（<code>widget.storage</code>）</td><td><code>%AppData%\WinWidget\data\&lt;實例識別碼&gt;.json</code>，每個實例 2 MB</td></tr><tr><td>你的組件資料夾</td><td><code>%AppData%\WinWidget\widgets\</code>（控制中心「設定 → 組件目錄」可直接打開）</td></tr><tr><td>設定與卡片位置</td><td><code>%AppData%\Roaming\WinWidget\config.json</code></td></tr><tr><td>日誌</td><td><code>%LocalAppData%\WinWidget\logs\app.log</code></td></tr></tbody></table></div>
+<p>移除一個實例時，它的保存資料一起刪除；移除組件資料夾不影響已經在桌面上的卡片（會標成「組件已不存在」）。</p>
+<h3 id="城市與定位placesjs">城市與定位：<code>places.js</code></h3>
+<p>內建的天氣、一週天氣、空氣品質、日出日落都用它，你也可以直接用：</p>
+<div class="code"><pre><code class="lang-html">&lt;script src=&quot;/__fw/places.js&quot;&gt;&lt;/script&gt;
+&lt;script src=&quot;main.js&quot;&gt;&lt;/script&gt;</code></pre></div>
+<div class="code"><pre><code class="lang-js">// 需要 &quot;network:geocoding-api.open-meteo.com&quot;，按網絡定位還要 &quot;network:get.geojs.io&quot;
+const place = await places.locate(widget.settings.get(&quot;city&quot;));   // &quot;&quot; → 按 IP 定位
+// place: { name: &quot;南昌&quot;, lat, lon, tz, at }
+// 城市不存在時丟 places.NotFound，message 已經是可以直接顯示的一句話
+
+// 把定位結果寫回設定，讓控制中心的城市框顯示目前是哪個城市（使用者自己填過就不動）
+places.echo(widget, settings, place);</code></pre></div>
+<p>結果會存進 <code>widget.storage</code>（<code>geo2:&lt;城市&gt;</code>、IP 定位是 <code>geo2:ip</code>，6 小時後重查一次），所以同一個城市只查一次。</p>
+<hr class="sep">
+<h2 id="完整-api-對照表">完整 API 對照表</h2>
+<p>一頁看完。所有回傳 Promise 的都可以 <code>await</code>；標「同步」的不用。</p>
+<div class="table-wrap"><table><thead><tr><th>API</th><th>權限</th><th>回傳</th><th>說明</th></tr></thead><tbody><tr><td><code>widget.apiVersion</code></td><td>—</td><td><code>1</code></td><td>SDK 版本</td></tr><tr><td><code>widget.hostVersion</code></td><td>—</td><td>字串</td><td>WinWidget 版本</td></tr><tr><td><code>widget.id</code></td><td>—</td><td>字串</td><td>組件 id</td></tr><tr><td><code>widget.instanceId</code></td><td>—</td><td>字串</td><td>這個實例的識別碼</td></tr><tr><td><code>widget.locale</code></td><td>—</td><td>字串</td><td>用戶語言</td></tr><tr><td><code>widget.developer</code></td><td>—</td><td>布林</td><td>開發者模式</td></tr><tr><td><code>widget.permissions</code></td><td>—</td><td>陣列</td><td>現在可用的權限</td></tr><tr><td><code>widget.locked</code></td><td>—</td><td>布林</td><td>是否鎖定（會即時更新）</td></tr><tr><td><code>widget.layer</code></td><td>—</td><td>字串</td><td>目前層級</td></tr><tr><td><code>widget.theme</code></td><td>—</td><td>字串</td><td>目前主題 id</td></tr><tr><td><code>widget.t(dict)</code></td><td>—</td><td>同步</td><td>按語言挑字串</td></tr><tr><td><code>widget.on(event, fn)</code></td><td>—</td><td>退訂函式</td><td>監聽事件</td></tr><tr><td><code>widget.settings.get(key?)</code></td><td>—</td><td>同步</td><td>讀設定</td></tr><tr><td><code>widget.settings.set(key, value)</code></td><td>—</td><td>Promise</td><td>寫設定，控制中心同步顯示</td></tr><tr><td><code>widget.settings.onChange(fn)</code></td><td>—</td><td>退訂函式</td><td>設定變更</td></tr><tr><td><code>widget.storage.get/set/remove/keys</code></td><td>—</td><td>Promise</td><td>保存資料，每個實例 2 MB</td></tr><tr><td><code>widget.system.subscribe(topics, cb, {interval})</code></td><td><code>system</code></td><td>退訂函式</td><td>週期取樣，第一筆馬上到</td></tr><tr><td><code>widget.system.history()</code></td><td><code>system</code></td><td>Promise</td><td>最近 15 分鐘的取樣（<code>{ now, points }</code>）</td></tr><tr><td><code>widget.system.info()</code></td><td><code>system</code></td><td>Promise</td><td>系統、處理器、記憶體、顯卡、開機時長</td></tr><tr><td><code>widget.system.adapters()</code></td><td><code>system</code></td><td>Promise</td><td>網路卡、IP、閘道</td></tr><tr><td><code>widget.system.ping(host, {timeout})</code></td><td><code>system</code></td><td>Promise</td><td>一次 ping，每秒最多一次</td></tr><tr><td><code>widget.audio.get()</code></td><td><code>audio</code></td><td>Promise</td><td>音量、靜音、裝置名</td></tr><tr><td><code>widget.audio.set({volume?, muted?})</code></td><td><code>audio</code></td><td>Promise</td><td>調整音量</td></tr><tr><td><code>widget.audio.onChange(fn)</code></td><td><code>audio</code></td><td>退訂函式</td><td>音量鍵、系統匣、換耳機都會通知</td></tr><tr><td><code>widget.media.get()</code></td><td><code>media</code></td><td>Promise</td><td>目前播放的內容</td></tr><tr><td><code>widget.media.onChange(fn)</code></td><td><code>media</code></td><td>退訂函式</td><td>換歌、暫停、換程式</td></tr><tr><td><code>widget.media.play/pause/toggle/next/previous()</code></td><td><code>media</code></td><td>Promise</td><td>控制播放</td></tr><tr><td><code>widget.media.seek(ms)</code></td><td><code>media</code></td><td>Promise</td><td>跳到某個位置</td></tr><tr><td><code>widget.media.position(state)</code></td><td><code>media</code></td><td>同步</td><td>依 state 推算現在播到哪（毫秒）</td></tr><tr><td><code>widget.media.lyrics()</code></td><td><code>media</code> + <code>network:*</code></td><td>Promise</td><td>時間軸歌詞</td></tr><tr><td><code>widget.files.list(key, {recursive})</code></td><td>用戶選過資料夾</td><td>Promise</td><td>資料夾裏的圖片</td></tr><tr><td><code>widget.files.url(file, {width})</code></td><td>—</td><td>同步</td><td>圖片網址，可要求縮圖</td></tr><tr><td><code>widget.files.info(key, path)</code></td><td>—</td><td>Promise</td><td>尺寸、拍攝時間</td></tr><tr><td><code>widget.files.pick(key)</code></td><td>—</td><td>Promise</td><td>開資料夾視窗，選好存進設定</td></tr><tr><td><code>widget.recycleBin.query/empty/open</code></td><td>內建</td><td>Promise</td><td>資源回收筒</td></tr><tr><td><code>widget.power(action)</code></td><td>內建</td><td>Promise</td><td><code>lock</code> / <code>sleep</code> / <code>restart</code> / <code>shutdown</code> / <code>signout</code></td></tr><tr><td><code>widget.fetch(url, {method, headers, body, as})</code></td><td><code>network:</code></td><td>Promise</td><td>不受 CORS 限制，最多 8 MB</td></tr><tr><td><code>widget.shell.open(url)</code></td><td><code>shell.open</code></td><td>Promise</td><td>用瀏覽器打開</td></tr><tr><td><code>widget.shell.launch(path)</code></td><td><code>shell.launch</code></td><td>Promise</td><td>打開程式、捷徑、資料夾、文件</td></tr><tr><td><code>widget.shell.info(path, {size})</code></td><td><code>shell.launch</code></td><td>Promise</td><td>名稱、類型、圖標</td></tr><tr><td><code>widget.shell.pick({type, filter, title})</code></td><td><code>shell.launch</code></td><td>Promise</td><td>選檔案或資料夾</td></tr><tr><td><code>widget.shell.paths(files)</code></td><td><code>shell.launch</code></td><td>Promise</td><td>拖進來的檔案路徑</td></tr><tr><td><code>widget.convertChinese(text, to)</code></td><td>—</td><td>Promise</td><td>簡繁逐字轉換</td></tr><tr><td><code>widget.notify(o)</code> / <code>widget.notify.cancel(tag?)</code></td><td><code>notify</code></td><td>Promise</td><td>Windows 通知，可預約</td></tr><tr><td><code>widget.window.getSize()</code></td><td>—</td><td>Promise</td><td>卡片目前的寬高</td></tr><tr><td><code>widget.window.setSize(w, h)</code></td><td>—</td><td>Promise</td><td>改大小（受 min/max 限制）</td></tr><tr><td><code>widget.window.startDrag()</code></td><td>—</td><td>同步</td><td>由你的程式碼開始拖動</td></tr><tr><td><code>widget.appearance.get()</code></td><td>—</td><td>同步</td><td>目前外觀</td></tr><tr><td><code>widget.appearance.onChange(fn)</code></td><td>—</td><td>退訂函式</td><td>換主題、改外觀</td></tr><tr><td><code>widget.log(...args)</code></td><td>—</td><td>同步</td><td>寫進 app.log</td></tr></tbody></table></div>
+<h3 id="事件">事件</h3>
+<div class="table-wrap"><table><thead><tr><th>事件</th><th>什麼時候來</th><th>內容</th></tr></thead><tbody><tr><td><code>settings</code></td><td>用戶在控制中心改了設定</td><td>全部設定值</td></tr><tr><td><code>appearance</code></td><td>換主題、改外觀</td><td>新的外觀值</td></tr><tr><td><code>state</code></td><td>鎖定、層級、穿透改變</td><td><code>{ locked, layer, clickThrough }</code></td></tr><tr><td><code>summon</code></td><td>快捷鍵叫出組件（便籤、待辦）</td><td>無</td></tr><tr><td><code>identify</code></td><td>控制中心按「定位」</td><td>無（SDK 自己畫光環）</td></tr><tr><td>其他</td><td>外殼推來沒認得的 <code>ev</code></td><td>原樣轉給你</td></tr></tbody></table></div>
+<h3 id="設定值的語言折疊">設定值的語言折疊</h3>
+<p>設定值可以按語言各寫一份，外殼在交給你的那一刻已經折疊成「用戶語言的那一個字串」：</p>
+<div class="code"><pre><code class="lang-json">{ &quot;key&quot;: &quot;city&quot;, &quot;type&quot;: &quot;text&quot;, &quot;default&quot;: { &quot;zh-TW&quot;: &quot;台北&quot;, &quot;zh-CN&quot;: &quot;厦门&quot;, &quot;en&quot;: &quot;Taipei&quot; } }</code></pre></div>
+<div class="code"><pre><code class="lang-js">widget.settings.get(&quot;city&quot;);   // &quot;厦门&quot;（用戶是簡體中文）</code></pre></div>
+<hr class="sep">
+<h2 id="三個完整例子">三個完整例子</h2>
+<h3 id="例-1把一個網路-api-的數字放上桌面">例 1：把一個網路 API 的數字放上桌面</h3>
+<p>需求：顯示某個 GitHub 專案的 star 數，每 30 分鐘更新，斷網時顯示上次的值。</p>
+<p><code>widget.json</code> 重點：<code>&quot;permissions&quot;: [&quot;network:api.github.com&quot;]</code>。</p>
+<div class="code"><pre><code class="lang-js">const $ = (id) =&gt; document.getElementById(id);
+const KEY = &quot;last&quot;;
+
+async function fetchOnce() {
+  const r = await widget.fetch(&quot;https://api.github.com/repos/Demon1110/WinWidget&quot;, {
+    headers: { accept: &quot;application/vnd.github+json&quot; },
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const repo = await r.json();
+  return { stars: repo.stargazers_count, at: Date.now() };
+}
+
+async function refresh() {
+  try {
+    const data = await fetchOnce();
+    show(data, false);
+    await widget.storage.set(KEY, data);
+  } catch (e) {
+    // 失敗時退回上次的值，並在角落標一下「舊資料」
+    const old = await widget.storage.get(KEY);
+    if (old) show(old, true);
+    else $(&quot;stars&quot;).textContent = &quot;—&quot;;
+    widget.log(`stars: ${e.message}`);
+  }
+}
+
+function show(data, stale) {
+  $(&quot;stars&quot;).textContent = data.stars.toLocaleString(widget.locale);
+  $(&quot;at&quot;).textContent = new Date(data.at).toLocaleTimeString(widget.locale, { hour: &quot;2-digit&quot;, minute: &quot;2-digit&quot; });
+  $(&quot;stale&quot;).hidden = !stale;
+}
+
+refresh();
+setInterval(refresh, 30 * 60 * 1000);   // 30 分鐘
+document.addEventListener(&quot;visibilitychange&quot;, () =&gt; { if (!document.hidden) refresh(); });</code></pre></div>
+<p>要點：</p>
+<ul class="plain">
+<li><code>permissions</code> 要寫 <code>network:api.github.com</code>（不是 <code>*.github.com</code>：能少就少）。</li>
+<li>先寫畫面再寫資料，或像上面一樣「失敗也有東西可顯示」，卡片不會一片空白。</li>
+<li>定時器用 <code>setInterval</code> 就好；不要每秒輪詢，<code>widget.media</code>、<code>widget.audio</code> 這類有事件的就用 <code>onChange</code>。</li>
+</ul>
+<h3 id="例-2每秒更新的系統監控省電寫法">例 2：每秒更新的系統監控（省電寫法）</h3>
+<div class="code"><pre><code class="lang-js">const $ = (id) =&gt; document.getElementById(id);
+const bars = [];
+
+// 一次訂閱兩個主題；WinWidget 會合成一筆資料給你
+widget.system.subscribe([&quot;cpu&quot;, &quot;memory&quot;], (d) =&gt; {
+  if (d.cpu) {
+    $(&quot;cpu&quot;).textContent = `${Math.round(d.cpu.usage)}%`;
+    push(bars[0], d.cpu.usage);
+  }
+  if (d.memory) {
+    $(&quot;mem&quot;).textContent = `${Math.round(d.memory.usage)}%`;
+    push(bars[1], d.memory.usage);
+  }
+}, { interval: 1000 });
+
+/** 20 格的迷你曲線；每秒更新，所以不加 transition。 */
+function push(bar, value) {
+  const cell = document.createElement(&quot;i&quot;);
+  cell.style.height = `${Math.max(4, Math.min(100, value))}%`;
+  bar.appendChild(cell);
+  if (bar.children.length &gt; 20) bar.firstElementChild.remove();
+}</code></pre></div>
+<div class="code"><pre><code class="lang-css">#cpu, #mem { font-variant-numeric: tabular-nums; }   /* 數字不會左右跳 */
+.mini { display: flex; align-items: flex-end; gap: 1px; height: 1.6rem; }
+.mini i { width: 2px; background: var(--w-accent); } /* 不要 transition / animation */</code></pre></div>
+<p>要點：</p>
+<ul class="plain">
+<li>每秒更新的元素不要 <code>transition</code>、不要 <code>animation</code>：一個 0.5 秒的動畫等於整張卡片一直在重畫，處理器會一直有負擔。</li>
+<li>數字用 <code>font-variant-numeric: tabular-nums</code>，寬度不會隨數字變動而抖。</li>
+<li>訂閱用完要退訂（<code>const stop = widget.system.subscribe(...); stop()</code>），否則卡片一直有取樣成本。</li>
+</ul>
+<h3 id="例-3同一個組件放兩個各記各的">例 3：同一個組件放兩個，各記各的</h3>
+<div class="code"><pre><code class="lang-js">// 卡片自己在拖動和縮放時會變，實例識別碼不會變：用它當資料分界
+const key = `state:${widget.instanceId}`;
+
+const saved = await widget.storage.get(key);
+index = saved ? saved.index : 0;
+
+function save() {
+  widget.storage.set(key, { index });   // 不用 await，寫入很快
+}</code></pre></div>
+<p>要點：<code>widget.storage</code> 的鍵是<strong>組件</strong>級別的（同一組件的兩個實例共用一個檔案），要分開保存就在鍵裏帶上 <code>instanceId</code>；設定值（<code>settings</code>）則是每個實例各自一份。</p>
+<hr class="sep">
+<h2 id="寫組件的檢查清單">寫組件的檢查清單</h2>
+<p>交付前逐條看一眼，能省掉九成的「裝上去怪怪的」：</p>
+<ul class="plain">
+<li><code>widget.json</code> 的 <code>id</code> 只用小寫英文、數字和 <code>. _ -</code>，2–64 字元，之後不再改。</li>
+<li><code>entry</code> 指向的檔案真的存在；所有資源都用<strong>相對路徑</strong>。</li>
+<li>檔案存成 UTF-8（沒有 BOM 也可以，有 BOM 會讓 JSON 解析失敗）。</li>
+<li>用到的能力都在 <code>permissions</code> 裏聲明；能用 <code>network:某個網站</code> 就不要 <code>network:*</code>。</li>
+<li>第一次載入就有東西看：先畫版面，再等資料；取不到時給一句人話，不要空白。</li>
+<li>每秒更新的元素不加動畫；不定時輪詢已經有事件的功能。</li>
+<li>數字和日期用 <code>widget.locale</code> 格式化，文字用 <code>widget.t()</code>。</li>
+<li>只用 <code>--w-*</code> 變數和 <code>w-*</code> 樣式，三套主題切一遍都不會看不到字。</li>
+<li>卡片可以被拉大縮小：用 flex/grid，必要時 <code>@container</code>；想讓內容跟着放大就設 <code>grow</code>。</li>
+<li>不要寫 <code>window.open</code>、頁面跳轉、<code>document.write</code>；要開網頁用 <code>widget.shell.open</code>。</li>
+<li>不要引用 CDN 上的腳本或字體（離線就壞了），要打包進組件資料夾。</li>
+<li>送出前在開發者模式按 F12 看一遍 Console，沒有紅色錯誤再匯出 <code>.fwz</code>。</li>
+</ul>
+<hr class="sep">
+<h2 id="常見問題">常見問題</h2>
+<p><strong>改了檔案，桌面上沒變化。</strong> 確認「設定」裏開發者模式是開的。沒開的話，在組件上右鍵 →「重新載入」。如果改的是 <code>widget.json</code> 而組件不見了，看「添加組件」頁頂部是不是列出了錯誤。</p>
+<p>**<code>widget.fetch</code> 失敗，說 permission denied。** 把那個網站加進 <code>permissions</code>，例如 <code>&quot;network:api.example.com&quot;</code>。錯誤訊息裏會寫出要加的那一行。如果說 &quot;not allowed yet&quot;，表示已經聲明但用戶還沒允許：到控制中心「我的組件」選這個組件，按「查看並允許」。</p>
+<p>**直接用 <code>fetch()</code> 或 <code>&lt;img&gt;</code> 載入網路上的東西失敗。** 網站要在 <code>permissions</code> 裏。<code>fetch()</code> 還要對方支援 CORS；不支援的話改用 <code>widget.fetch</code>。</p>
+<p><strong>中文變成亂碼。</strong> 把檔案存成 UTF-8。</p>
+<p><strong>想讓組件第一次出現時大一點或小一點。</strong> 改 <code>size.width</code> 和 <code>size.height</code>。已經在桌面上的組件會保留用戶調過的大小，可以從「添加組件」再放一個新的來看效果。</p>
+<p><strong>怎樣讓組件在淺色主題（紙本）下也好看？</strong> 文字和線條都用 <code>--w-*</code> 變數，不要寫死白色或黑色。到控制中心「主題」切換三套主題看一遍。</p>
+<p><strong>改了「語言」設定，組件還是原本的語言。</strong> 語言在<strong>啟動時</strong>讀 <code>config.json</code>，改了要重新啟動 WinWidget（控制中心「設定」裏的語言會立即影響控制中心本身，桌面上已經開着的組件要重新載入才會換）。組件裏請一律用 <code>widget.locale</code> / <code>widget.t()</code>，不要自己判斷系統語言。</p>
+<p><strong>控制中心按「組件目錄」「資料位置」沒反應，提示「沒有成功」。</strong> 這兩個按鈕由 WinWidget 用系統的方式打開資料夾（等同在檔案總管裏雙擊）。如果完全沒反應：先確認路徑存在（按鈕會自動建立目錄），再看 <code>%LocalAppData%\WinWidget\logs\app.log</code> 裏那一行錯誤。舊版本把資料夾當成網址開啟，所以一定會失敗，更新到最新版即可。</p>
+<p><strong>「檢查更新」說沒有更新通道 / 檢查不到。</strong> <code>config.json</code> 的 <code>update_url</code> 留空時，預設讀本專案 GitHub Releases 的最新版本（<code>api.github.com</code>）。要換成自己的通道，就在 <code>update_url</code> 填一個 JSON 位址，內容是 <code>{&quot;version&quot;: &quot;1.2.0&quot;, &quot;url&quot;: &quot;下載位址&quot;, &quot;size&quot;: 文件大小, &quot;notes&quot;: &quot;更新說明&quot;, &quot;page&quot;: &quot;介紹頁&quot;}</code>。檢查和下載都在背景執行，不會讓介面卡住；開發者模式不允許自我更新。</p>
+<p><strong>媒體組件裏「顯示是哪個程式在播放」關掉還有字。</strong> 那是組件頁面自己的顯示邏輯，最新版已修好。若還留着，確認組件資料夾裏的 <code>style.css</code> 是最新的（<code>body.no-app .app { display: none }</code>）。</p>
+</article>
+<article data-lang="en" lang="en" hidden>
+<h1 id="winwidget-widget-guide">WinWidget Widget Guide</h1>
+<p>A widget is a folder: a <code>widget.json</code> file plus ordinary HTML, CSS and JavaScript. If you can build a web page, you can build a widget.</p>
+
+<hr class="sep">
+<h2 id="your-first-widget-in-ten-minutes">Your first widget in ten minutes</h2>
+<p>We&#x27;ll make a &quot;Daily quote&quot; widget: one quote a day, a button for the next one, and quotes you can edit in the Control Center.</p>
+<h3 id="1-create-the-widget-1-minute">1. Create the widget (1 minute)</h3>
+<ul class="plain">
+<li>Click the tray icon to open the Control Center.</li>
+<li>On the Control Center&#x27;s <strong>Add widgets</strong> page, press <strong>New widget…</strong> at the top right (just a &quot;+&quot; when the window is narrow). Or right-click the tray icon → <strong>Add widget</strong> → <strong>New widget…</strong>.</li>
+<li>Type the name <code>Daily Quote</code> and press <strong>Create</strong>.</li>
+</ul>
+<p>WinWidget then:</p>
+<ul class="plain">
+<li>creates a folder in your widgets folder (for example <code>%AppData%\WinWidget\widgets\daily-quote</code>) with a working template in it;</li>
+<li>adds the widget to the desktop;</li>
+<li>turns on <strong>developer mode</strong>: from now on, saving a file in that folder reloads the widget on the desktop;</li>
+<li>opens the folder in File Explorer.</li>
+</ul>
+<p>Open the folder in your editor. <a href="https://code.visualstudio.com/">VS Code</a> is a good choice: thanks to the <code>widget.d.ts</code> file in the folder, it lists everything <code>widget.</code> offers as you type.</p>
+<h3 id="2-add-a-setting-1-minute">2. Add a setting (1 minute)</h3>
+<p>Open <code>widget.json</code> and replace the whole <code>settings</code> part with:</p>
+<div class="code"><pre><code class="lang-json">&quot;settings&quot;: [
+  { &quot;key&quot;: &quot;quotes&quot;, &quot;type&quot;: &quot;textarea&quot;, &quot;label&quot;: &quot;Quotes (one per line)&quot;,
+    &quot;default&quot;: &quot;Slow is smooth, smooth is fast.\nEat a proper lunch today.\nDone beats perfect.&quot; }
+]</code></pre></div>
+<p>Save. In the Control Center, open <strong>My widgets</strong>, pick &quot;Daily Quote&quot; and its <strong>Content</strong> tab: there&#x27;s a text box with the three quotes. WinWidget builds that form from <code>settings</code> on its own.</p>
+<h3 id="3-build-the-page-3-minutes">3. Build the page (3 minutes)</h3>
+<p>Replace <code>index.html</code> with:</p>
+<div class="code"><pre><code class="lang-html">&lt;!doctype html&gt;
+&lt;html&gt;
+&lt;head&gt;
+  &lt;meta charset=&quot;utf-8&quot;&gt;
+  &lt;link rel=&quot;stylesheet&quot; href=&quot;style.css&quot;&gt;
+&lt;/head&gt;
+&lt;body&gt;
+  &lt;div class=&quot;w-label&quot; id=&quot;day&quot;&gt;&lt;/div&gt;
+  &lt;p class=&quot;quote&quot; id=&quot;quote&quot;&gt;&lt;/p&gt;
+  &lt;button class=&quot;w-btn&quot; id=&quot;next&quot;&gt;Next&lt;/button&gt;
+  &lt;script src=&quot;main.js&quot;&gt;&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;</code></pre></div>
+<p>Replace <code>style.css</code> with:</p>
+<div class="code"><pre><code class="lang-css">body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quote {
+  flex: 1;
+  margin: 0;
+  font-size: 1.3rem;
+  line-height: 1.5;
+}
+
+#next {
+  align-self: flex-end;
+}</code></pre></div>
+<p><code>&lt;body&gt;</code> is the card itself. <code>w-label</code> and <code>w-btn</code> come with WinWidget; the theme supplies the background, corners, fonts and colors, so you don&#x27;t write any of that.</p>
+<h3 id="4-add-the-logic-3-minutes">4. Add the logic (3 minutes)</h3>
+<p>Replace <code>main.js</code> with:</p>
+<div class="code"><pre><code class="lang-js">const $ = (id) =&gt; document.getElementById(id);
+let quotes = [];
+let index = 0;
+
+function show() {
+  const quote = quotes.length ? quotes[index % quotes.length] : &quot;Add quotes in the Control Center&quot;;
+  $(&quot;quote&quot;).textContent = quote;
+  $(&quot;day&quot;).textContent = new Date().toLocaleDateString(widget.locale, {
+    month: &quot;long&quot;, day: &quot;numeric&quot;, weekday: &quot;long&quot;,
+  });
+}
+
+// Read the setting: one quote per line
+function load(settings) {
+  quotes = settings.quotes.split(&quot;\n&quot;).map((s) =&gt; s.trim()).filter(Boolean);
+  show();
+}
+
+// A new quote every day; if &quot;Next&quot; was pressed today, remember where it got to
+const today = new Date().toDateString();
+widget.storage.get(&quot;pick&quot;).then((pick) =&gt; {
+  const dayNumber = Math.floor(Date.now() / 86400000);
+  index = pick &amp;&amp; pick.day === today ? pick.index : dayNumber;
+  load(widget.settings.get());
+});
+
+// The quotes changed in the Control Center: show them right away
+widget.settings.onChange(load);
+
+$(&quot;next&quot;).addEventListener(&quot;click&quot;, () =&gt; {
+  index++;
+  widget.storage.set(&quot;pick&quot;, { day: today, index });
+  show();
+});</code></pre></div>
+<p>Save, and the widget on the desktop changes at once. Try:</p>
+<ul class="plain">
+<li>pressing <strong>Next</strong>;</li>
+<li>editing the quotes in the Control Center: the desktop updates as you type;</li>
+<li>switching to another theme under <strong>Themes</strong>: fonts and colors follow;</li>
+<li>restarting WinWidget: today&#x27;s quote is still the one you picked (<code>widget.storage</code> keeps it).</li>
+</ul>
+<h3 id="5-when-something-breaks-1-minute">5. When something breaks (1 minute)</h3>
+<p>In developer mode, a script error shows as a red bar at the bottom of the card with the message and where it happened (for example <code>main.js:12</code>). Click the bar to open the developer tools, or press <strong>F12</strong> on the widget. Fix it, save, and the bar goes away.</p>
+<h3 id="6-share-it-1-minute">6. Share it (1 minute)</h3>
+<p>Control Center → <strong>Add widgets</strong> → your widget&#x27;s card → <strong>Export .fwz</strong>. Anyone can install it by double-clicking the <code>.fwz</code> file (or dropping it on the Control Center window).</p>
+<p>To let everyone find it under <strong>Online</strong> in the Control Center, submit it to the <a href="https://hmgvibe.github.io/fullwidget-market/">widget market</a>: put the widget folder in <code>widgets/&lt;your-github-name&gt;.&lt;widget&gt;/</code> of the <a href="https://github.com/hmgvibe/fullwidget-market">fullwidget-market</a> repository on GitHub and open a pull request. Once the automatic check passes and a maintainer has looked at it, it goes live; CONTRIBUTING.md there has the details.</p>
+<hr class="sep">
+<h2 id="whats-in-the-folder">What&#x27;s in the folder</h2>
+<div class="table-wrap"><table><thead><tr><th>File</th><th>What it&#x27;s for</th></tr></thead><tbody><tr><td><code>widget.json</code></td><td>Name, size, permissions and settings. <strong>Required.</strong></td></tr><tr><td><code>index.html</code></td><td>The widget&#x27;s page (the <code>entry</code> in <code>widget.json</code> can name another file).</td></tr><tr><td><code>style.css</code>, <code>main.js</code></td><td>Styles and logic. Any names work; link them from the HTML with relative paths.</td></tr><tr><td><code>icon.svg</code></td><td>Shown in the gallery, tray menu and Control Center (a 24×24 SVG works best).</td></tr><tr><td><code>widget.d.ts</code>, <code>jsconfig.json</code></td><td>Only for your editor, so it can suggest <code>widget.</code> calls.</td></tr></tbody></table></div>
+<p>Widgets folder: <code>%AppData%\WinWidget\widgets\</code>. Open it from Control Center → <strong>Settings</strong> → <strong>Widgets folder</strong>. Put a widget folder in there and it shows up under <strong>Add widgets</strong> (by itself in developer mode; otherwise press <strong>Rescan</strong>).</p>
+<p>Save files as <strong>UTF-8</strong>.</p>
+<hr class="sep">
+<h2 id="widgetjson">widget.json</h2>
+<p><code>//</code> comments are allowed, and so is a comma after the last item.</p>
+<div class="code"><pre><code class="lang-json">{
+  &quot;id&quot;: &quot;me.daily-quote&quot;,
+  &quot;name&quot;: { &quot;en&quot;: &quot;Daily Quote&quot;, &quot;zh-TW&quot;: &quot;每日一句&quot;, &quot;zh-CN&quot;: &quot;每日一句&quot; },
+  &quot;description&quot;: &quot;One quote a day&quot;,
+  &quot;version&quot;: &quot;1.0.0&quot;,
+  &quot;author&quot;: &quot;Your name&quot;,
+  &quot;entry&quot;: &quot;index.html&quot;,
+  &quot;icon&quot;: &quot;icon.svg&quot;,
+  &quot;category&quot;: &quot;info&quot;,
+  &quot;size&quot;: {
+    &quot;width&quot;: 280, &quot;height&quot;: 160,
+    &quot;minWidth&quot;: 200, &quot;minHeight&quot;: 120, &quot;maxWidth&quot;: 600, &quot;maxHeight&quot;: 400,
+    &quot;resizable&quot;: true
+  },
+  &quot;layer&quot;: &quot;desktop&quot;,
+  &quot;permissions&quot;: [],
+  &quot;settings&quot;: []
+}</code></pre></div>
+<div class="table-wrap"><table><thead><tr><th>Field</th><th>Required</th><th>Meaning</th></tr></thead><tbody><tr><td><code>id</code></td><td>yes</td><td>Unique id: lowercase letters, digits and <code>. _ -</code>, 2–64 characters, e.g. <code>me.daily-quote</code>. Don&#x27;t change it later: saved data and updates depend on it. Ids starting with <code>winwidget.</code> are for built-in widgets.</td></tr><tr><td><code>name</code></td><td>recommended</td><td>Display name: plain text, or per language: <code>{ &quot;en&quot;: &quot;…&quot;, &quot;zh-TW&quot;: &quot;…&quot; }</code>.</td></tr><tr><td><code>description</code></td><td></td><td>One line for the gallery. Also per language if you like.</td></tr><tr><td><code>version</code></td><td>recommended</td><td>e.g. <code>1.2.0</code>. Installing a <code>.fwz</code> uses it to tell an update from a reinstall or an older version.</td></tr><tr><td><code>author</code></td><td></td><td>Who made it.</td></tr><tr><td><code>entry</code></td><td></td><td>The page file; <code>index.html</code> by default.</td></tr><tr><td><code>icon</code></td><td></td><td>Icon file. Without one, the first letter of the name is shown.</td></tr><tr><td><code>category</code></td><td></td><td>Where the widget library lists it: <code>time</code>, <code>weather</code>, <code>system</code>, <code>productivity</code>, <code>info</code> or <code>media</code> (media &amp; decor). Anything else, or nothing, goes under &quot;Other&quot;.</td></tr><tr><td><code>preview</code></td><td></td><td>A picture for the widget library card, e.g. <code>&quot;preview.png&quot;</code>. You can give one per theme and language: <code>&quot;preview/{theme}.{lang}.webp&quot;</code>, where <code>{theme}</code> becomes the theme id (<code>instrument</code>, <code>type</code>, <code>paper</code>) and <code>{lang}</code> becomes <code>zh-TW</code>, <code>zh-CN</code> or <code>en</code>; a missing one is replaced by the same theme in another language, or by another theme. Use a PNG or WebP with a transparent background, about 300 pixels wide. Without a preview the card shows the icon.</td></tr><tr><td><code>size</code></td><td></td><td>Card size in pixels (without the shadow). <code>width</code>/<code>height</code> is the size when first added; <code>min*</code>/<code>max*</code> limit resizing; <code>resizable: false</code> turns resizing off; <code>grow</code> (0–1) says whether the content grows when the card is made bigger than its default size, see <a href="#content-that-grows-with-the-card">Content that grows with the card</a>.</td></tr><tr><td><code>layer</code></td><td></td><td>Layer when first added: <code>desktop</code> (default: under all windows, still visible after Win+D), <code>normal</code>, or <code>top</code> (always on top). Users can change it.</td></tr><tr><td><code>permissions</code></td><td></td><td>What it needs to do; see <a href="#permissions">Permissions</a>.</td></tr><tr><td><code>settings</code></td><td></td><td>Its settings. The Control Center builds a form from them.</td></tr></tbody></table></div>
+<h3 id="settings">settings</h3>
+<p>Each setting:</p>
+<div class="code"><pre><code class="lang-json">{
+  &quot;key&quot;: &quot;city&quot;,
+  &quot;type&quot;: &quot;text&quot;,
+  &quot;label&quot;: &quot;City&quot;,
+  &quot;description&quot;: &quot;Leave empty to detect it&quot;,
+  &quot;default&quot;: &quot;&quot;
+}</code></pre></div>
+<div class="table-wrap"><table><thead><tr><th>Field</th><th>Meaning</th></tr></thead><tbody><tr><td><code>key</code></td><td>The name in code: <code>widget.settings.get(&quot;city&quot;)</code>.</td></tr><tr><td><code>type</code></td><td>See the table below.</td></tr><tr><td><code>label</code></td><td>Shown on the form. Can be given per language.</td></tr><tr><td><code>description</code></td><td>A short line under the label.</td></tr><tr><td><code>default</code></td><td>Starting value. Any type can be given per language, e.g. <code>{ &quot;zh-TW&quot;: &quot;google&quot;, &quot;zh-CN&quot;: &quot;baidu&quot;, &quot;en&quot;: &quot;google&quot; }</code>.</td></tr><tr><td><code>placeholder</code></td><td>Hint text inside an empty box.</td></tr><tr><td><code>min</code> <code>max</code> <code>step</code></td><td>For <code>number</code> and <code>slider</code>.</td></tr><tr><td><code>options</code></td><td>For <code>select</code>: <code>[{ &quot;value&quot;: &quot;c&quot;, &quot;label&quot;: &quot;Celsius&quot; }, { &quot;value&quot;: &quot;f&quot;, &quot;label&quot;: &quot;Fahrenheit&quot; }]</code>.</td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>type</th><th>Form control</th><th>Value</th></tr></thead><tbody><tr><td><code>toggle</code></td><td>Switch</td><td><code>true</code> / <code>false</code></td></tr><tr><td><code>text</code></td><td>One line of text</td><td>string</td></tr><tr><td><code>textarea</code></td><td>Several lines</td><td>string (lines joined with <code>\n</code>)</td></tr><tr><td><code>number</code></td><td>Number box</td><td>number</td></tr><tr><td><code>slider</code></td><td>Slider</td><td>number</td></tr><tr><td><code>select</code></td><td>Drop-down (up to three short options show as buttons)</td><td>the option&#x27;s <code>value</code></td></tr><tr><td><code>color</code></td><td>Color picker</td><td><code>&quot;#rrggbb&quot;</code></td></tr><tr><td><code>font</code></td><td>Font (from the installed fonts)</td><td>font name; <code>null</code> when cleared (usually means the theme&#x27;s font)</td></tr><tr><td><code>date</code></td><td>Date</td><td><code>&quot;2026-12-31&quot;</code></td></tr><tr><td><code>folder</code></td><td>Folder (its path and a &quot;Choose…&quot; button)</td><td>a full path; the default may use environment variables, e.g. <code>&quot;%USERPROFILE%\\Pictures&quot;</code>. See [<code>widget.files</code>](#a-folder-the-user-chose-widgetfiles)</td></tr></tbody></table></div>
+<hr class="sep">
+<h2 id="javascript-api">JavaScript API</h2>
+<p>WinWidget sets up the global <code>widget</code> before your script runs: nothing to import. Full types and notes are in <code>widget.d.ts</code>.</p>
+<p>Anything that waits (saved data, network…) returns a Promise, so you can <code>await</code> it.</p>
+<h3 id="basics">Basics</h3>
+<div class="code"><pre><code class="lang-js">widget.id          // &quot;me.daily-quote&quot;
+widget.instanceId  // this copy on the desktop (a widget can be added several times)
+widget.locale      // the user&#x27;s language, e.g. &quot;en-US&quot;; use it for dates and numbers
+widget.theme       // current theme: &quot;instrument&quot;, &quot;type&quot; or &quot;paper&quot;
+widget.developer   // true in developer mode
+widget.permissions // permissions usable right now
+
+// Pick the text for the user&#x27;s language
+widget.t({ en: &quot;Good morning&quot;, &quot;zh-TW&quot;: &quot;早安&quot;, &quot;zh-CN&quot;: &quot;早安&quot; })</code></pre></div>
+<h3 id="settings-widgetsettings">Settings: <code>widget.settings</code></h3>
+<div class="code"><pre><code class="lang-js">// Reading is synchronous: no await
+const all = widget.settings.get();         // { quotes: &quot;…&quot;, … }
+const one = widget.settings.get(&quot;quotes&quot;);
+
+// The user changed a setting in the Control Center
+widget.settings.onChange((all) =&gt; { /* … */ });
+
+// Code can change one too; the Control Center shows the new value
+await widget.settings.set(&quot;quotes&quot;, &quot;…&quot;);</code></pre></div>
+<h3 id="saved-data-widgetstorage">Saved data: <code>widget.storage</code></h3>
+<p>Kept across restarts and removed together with the widget. Each copy on the desktop has its own. Up to 2 MB per copy.</p>
+<div class="code"><pre><code class="lang-js">// Any JSON data
+await widget.storage.set(&quot;todo&quot;, [{ text: &quot;Buy milk&quot;, done: false }]);
+
+// null if it was never saved
+const todo = (await widget.storage.get(&quot;todo&quot;)) || [];
+
+await widget.storage.remove(&quot;todo&quot;);
+const keys = await widget.storage.keys();</code></pre></div>
+<h3 id="system-figures-widgetsystem-needs-system">System figures: <code>widget.system</code> (needs <code>system</code>)</h3>
+<div class="code"><pre><code class="lang-js">const stop = widget.system.subscribe([&quot;cpu&quot;, &quot;memory&quot;], (d) =&gt; {
+  cpu.textContent = Math.round(d.cpu.usage) + &quot;%&quot;;
+  mem.textContent = Math.round(d.memory.usage) + &quot;%&quot;;
+}, { interval: 2000 });  // every 2 s (default 1 s); the first update comes at once
+
+stop(); // when you no longer need it</code></pre></div>
+<div class="table-wrap"><table><thead><tr><th>Topic</th><th>Contents</th></tr></thead><tbody><tr><td><code>cpu</code></td><td><code>usage</code> (%), <code>cores</code></td></tr><tr><td><code>memory</code></td><td><code>usage</code> (%), <code>total</code>, <code>used</code>, <code>available</code> (bytes)</td></tr><tr><td><code>network</code></td><td><code>down</code>, <code>up</code> (bytes per second), <code>totalDown</code>, <code>totalUp</code></td></tr><tr><td><code>disk</code></td><td>one entry per drive (USB drives too): <code>name</code> (&quot;C:&quot;), <code>label</code>, <code>type</code> (<code>fixed</code> / <code>removable</code>), <code>total</code>, <code>free</code>, <code>usage</code> (%)</td></tr><tr><td><code>battery</code></td><td><code>present</code>, <code>percent</code>, <code>charging</code>, <code>pluggedIn</code>, <code>secondsLeft</code>, <code>saver</code> (battery saver)</td></tr></tbody></table></div>
+<p>However many widgets subscribe, WinWidget samples once and shares the result. Hidden or paused widgets get nothing and cost nothing.</p>
+<p>For things that rarely change, ask once:</p>
+<div class="code"><pre><code class="lang-js">const pc = await widget.system.info();
+// pc.os.name &quot;Windows 11 Pro&quot;, pc.os.version &quot;25H2&quot;, pc.cpu.name, pc.memory.installed (bytes),
+// pc.gpus (graphics adapters), pc.computer (PC name), pc.uptime (milliseconds since start)
+
+const net = await widget.system.adapters();
+// net.online; net.adapters[0] is the one on the internet: name &quot;Wi-Fi&quot;, type &quot;wifi&quot;, ipv4, gateways, dns
+
+const r = await widget.system.ping(&quot;1.1.1.1&quot;);   // { ok, ms, status }; at most once a second per widget</code></pre></div>
+<h3 id="volume-widgetaudio-needs-audio">Volume: <code>widget.audio</code> (needs <code>audio</code>)</h3>
+<div class="code"><pre><code class="lang-js">const stop = widget.audio.onChange((a) =&gt; {
+  // a.volume 0–100, a.muted, a.device (&quot;Speakers (Realtek Audio)&quot;)
+  // called at once on volume keys, the taskbar slider, or switching to headphones
+});
+await widget.audio.set({ volume: 40 });
+await widget.audio.set({ muted: true });</code></pre></div>
+<h3 id="now-playing-widgetmedia-needs-media">Now playing: <code>widget.media</code> (needs <code>media</code>)</h3>
+<p>Reads what&#x27;s playing in Windows&#x27; media controls (Spotify, browsers, the Media Player app… the same as the volume flyout shows) and controls it:</p>
+<div class="code"><pre><code class="lang-js">widget.media.onChange((m) =&gt; {
+  if (!m.available) return;          // nothing is playing
+  // m.title, m.artist, m.album, m.app.name (&quot;Spotify&quot;), m.app.icon
+  // m.playing, m.position, m.duration (ms), m.cover (the album art&#x27;s address, ready for an &lt;img&gt;)
+  // m.can.next, m.can.previous, m.can.seek: which buttons the app accepts right now
+});
+const now = widget.media.position(m);   // where playback is now (it moves on while playing)
+await widget.media.toggle();            // play / pause; also play(), pause(), next(), previous()
+await widget.media.seek(60000);         // jump to 1:00
+// timed lyrics of the current song, looked up on NetEase Cloud Music, QQ Music and Kugou
+const { title, lyrics } = await widget.media.lyrics();
+if (lyrics.found) lyrics.lines;         // [{ t: ms, text, tr?: translation }], in order</code></pre></div>
+<p>Windows reports every change at once (a new track, pause, another app starting to play), so there is nothing to poll.</p>
+<h3 id="a-folder-the-user-chose-widgetfiles">A folder the user chose: <code>widget.files</code></h3>
+<p>Add a setting of type <code>folder</code>. Once the user picks a folder, the widget can read the pictures in it. <strong>Choosing the folder is the permission</strong>: nothing goes in <code>permissions</code>.</p>
+<div class="code"><pre><code class="lang-json">{ &quot;key&quot;: &quot;folder&quot;, &quot;type&quot;: &quot;folder&quot;, &quot;label&quot;: &quot;Photo folder&quot;, &quot;default&quot;: &quot;%USERPROFILE%\\Pictures&quot; }</code></pre></div>
+<div class="code"><pre><code class="lang-js">const { files } = await widget.files.list(&quot;folder&quot;, { recursive: true });
+// files: [{ path: &quot;2025/beach.jpg&quot;, name: &quot;beach&quot;, size, modified, url }]
+img.src = widget.files.url(files[0], { width: 800 });   // a smaller copy made by Windows: fast, and light on memory
+const { taken } = await widget.files.info(&quot;folder&quot;, files[0]);  // when the camera took it, or null
+await widget.files.pick(&quot;folder&quot;);      // opens the folder dialog from the widget and saves the choice</code></pre></div>
+<ul class="plain">
+<li>Only pictures in that folder (and its subfolders): jpg, png, gif, webp, bmp, avif, heic, tif; up to 5000.</li>
+<li>For someone else&#x27;s widget, the folder in <code>default</code> doesn&#x27;t count: it can read only after the user has picked one. Built-in widgets and your own can use the default.</li>
+<li>Folder values may contain environment variables such as <code>%USERPROFILE%</code>.</li>
+</ul>
+<h3 id="network-widgetfetch-needs-network-permissions">Network: <code>widget.fetch</code> (needs <code>network:</code> permissions)</h3>
+<p>Like the browser&#x27;s <code>fetch</code>, but sent by WinWidget, so CORS doesn&#x27;t apply:</p>
+<div class="code"><pre><code class="lang-js">const r = await widget.fetch(
+  &quot;https://api.open-meteo.com/v1/forecast?latitude=25&amp;longitude=121&amp;current=temperature_2m&quot;
+);
+if (r.ok) {
+  const data = await r.json();
+}
+
+await widget.fetch(&quot;https://example.com/api&quot;, {
+  method: &quot;POST&quot;,
+  headers: { &quot;content-type&quot;: &quot;application/json&quot; },
+  body: { hello: &quot;world&quot; },   // objects are sent as JSON
+});</code></pre></div>
+<p>The response has <code>ok</code>, <code>status</code>, <code>statusText</code>, <code>url</code>, <code>headers</code>, <code>body</code> (text), <code>text()</code> and <code>json()</code>. For binary content such as images pass <code>{ as: &quot;base64&quot; }</code> and <code>body</code> holds base64 text. Up to 8 MB per response; redirects are followed, and every hop must be allowed.</p>
+<h3 id="opening-links-widgetshellopen-needs-shellopen">Opening links: <code>widget.shell.open</code> (needs <code>shell.open</code>)</h3>
+<div class="code"><pre><code class="lang-js">// Opens in the default browser; mailto: works too
+widget.shell.open(&quot;https://example.com&quot;);</code></pre></div>
+<p>A widget page can&#x27;t navigate away or open windows itself; use this to open web pages.</p>
+<h3 id="opening-programs-and-files-widgetshelllaunch-needs-shelllaunch">Opening programs and files: <code>widget.shell.launch</code> (needs <code>shell.launch</code>)</h3>
+<div class="code"><pre><code class="lang-js">await widget.shell.launch(&quot;C:\\Windows\\notepad.exe&quot;);    // programs, shortcuts, folders, documents; no arguments
+
+const path = await widget.shell.pick({ type: &quot;file&quot;, filter: &quot;programs&quot; }); // the user chooses; null if cancelled
+const info = await widget.shell.info(path);  // { name: &quot;Notepad&quot;, kind: &quot;app&quot;, icon: &quot;data:image/png;…&quot; }
+
+// full paths of files dropped on the widget
+document.addEventListener(&quot;dragover&quot;, (e) =&gt; e.preventDefault());
+document.addEventListener(&quot;drop&quot;, async (e) =&gt; {
+  e.preventDefault();
+  const paths = await widget.shell.paths(e.dataTransfer.files);
+});</code></pre></div>
+<p><code>pick</code> takes <code>type</code> <code>file</code> or <code>folder</code>, and <code>filter</code> <code>programs</code>, <code>images</code> or <code>all</code>.</p>
+<h3 id="simplified--traditional-chinese-widgetconvertchinese">Simplified ↔ Traditional Chinese: <code>widget.convertChinese</code></h3>
+<div class="code"><pre><code class="lang-js">await widget.convertChinese(&quot;北极熊和幼崽&quot;, &quot;traditional&quot;);  // &quot;北極熊和幼崽&quot;</code></pre></div>
+<p>Character by character with Windows&#x27; own tables: good for short text such as a headline fetched in Simplified Chinese; regional word choices are not changed. No permission needed.</p>
+<h3 id="notifications-widgetnotify-needs-notify">Notifications: <code>widget.notify</code> (needs <code>notify</code>)</h3>
+<div class="code"><pre><code class="lang-js">// A Windows notification right now (the title defaults to the widget&#x27;s name)
+widget.notify(&quot;Download finished&quot;);
+
+// Booked for later; a new booking with the same tag replaces the old one
+widget.notify({ title: &quot;Pomodoro&quot;, body: &quot;Take a break&quot;, at: Date.now() + 25 * 60 * 1000, tag: &quot;end&quot; });
+
+widget.notify.cancel(&quot;end&quot;); // cancels that booking; without a tag, all of this widget&#x27;s bookings</code></pre></div>
+<p>WinWidget keeps the time for bookings, so they arrive on time even while the widget is paused by a full-screen app or &quot;Hide all widgets&quot;. Bookings can be up to 7 days ahead, 20 per widget; after the PC wakes from sleep, bookings more than 15 minutes late are dropped.</p>
+<h3 id="the-window-widgetwindow">The window: <code>widget.window</code></h3>
+<div class="code"><pre><code class="lang-js">const { width, height } = await widget.window.getSize();
+await widget.window.setSize(320, 200);   // kept within the min/max in size</code></pre></div>
+<h3 id="looks-and-events">Looks and events</h3>
+<div class="code"><pre><code class="lang-js">// Current theme and appearance values
+widget.appearance.get();
+
+// The theme or appearance changed (CSS variables are already updated)
+widget.appearance.onChange((a) =&gt; {});
+
+// Locked, layer or click-through changed: { locked, layer, clickThrough }
+widget.on(&quot;state&quot;, (s) =&gt; {});
+
+// Called up with a shortcut (the notes and to-do shortcuts, for winwidget.notes and winwidget.todo): focus your main input
+widget.on(&quot;summon&quot;, () =&gt; {});
+
+// Write to the WinWidget log
+widget.log(&quot;message&quot;, { any: &quot;data&quot; });</code></pre></div>
+<hr class="sep">
+<h2 id="looks-follow-the-theme">Looks: follow the theme</h2>
+<p>WinWidget comes with several themes, and users can adjust background, text color, accent color, font, text size, corners, padding and opacity in the Control Center. Use the variables and classes below and all of that just works for your widget.</p>
+<h3 id="layout">Layout</h3>
+<ul class="plain">
+<li><code>&lt;body&gt;</code> is the card: background, corners, border and padding are already set. Put your content straight into <code>&lt;body&gt;</code>.</li>
+<li><code>&lt;html&gt;</code> is the transparent window with room for the shadow around the card; don&#x27;t give it a background.</li>
+<li>Size text in <code>rem</code>: when users change the text size, <code>1rem</code> follows (14px by default).</li>
+<li>Cards can be resized. Lay out with flex or grid; to adapt to size, set <code>container-type: size</code> on <code>body</code> and use <code>@container (max-height: 100px) { … }</code>. <code>@container</code> rules style what is inside <code>body</code>, not <code>body</code> itself.</li>
+</ul>
+<h3 id="content-that-grows-with-the-card">Content that grows with the card</h3>
+<p>Add <code>&quot;grow&quot;: 1</code> to <code>size</code> in <code>widget.json</code>, and when the user makes the card bigger than its default size, the whole content is magnified with it (text, icons and spacing alike) instead of leaving empty space:</p>
+<div class="code"><pre><code class="lang-json">&quot;size&quot;: { &quot;width&quot;: 260, &quot;height&quot;: 150, &quot;minWidth&quot;: 180, &quot;minHeight&quot;: 110, &quot;grow&quot;: 1 }</code></pre></div>
+<ul class="plain">
+<li>The factor is the smaller of &quot;how many times wider&quot; and &quot;how many times taller&quot;, at most 3. At twice the width and 1.3 times the height the content grows 1.3 times, and your layout gets the extra width.</li>
+<li>Below the default size nothing shrinks: small sizes are up to your layout (<code>@container</code>, above).</li>
+<li><code>grow</code> may be anything from 0 to 1: for lists, <code>0.5</code> makes the text a little bigger while showing more items.</li>
+<li>Leave it out (or <code>0</code>) to keep the old behaviour: more room, same size.</li>
+<li>The card&#x27;s corners, outline and shadow don&#x27;t grow. The current factor is in the CSS variable <code>--w-size-scale</code>.</li>
+</ul>
+<h3 id="css-variables">CSS variables</h3>
+<div class="table-wrap"><table><thead><tr><th>Variable</th><th>Use</th></tr></thead><tbody><tr><td><code>--w-fg</code></td><td>Main text color</td></tr><tr><td><code>--w-fg-muted</code></td><td>Secondary text (labels, notes)</td></tr><tr><td><code>--w-fg-faint</code></td><td>Very faint text and dividers</td></tr><tr><td><code>--w-accent</code></td><td>Accent: progress, selection, key figures</td></tr><tr><td><code>--w-on-accent</code></td><td>Text on top of the accent color</td></tr><tr><td><code>--w-warn</code> <code>--w-danger</code></td><td>Warnings, danger</td></tr><tr><td><code>--w-bg</code></td><td>Card background (already on body)</td></tr><tr><td><code>--w-bg-solid</code></td><td>The card colour without transparency: for things that must hide what&#x27;s behind them, such as a pop-up list</td></tr><tr><td><code>--w-border</code> <code>--w-rule</code></td><td>Borders, dividers</td></tr><tr><td><code>--w-track</code></td><td>Background of progress bars</td></tr><tr><td><code>--w-control-bg</code> <code>--w-hover</code></td><td>Input background, hover background</td></tr><tr><td><code>--w-font</code></td><td>Body font</td></tr><tr><td><code>--w-font-num</code></td><td>Font for figures</td></tr><tr><td><code>--w-font-display</code></td><td>Font for the widget&#x27;s one big figure (time, temperature)</td></tr><tr><td><code>--w-font-title</code></td><td>Font for headings</td></tr><tr><td><code>--w-radius</code> <code>--w-padding</code></td><td>Card corners, padding</td></tr></tbody></table></div>
+<h3 id="ready-made-classes">Ready-made classes</h3>
+<div class="table-wrap"><table><thead><tr><th>class</th><th>Use</th></tr></thead><tbody><tr><td><code>w-label</code></td><td>Small, muted label text</td></tr><tr><td><code>w-title</code></td><td>Heading</td></tr><tr><td><code>w-num</code></td><td>Figures (tabular, the theme&#x27;s figure font)</td></tr><tr><td><code>w-display</code></td><td>The one big figure</td></tr><tr><td><code>w-rule</code></td><td>Divider (on an <code>&lt;hr&gt;</code> or <code>&lt;div&gt;</code>)</td></tr><tr><td><code>w-bar</code></td><td>Progress bar: <code>&lt;div class=&quot;w-bar&quot;&gt;&lt;i style=&quot;width:40%&quot;&gt;&lt;/i&gt;&lt;/div&gt;</code>; add <code>is-warn</code> for the warning color</td></tr><tr><td><code>w-input</code></td><td>Text input</td></tr><tr><td><code>w-btn</code></td><td>Button; add <code>is-primary</code> for an accent button</td></tr><tr><td><code>w-check</code></td><td>Round check box: <code>&lt;button class=&quot;w-check&quot; aria-pressed=&quot;true&quot;&gt;</code></td></tr></tbody></table></div>
+<h3 id="per-theme-touches">Per-theme touches</h3>
+<p><code>&lt;html&gt;</code> carries these attributes for styles of your own:</p>
+<div class="code"><pre><code class="lang-css">/* one particular theme */
+html[data-theme=&quot;paper&quot;] .quote { font-style: italic; }
+
+/* the user picked frosted cards */
+html[data-style=&quot;frosted&quot;] .quote { letter-spacing: 0.02em; }
+
+/* the widget is locked */
+html[data-locked=&quot;true&quot;] #next { display: none; }</code></pre></div>
+<p>Users can also add CSS to a single widget under Look → Custom CSS in the Control Center; it comes after yours.</p>
+<h3 id="saving-power-dont-animate-what-updates-every-second">Saving power: don&#x27;t animate what updates every second</h3>
+<p>Widgets stay open all day, and every frame drawn costs something. A figure or bar that updates every second with a 0.5-second <code>transition</code> is animating nearly all the time: one widget can use 20% of a CPU core that way, against 1% without.</p>
+<ul class="plain">
+<li>No <code>transition</code> or <code>animation</code> on anything that updates every second or faster. <code>w-bar</code> animates its width for 0.5 s by default; for bars updated every second add <code>.w-bar &gt; i { transition: none; }</code>.</li>
+<li>No <code>animation: … infinite</code>; to blink for attention, give a count (such as <code>8</code>).</li>
+<li>Hands, dials and anything else that turns: put it on its own element and turn it with a CSS <code>transform</code>, rather than redrawing a whole SVG every second.</li>
+<li>What changes once a minute, update once a minute (<code>setTimeout</code> to the next minute).</li>
+</ul>
+<hr class="sep">
+<h2 id="dragging-menus-and-clicks">Dragging, menus and clicks</h2>
+<p>WinWidget handles these for you:</p>
+<ul class="plain">
+<li><strong>Dragging</strong>: press anywhere on the card and drag to move the widget. Buttons, links and inputs don&#x27;t start a drag; add <code>data-no-drag</code> to anything else that shouldn&#x27;t.</li>
+<li><strong>Right-click</strong> shows the WinWidget widget menu. Add <code>data-no-menu</code> where you want to handle right-clicks yourself.</li>
+<li><strong>Resizing</strong>: unless <code>size.resizable</code> is <code>false</code>, there&#x27;s a grip in the bottom-right corner.</li>
+<li><strong>Locking</strong>: a locked widget can&#x27;t be moved or resized; check <code>widget.locked</code> or <code>html[data-locked]</code>.</li>
+</ul>
+<hr class="sep">
+<h2 id="permissions">Permissions</h2>
+<p>By default a widget can only show its own content: it can&#x27;t go online, can&#x27;t read system figures and can&#x27;t touch files on the PC. To do more, list what it needs under <code>permissions</code> in <code>widget.json</code>:</p>
+<div class="table-wrap"><table><thead><tr><th>Permission</th><th>Allows</th></tr></thead><tbody><tr><td><code>system</code></td><td><code>widget.system</code>: processor, memory, network, disk, battery</td></tr><tr><td><code>network:api.example.com</code></td><td>Connecting to that site</td></tr><tr><td><code>network:*.example.com</code></td><td>Connecting to example.com and all its subdomains</td></tr><tr><td><code>network:*</code></td><td>Connecting to any site (users see a clear warning when installing; avoid it if you can)</td></tr><tr><td><code>shell.open</code></td><td><code>widget.shell.open</code>: opening links in the browser</td></tr><tr><td><code>notify</code></td><td><code>widget.notify</code>: showing Windows notifications</td></tr><tr><td><code>audio</code></td><td><code>widget.audio</code>: reading and changing the system volume and mute</td></tr><tr><td><code>media</code></td><td><code>widget.media</code>: what&#x27;s playing (title, cover) and play, pause, skip</td></tr><tr><td><code>shell.launch</code></td><td><code>widget.shell.launch</code>, <code>pick</code>, <code>info</code>, <code>paths</code>: opening programs and files, choosing files, reading names and icons (users see a clear warning when allowing it)</td></tr></tbody></table></div>
+<p>Reading a folder needs no permission: the widget can read only the pictures in the folder the user chose in its settings. See [<code>widget.files</code>](#a-folder-the-user-chose-widgetfiles).</p>
+<p><strong>Who allows them:</strong></p>
+<ul class="plain">
+<li>Widgets made with <strong>New widget</strong> are yours, so what they declare works right away.</li>
+<li>Other people&#x27;s widgets list their permissions when installed; pressing <strong>Install</strong> allows them. If an update asks for more, the user is asked again, and the new ones don&#x27;t work until then.</li>
+<li>A widget folder copied straight into the widgets folder asks the user the first time it&#x27;s added to the desktop.</li>
+</ul>
+<p><strong>Network rules:</strong> this covers more than <code>widget.fetch</code>: images, fonts, scripts, <code>fetch()</code> and WebSockets in the page can also only reach allowed sites. The difference is that a plain <code>fetch()</code> needs the site to allow CORS, and <code>widget.fetch</code> doesn&#x27;t.</p>
+<hr class="sep">
+<h2 id="debugging">Debugging</h2>
+<p>Turn on <strong>developer mode</strong> under Control Center → <strong>Settings</strong> (<strong>New widget</strong> turns it on for you). Then:</p>
+<ul class="plain">
+<li><strong>Reload on save</strong>: saving any file in a widget&#x27;s folder reloads the widgets that use it; changes to <code>widget.json</code> (size, settings) apply at once too.</li>
+<li><strong>Error bar</strong>: script errors show at the bottom of the card with where they happened; click to open the developer tools.</li>
+<li><strong>Developer tools</strong>: press F12 on the widget, or use My widgets → Behavior → Developer tools. F5 reloads.</li>
+<li><strong>Log</strong>: <code>widget.log()</code> output and widget errors go to <code>%LocalAppData%\WinWidget\logs\app.log</code>.</li>
+<li><strong>Folders that don&#x27;t load</strong>: if <code>widget.json</code> has a problem (a missing comma, a bad id, no entry file), the top of <strong>Add widgets</strong> names the folder, the line and the reason.</li>
+</ul>
+<p><strong>Command line</strong> (run in a terminal; acts on the running WinWidget):</p>
+<div class="code"><pre><code class="lang-bat">WinWidget.exe --cmd=&quot;reload me.daily-quote&quot;
+WinWidget.exe --cmd=&quot;devtools me.daily-quote&quot;
+WinWidget.exe --cmd=&quot;add me.daily-quote&quot;
+WinWidget.exe --cmd=&quot;rescan&quot;
+WinWidget.exe --cmd=&quot;export me.daily-quote D:\out\daily-quote.fwz&quot;
+WinWidget.exe D:\downloads\daily-quote.fwz</code></pre></div>
+<p><code>reload</code> and <code>devtools</code> also take the id of one copy on the desktop (shown as <strong>ID</strong> under Behavior).</p>
+<hr class="sep">
+<h2 id="packaging-and-sharing">Packaging and sharing</h2>
+<p>A <code>.fwz</code> file is a widget folder zipped up with another extension.</p>
+<ul class="plain">
+<li><strong>Export</strong>: Control Center → <strong>Add widgets</strong> → your widget&#x27;s card → <strong>Export .fwz</strong>. Hidden files and folders (such as <code>.git</code>) and <code>node_modules</code> are left out.</li>
+<li><strong>Install</strong>: double-click a <code>.fwz</code> file, drop it on the Control Center window, or press <strong>Install .fwz file…</strong> under <strong>Add widgets</strong>. The name, author, version and permissions are shown before anything is installed.</li>
+<li><strong>Update</strong>: raise <code>version</code> and export again. A widget with the same <code>id</code> is replaced; copies on the desktop keep their settings and saved data, and the old version goes to the Recycle Bin.</li>
+<li><strong>Frameworks</strong>: React, Vue, Svelte and others all work, as long as the output is static files. Put the build output (e.g. <code>dist/</code>) next to <code>widget.json</code>, point <code>entry</code> at its <code>index.html</code>, and use relative asset paths (with Vite, <code>base: &quot;./&quot;</code>).</li>
+<li><strong>Limits</strong>: a <code>.fwz</code> can be up to 64 MB, and at most 256 MB and 5000 files unpacked.</li>
+</ul>
+<hr class="sep">
+<h2 id="how-a-widget-talks-to-the-host-advanced">How a widget talks to the host (advanced)</h2>
+<p>Everything above is enough to build a complete widget. This chapter is for people who want to know how it actually runs: where the page comes from, what the host hands it, which messages exist, and where the data lives.</p>
+<h3 id="how-the-page-is-opened">How the page is opened</h3>
+<p>WinWidget does not open your <code>index.html</code> from <code>file://</code>. It runs a small HTTP server bound to <code>127.0.0.1</code> and serves the page:</p>
+<div class="code"><pre><code>http://127.0.0.1:&lt;port&gt;/__fw/&lt;widget id&gt;/index.html</code></pre></div>
+<ul class="plain">
+<li><strong>The port changes on every start</strong>, so always use relative paths (<code>style.css</code>, <code>main.js</code>, <code>img/a.png</code>) — never a hard-coded <code>127.0.0.1:8800</code>.</li>
+<li>Each widget type has its own origin, <code>&lt;widget id&gt;.widgets.localhost</code>, so <code>localStorage</code>, <code>IndexedDB</code> and <code>Cache</code> are separated per widget type, shared by all its instances.</li>
+<li>The page cannot navigate elsewhere or open a new window; use <code>widget.shell.open</code> for web pages.</li>
+<li>Images, fonts and scripts the page loads are bound by the same <code>network:</code> permissions.</li>
+</ul>
+<h3 id="what-the-host-hands-you-at-startup">What the host hands you at startup</h3>
+<p>Before any of your scripts run, the host puts this in <code>window.__FW_BOOT__</code>:</p>
+<div class="table-wrap"><table><thead><tr><th>Field</th><th>Meaning</th></tr></thead><tbody><tr><td><code>settings</code></td><td>every setting of this instance (language objects already folded)</td></tr><tr><td><code>appearance</code></td><td><code>theme</code>, <code>style</code>, <code>shadow</code>, <code>themeCss</code>, <code>themeHref</code>, <code>userCss</code>, …</td></tr><tr><td><code>locked</code></td><td>whether the user locked it</td></tr><tr><td><code>layer</code></td><td><code>desktop</code> / <code>normal</code> / <code>top</code></td></tr><tr><td><code>clickThrough</code></td><td>click-through on or off</td></tr><tr><td><code>state</code></td><td><code>{ edit, label }</code>: arrange mode, the name label on the card</td></tr><tr><td><code>developer</code></td><td>developer mode on or off</td></tr><tr><td><code>locale</code></td><td>the user&#x27;s language, e.g. <code>zh-TW</code></td></tr><tr><td><code>permissions</code></td><td>what is actually allowed right now</td></tr><tr><td><code>hostVersion</code></td><td>WinWidget version, e.g. <code>1.0.0</code></td></tr><tr><td><code>widgetId</code> / <code>instanceId</code></td><td>the widget id, and this card&#x27;s own id</td></tr><tr><td><code>size</code></td><td><code>{ width, height, grow }</code> — the default size</td></tr><tr><td><code>resizable</code></td><td>whether the card can be resized</td></tr></tbody></table></div>
+<p><code>widget-sdk.js</code> builds <code>window.widget</code> from that, which is why <code>widget</code> is already there in the first line of <code>main.js</code>.</p>
+<h3 id="the-message-protocol">The message protocol</h3>
+<p>Every <code>widget.*</code> call is a message. When something behaves oddly, watching the messages is the fastest way to understand it:</p>
+<div class="code"><pre><code class="lang-js">// call: { id, m, p }; the host answers { id, r } or { id, e: &quot;error text&quot; }
+chrome.webview.postMessage(JSON.stringify({ id: 7, m: &quot;storage.get&quot;, p: { key: &quot;todo&quot; } }));
+
+// no answer needed (dragging, the context menu): { m, p }
+chrome.webview.postMessage(JSON.stringify({ m: &quot;window.menu&quot; }));
+
+// the host pushes: { ev: &quot;settings&quot; | &quot;appearance&quot; | &quot;state&quot; | &quot;system&quot; | &quot;audio&quot; | &quot;media&quot; | &quot;identify&quot;, d: … }
+chrome.webview.addEventListener(&quot;message&quot;, (e) =&gt; console.log(e.data));</code></pre></div>
+<p>Day to day you use the SDK; this layer exists for debugging. SDK error messages carry their target, e.g. <code>HTTP 404 (https://api.example.com/x)</code>.</p>
+<h3 id="every-method-the-host-offers">Every method the host offers</h3>
+<p>The SDK wraps all of these. The table shows the underlying names so you can match them in DevTools:</p>
+<div class="table-wrap"><table><thead><tr><th>Message <code>m</code></th><th>Same as</th></tr></thead><tbody><tr><td><code>settings.set</code></td><td><code>widget.settings.set(key, value)</code></td></tr><tr><td><code>storage.get</code> / <code>set</code> / <code>remove</code> / <code>keys</code></td><td><code>widget.storage.*</code></td></tr><tr><td><code>system.subscribe</code> / <code>unsubscribe</code> / <code>history</code> / <code>info</code> / <code>adapters</code> / <code>ping</code></td><td><code>widget.system.*</code></td></tr><tr><td><code>audio.get</code> / <code>set</code> / <code>subscribe</code> / <code>unsubscribe</code></td><td><code>widget.audio.*</code></td></tr><tr><td><code>media.get</code> / <code>control</code> / <code>lyrics</code> / <code>subscribe</code> / <code>unsubscribe</code></td><td><code>widget.media.*</code></td></tr><tr><td><code>files.list</code> / <code>info</code> / <code>pick</code></td><td><code>widget.files.*</code></td></tr><tr><td><code>recycle.query</code> / <code>empty</code> / <code>open</code></td><td><code>widget.recycleBin.*</code> (built-in widgets only)</td></tr><tr><td><code>power.do</code></td><td><code>widget.power(action)</code> (built-in widgets only)</td></tr><tr><td><code>net.fetch</code></td><td><code>widget.fetch(url, options)</code></td></tr><tr><td><code>notify.show</code> / <code>cancel</code></td><td><code>widget.notify(...)</code></td></tr><tr><td><code>shell.open</code> / <code>launch</code> / <code>info</code> / <code>pick</code> / <code>paths</code></td><td><code>widget.shell.*</code></td></tr><tr><td><code>text.chinese</code></td><td><code>widget.convertChinese(text, to)</code></td></tr><tr><td><code>window.getSize</code> / <code>setSize</code> / <code>drag</code> / <code>resize</code> / <code>press</code> / <code>menu</code> / <code>devtools</code></td><td><code>widget.window.*</code>; the last four are sent by the SDK itself</td></tr><tr><td><code>log</code></td><td><code>widget.log(...)</code></td></tr></tbody></table></div>
+<p><code>log</code> and <code>ready</code> get no answer; everything else does.</p>
+<h3 id="built-in-resources">Built-in resources</h3>
+<div class="table-wrap"><table><thead><tr><th>Address</th><th>Contents</th></tr></thead><tbody><tr><td><code>/__fw/widget-sdk.js</code></td><td>the SDK (injected into every page)</td></tr><tr><td><code>/__fw/base.css</code></td><td>theme variables and the <code>w-*</code> classes (loaded on every page)</td></tr><tr><td><code>/__fw/places.js</code></td><td>city lookup for the weather widgets; see <a href="#cities-and-location-placesjs">Cities and location</a></td></tr><tr><td><code>/__fw/themes/…</code></td><td>theme CSS and fonts</td></tr><tr><td><code>/__files/&lt;instance&gt;/&lt;setting key&gt;/&lt;relative path&gt;</code></td><td>pictures in the folder the user chose (what <code>widget.files.url()</code> builds)</td></tr><tr><td><code>/__docs/</code></td><td>this documentation</td></tr></tbody></table></div>
+<h3 id="where-the-data-lives">Where the data lives</h3>
+<div class="table-wrap"><table><thead><tr><th>What</th><th>Where</th></tr></thead><tbody><tr><td>Saved data (<code>widget.storage</code>)</td><td><code>%AppData%\WinWidget\data\&lt;instance id&gt;.json</code>, 2 MB per instance</td></tr><tr><td>Your widget folder</td><td><code>%AppData%\WinWidget\widgets\</code> (Settings → &quot;widgets folder&quot;)</td></tr><tr><td>Settings and card positions</td><td><code>%AppData%\Roaming\WinWidget\config.json</code></td></tr><tr><td>Log</td><td><code>%LocalAppData%\WinWidget\logs\app.log</code></td></tr></tbody></table></div>
+<p>Removing an instance deletes its saved data too; removing the widget folder leaves the cards on the desktop marked &quot;widget is gone&quot;.</p>
+<h3 id="cities-and-location-placesjs">Cities and location: <code>places.js</code></h3>
+<p>The weather, forecast, air-quality and sunrise widgets all use it; you can too:</p>
+<div class="code"><pre><code class="lang-html">&lt;script src=&quot;/__fw/places.js&quot;&gt;&lt;/script&gt;
+&lt;script src=&quot;main.js&quot;&gt;&lt;/script&gt;</code></pre></div>
+<div class="code"><pre><code class="lang-js">// needs &quot;network:geocoding-api.open-meteo.com&quot;; locating by network also needs &quot;network:get.geojs.io&quot;
+const place = await places.locate(widget.settings.get(&quot;city&quot;));   // &quot;&quot; → locate by IP
+// place: { name: &quot;Nanchang&quot;, lat, lon, tz, at }
+// an unknown city throws places.NotFound, whose message is ready to show
+
+// Write the located city back into the settings so the control center shows it
+// (a city the user typed is left alone, so this cannot loop).
+places.echo(widget, settings, place);</code></pre></div>
+<p>Results are cached in <code>widget.storage</code> (<code>geo2:&lt;city&gt;</code>, or <code>geo2:ip</code> for the network location, re-checked every six hours), so one city is looked up once.</p>
+<hr class="sep">
+<h2 id="every-api-on-one-page">Every API on one page</h2>
+<p>Anything returning a Promise can be awaited; &quot;sync&quot; means it returns immediately.</p>
+<div class="table-wrap"><table><thead><tr><th>API</th><th>Permission</th><th>Returns</th><th>Notes</th></tr></thead><tbody><tr><td><code>widget.apiVersion</code></td><td>—</td><td><code>1</code></td><td>SDK version</td></tr><tr><td><code>widget.hostVersion</code></td><td>—</td><td>string</td><td>WinWidget version</td></tr><tr><td><code>widget.id</code></td><td>—</td><td>string</td><td>widget id</td></tr><tr><td><code>widget.instanceId</code></td><td>—</td><td>string</td><td>this card&#x27;s id</td></tr><tr><td><code>widget.locale</code></td><td>—</td><td>string</td><td>the user&#x27;s language</td></tr><tr><td><code>widget.developer</code></td><td>—</td><td>bool</td><td>developer mode</td></tr><tr><td><code>widget.permissions</code></td><td>—</td><td>array</td><td>permissions allowed now</td></tr><tr><td><code>widget.locked</code></td><td>—</td><td>bool</td><td>live</td></tr><tr><td><code>widget.layer</code></td><td>—</td><td>string</td><td>current layer</td></tr><tr><td><code>widget.theme</code></td><td>—</td><td>string</td><td>current theme id</td></tr><tr><td><code>widget.t(dict)</code></td><td>—</td><td>sync</td><td>pick the string for the user&#x27;s language</td></tr><tr><td><code>widget.on(event, fn)</code></td><td>—</td><td>unsubscribe</td><td>listen to host events</td></tr><tr><td><code>widget.settings.get(key?)</code></td><td>—</td><td>sync</td><td>read settings</td></tr><tr><td><code>widget.settings.set(key, value)</code></td><td>—</td><td>Promise</td><td>write a setting; the control center follows</td></tr><tr><td><code>widget.settings.onChange(fn)</code></td><td>—</td><td>unsubscribe</td><td>settings changed</td></tr><tr><td><code>widget.storage.get/set/remove/keys</code></td><td>—</td><td>Promise</td><td>saved data, 2 MB per instance</td></tr><tr><td><code>widget.system.subscribe(topics, cb, {interval})</code></td><td><code>system</code></td><td>unsubscribe</td><td>periodic samples, first one right away</td></tr><tr><td><code>widget.system.history()</code></td><td><code>system</code></td><td>Promise</td><td>the last 15 minutes (<code>{ now, points }</code>)</td></tr><tr><td><code>widget.system.info()</code></td><td><code>system</code></td><td>Promise</td><td>OS, CPU, memory, GPUs, uptime</td></tr><tr><td><code>widget.system.adapters()</code></td><td><code>system</code></td><td>Promise</td><td>adapters, IPs, gateways</td></tr><tr><td><code>widget.system.ping(host, {timeout})</code></td><td><code>system</code></td><td>Promise</td><td>one ping, at most once a second</td></tr><tr><td><code>widget.audio.get()</code></td><td><code>audio</code></td><td>Promise</td><td>volume, mute, device name</td></tr><tr><td><code>widget.audio.set({volume?, muted?})</code></td><td><code>audio</code></td><td>Promise</td><td>change volume or mute</td></tr><tr><td><code>widget.audio.onChange(fn)</code></td><td><code>audio</code></td><td>unsubscribe</td><td>volume keys, tray, new headphones</td></tr><tr><td><code>widget.media.get()</code></td><td><code>media</code></td><td>Promise</td><td>what is playing</td></tr><tr><td><code>widget.media.onChange(fn)</code></td><td><code>media</code></td><td>unsubscribe</td><td>new track, pause, another app</td></tr><tr><td><code>widget.media.play/pause/toggle/next/previous()</code></td><td><code>media</code></td><td>Promise</td><td>transport buttons</td></tr><tr><td><code>widget.media.seek(ms)</code></td><td><code>media</code></td><td>Promise</td><td>jump</td></tr><tr><td><code>widget.media.position(state)</code></td><td><code>media</code></td><td>sync</td><td>where playback is now, in ms</td></tr><tr><td><code>widget.media.lyrics()</code></td><td><code>media</code> + <code>network:*</code></td><td>Promise</td><td>timed lyrics</td></tr><tr><td><code>widget.files.list(key, {recursive})</code></td><td>folder chosen</td><td>Promise</td><td>pictures in that folder</td></tr><tr><td><code>widget.files.url(file, {width})</code></td><td>—</td><td>sync</td><td>picture URL, optionally a thumbnail</td></tr><tr><td><code>widget.files.info(key, path)</code></td><td>—</td><td>Promise</td><td>size, taken-at</td></tr><tr><td><code>widget.files.pick(key)</code></td><td>—</td><td>Promise</td><td>folder dialog, saved into the setting</td></tr><tr><td><code>widget.recycleBin.query/empty/open</code></td><td>built-in</td><td>Promise</td><td>Recycle Bin</td></tr><tr><td><code>widget.power(action)</code></td><td>built-in</td><td>Promise</td><td><code>lock</code> / <code>sleep</code> / <code>restart</code> / <code>shutdown</code> / <code>signout</code></td></tr><tr><td><code>widget.fetch(url, {method, headers, body, as})</code></td><td><code>network:</code></td><td>Promise</td><td>no CORS, 8 MB per call</td></tr><tr><td><code>widget.shell.open(url)</code></td><td><code>shell.open</code></td><td>Promise</td><td>open in the default browser</td></tr><tr><td><code>widget.shell.launch(path)</code></td><td><code>shell.launch</code></td><td>Promise</td><td>program, shortcut, folder, document</td></tr><tr><td><code>widget.shell.info(path, {size})</code></td><td><code>shell.launch</code></td><td>Promise</td><td>name, kind, icon</td></tr><tr><td><code>widget.shell.pick({type, filter, title})</code></td><td><code>shell.launch</code></td><td>Promise</td><td>file or folder dialog</td></tr><tr><td><code>widget.shell.paths(files)</code></td><td><code>shell.launch</code></td><td>Promise</td><td>paths of dropped files</td></tr><tr><td><code>widget.convertChinese(text, to)</code></td><td>—</td><td>Promise</td><td>simplified ↔ traditional</td></tr><tr><td><code>widget.notify(o)</code> / <code>widget.notify.cancel(tag?)</code></td><td><code>notify</code></td><td>Promise</td><td>Windows notifications, bookable</td></tr><tr><td><code>widget.window.getSize()</code></td><td>—</td><td>Promise</td><td>current card size</td></tr><tr><td><code>widget.window.setSize(w, h)</code></td><td>—</td><td>Promise</td><td>resize within min/max</td></tr><tr><td><code>widget.window.startDrag()</code></td><td>—</td><td>sync</td><td>start dragging from your code</td></tr><tr><td><code>widget.appearance.get()</code></td><td>—</td><td>sync</td><td>current appearance</td></tr><tr><td><code>widget.appearance.onChange(fn)</code></td><td>—</td><td>unsubscribe</td><td>theme or appearance changed</td></tr><tr><td><code>widget.log(...args)</code></td><td>—</td><td>sync</td><td>write to app.log</td></tr></tbody></table></div>
+<h3 id="events">Events</h3>
+<div class="table-wrap"><table><thead><tr><th>Event</th><th>When</th><th>Payload</th></tr></thead><tbody><tr><td><code>settings</code></td><td>the user changed settings</td><td>all settings</td></tr><tr><td><code>appearance</code></td><td>theme or appearance changed</td><td>the new appearance</td></tr><tr><td><code>state</code></td><td>locked, layer or click-through changed</td><td><code>{ locked, layer, clickThrough }</code></td></tr><tr><td><code>summon</code></td><td>the hotkey brought the widget up</td><td>none</td></tr><tr><td><code>identify</code></td><td>&quot;Locate&quot; was pressed in the control center</td><td>none (the SDK draws the ring)</td></tr><tr><td>anything else</td><td>a <code>ev</code> the SDK does not know</td><td>passed through as-is</td></tr></tbody></table></div>
+<h3 id="folding-of-language-objects">Folding of language objects</h3>
+<p>A setting can carry one value per language; the host folds it to the user&#x27;s language before you see it:</p>
+<div class="code"><pre><code class="lang-json">{ &quot;key&quot;: &quot;city&quot;, &quot;type&quot;: &quot;text&quot;, &quot;default&quot;: { &quot;zh-TW&quot;: &quot;台北&quot;, &quot;zh-CN&quot;: &quot;厦门&quot;, &quot;en&quot;: &quot;Taipei&quot; } }</code></pre></div>
+<div class="code"><pre><code class="lang-js">widget.settings.get(&quot;city&quot;);   // &quot;厦门&quot; for a Simplified Chinese user</code></pre></div>
+<hr class="sep">
+<h2 id="three-complete-examples">Three complete examples</h2>
+<h3 id="1-a-number-from-a-web-api-on-the-desktop">1. A number from a web API on the desktop</h3>
+<p>Show a GitHub project&#x27;s star count, refresh every 30 minutes, and keep the last value when the network fails.</p>
+<p><code>widget.json</code>: <code>&quot;permissions&quot;: [&quot;network:api.github.com&quot;]</code>.</p>
+<div class="code"><pre><code class="lang-js">const $ = (id) =&gt; document.getElementById(id);
+const KEY = &quot;last&quot;;
+
+async function fetchOnce() {
+  const r = await widget.fetch(&quot;https://api.github.com/repos/Demon1110/WinWidget&quot;, {
+    headers: { accept: &quot;application/vnd.github+json&quot; },
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const repo = await r.json();
+  return { stars: repo.stargazers_count, at: Date.now() };
+}
+
+async function refresh() {
+  try {
+    const data = await fetchOnce();
+    show(data, false);
+    await widget.storage.set(KEY, data);
+  } catch (e) {
+    // Fall back to the last good value and mark it as stale.
+    const old = await widget.storage.get(KEY);
+    if (old) show(old, true);
+    else $(&quot;stars&quot;).textContent = &quot;—&quot;;
+    widget.log(`stars: ${e.message}`);
+  }
+}
+
+function show(data, stale) {
+  $(&quot;stars&quot;).textContent = data.stars.toLocaleString(widget.locale);
+  $(&quot;at&quot;).textContent = new Date(data.at).toLocaleTimeString(widget.locale, { hour: &quot;2-digit&quot;, minute: &quot;2-digit&quot; });
+  $(&quot;stale&quot;).hidden = !stale;
+}
+
+refresh();
+setInterval(refresh, 30 * 60 * 1000);
+document.addEventListener(&quot;visibilitychange&quot;, () =&gt; { if (!document.hidden) refresh(); });</code></pre></div>
+<ul class="plain">
+<li><code>permissions</code> needs <code>network:api.github.com</code>, not <code>*.github.com</code>: ask for as little as possible.</li>
+<li>Something to show even before (or without) data, so the card is never blank.</li>
+<li><code>setInterval</code> is fine; never poll per second what has an event (<code>widget.media</code>, <code>widget.audio</code>).</li>
+</ul>
+<h3 id="2-system-figures-once-a-second-cheaply">2. System figures once a second, cheaply</h3>
+<div class="code"><pre><code class="lang-js">const $ = (id) =&gt; document.getElementById(id);
+const bars = [];
+
+widget.system.subscribe([&quot;cpu&quot;, &quot;memory&quot;], (d) =&gt; {
+  if (d.cpu) {
+    $(&quot;cpu&quot;).textContent = `${Math.round(d.cpu.usage)}%`;
+    push(bars[0], d.cpu.usage);
+  }
+  if (d.memory) {
+    $(&quot;mem&quot;).textContent = `${Math.round(d.memory.usage)}%`;
+    push(bars[1], d.memory.usage);
+  }
+}, { interval: 1000 });
+
+/** A 20-cell sparkline that updates every second, so no transition. */
+function push(bar, value) {
+  const cell = document.createElement(&quot;i&quot;);
+  cell.style.height = `${Math.max(4, Math.min(100, value))}%`;
+  bar.appendChild(cell);
+  if (bar.children.length &gt; 20) bar.firstElementChild.remove();
+}</code></pre></div>
+<div class="code"><pre><code class="lang-css">#cpu, #mem { font-variant-numeric: tabular-nums; }   /* digits stop jittering */
+.mini { display: flex; align-items: flex-end; gap: 1px; height: 1.6rem; }
+.mini i { width: 2px; background: var(--w-accent); } /* no transition, no animation */</code></pre></div>
+<ul class="plain">
+<li>No <code>transition</code> or <code>animation</code> on anything that changes every second: a 0.5 s animation means the card repaints constantly.</li>
+<li><code>tabular-nums</code> keeps numbers from shifting sideways.</li>
+<li>Unsubscribe when you no longer need it (<code>const stop = widget.system.subscribe(...); stop();</code>).</li>
+</ul>
+<h3 id="3-two-copies-of-the-same-widget-separate-data">3. Two copies of the same widget, separate data</h3>
+<div class="code"><pre><code class="lang-js">// The card is dragged and resized, but the instance id never changes: use it to separate data.
+const key = `state:${widget.instanceId}`;
+
+const saved = await widget.storage.get(key);
+index = saved ? saved.index : 0;
+
+function save() {
+  widget.storage.set(key, { index });   // no await needed, writes are quick
+}</code></pre></div>
+<p><code>widget.storage</code> is per <strong>widget type</strong> (both copies share one file), so put <code>instanceId</code> in the key when they must not share; settings are per instance already.</p>
+<hr class="sep">
+<h2 id="checklist-before-you-hand-a-widget-out">Checklist before you hand a widget out</h2>
+<ul class="plain">
+<li><code>id</code> uses only lowercase letters, digits and <code>. _ -</code>, 2–64 characters, and never changes afterwards.</li>
+<li><code>entry</code> exists, and every resource is a relative path.</li>
+<li>Files are UTF-8 (a BOM will break <code>widget.json</code> parsing).</li>
+<li>Everything you use is declared in <code>permissions</code>; prefer <code>network:some.site</code> over <code>network:*</code>.</li>
+<li>Something is visible on first paint; when data fails, say so in plain words instead of leaving the card blank.</li>
+<li>Nothing that updates every second has an animation; nothing that has an event is polled.</li>
+<li>Numbers and dates go through <code>widget.locale</code>; words go through <code>widget.t()</code>.</li>
+<li>Only <code>--w-*</code> variables and <code>w-*</code> classes, checked on all three themes.</li>
+<li>It survives being resized: flex/grid, <code>@container</code> where needed, <code>grow</code> if the content should scale.</li>
+<li>No <code>window.open</code>, no navigation, no <code>document.write</code>; use <code>widget.shell.open</code>.</li>
+<li>No CDN scripts or fonts (they break offline) — bundle them in the widget folder.</li>
+<li>Look at the Console with F12 in developer mode before exporting the <code>.fwz</code>.</li>
+</ul>
+<hr class="sep">
+<h2 id="questions">Questions</h2>
+<p><strong>I changed a file and nothing happened on the desktop.</strong> Check that developer mode is on under Settings. If it&#x27;s off, right-click the widget → <strong>Reload</strong>. If you changed <code>widget.json</code> and the widget disappeared, look at the top of <strong>Add widgets</strong> for an error.</p>
+<p>**<code>widget.fetch</code> fails with &quot;permission denied&quot;.** Add the site to <code>permissions</code>, e.g. <code>&quot;network:api.example.com&quot;</code>; the error message names the exact line to add. If it says &quot;not allowed yet&quot;, the permission is declared but the user hasn&#x27;t allowed it: pick the widget under <strong>My widgets</strong> and press <strong>Review</strong>.</p>
+<p>**A plain <code>fetch()</code> or <code>&lt;img&gt;</code> from the web doesn&#x27;t load.** The site has to be in <code>permissions</code>. A plain <code>fetch()</code> also needs the site to allow CORS; if it doesn&#x27;t, use <code>widget.fetch</code>.</p>
+<p><strong>Text shows up garbled.</strong> Save the files as UTF-8.</p>
+<p><strong>I want the widget bigger or smaller when it&#x27;s first added.</strong> Change <code>size.width</code> and <code>size.height</code>. Copies already on the desktop keep the size the user gave them; add a new one from <strong>Add widgets</strong> to see the change.</p>
+<p><strong>How do I make it look right on the light Paper theme?</strong> Use the <code>--w-*</code> variables for text and lines instead of hard-coded white or black, and check all three themes under <strong>Themes</strong>.</p>
+<p><strong>I changed the language and the widget still speaks the old one.</strong> The language is read from <code>config.json</code> at startup, so restart WinWidget; the control center itself follows immediately, cards already open reload on the next launch. Always use <code>widget.locale</code> / <code>widget.t()</code> in a widget instead of detecting the system language.</p>
+<p><strong>&quot;Widgets folder&quot; and &quot;data&quot; in the settings do not open.</strong> Those buttons hand a local folder to Windows (the same as double-clicking it in Explorer). Older builds passed it to the URL opener, which only accepts http/https/mailto, so it always failed; the current build opens it properly. If a click still does nothing, check that line in <code>%LocalAppData%\WinWidget\logs\app.log</code>.</p>
+<p><strong>Check for updates says there is no channel.</strong> With an empty <code>update_url</code>, updates are read from this project&#x27;s GitHub Releases (<code>api.github.com</code>). To use your own feed, point <code>update_url</code> at a JSON document <code>{&quot;version&quot;: &quot;1.2.0&quot;, &quot;url&quot;: &quot;download&quot;, &quot;size&quot;: bytes, &quot;notes&quot;: &quot;notes&quot;, &quot;page&quot;: &quot;page&quot;}</code>. Checks and downloads run in the background, and developer mode never updates itself.</p>
+</article>
+  </main>
+</div>
+
+<script>
+(function () {
+  var langs = Array.prototype.slice.call(document.querySelectorAll('#langs button'));
+  var articles = Array.prototype.slice.call(document.querySelectorAll('article[data-lang]'));
+  var side = document.getElementById('side');
+
+  function tocFor(lang) {
+    var nav = side.querySelector('div[data-lang="' + lang + '"]');
+    return nav;
+  }
+
+  function show(lang) {
+    articles.forEach(function (a) { a.hidden = a.dataset.lang !== lang; });
+    Array.prototype.slice.call(side.querySelectorAll('div[data-lang]')).forEach(function (d) {
+      d.hidden = d.dataset.lang !== lang;
+    });
+    langs.forEach(function (b) {
+      b.setAttribute('aria-pressed', String(b.dataset.lang === lang));
+    });
+    document.documentElement.lang = lang;
+    try { localStorage.setItem('ww-docs-lang', lang); } catch (e) {}
+    // Opening the file as .../developer-guide.html#some-heading should land on
+    // that heading even though the article only became visible just now.
+    if (location.hash) {
+      var target = document.querySelector(location.hash.replace(/[%"]/g, ''));
+      if (target) { target.scrollIntoView(); }
+    }
+  }
+
+  langs.forEach(function (b) {
+    b.addEventListener('click', function () { show(b.dataset.lang); });
+  });
+
+  var wanted = null;
+  try { wanted = localStorage.getItem('ww-docs-lang'); } catch (e) {}
+  if (!wanted) {
+    wanted = (navigator.language || '').toLowerCase().indexOf('en') === 0 ? 'en'
+      : (navigator.language || '').toLowerCase() === 'zh-tw' ? 'zh-TW' : 'zh-CN';
+  }
+  if (!articles.some(function (a) { return a.dataset.lang === wanted; })) wanted = 'zh-CN';
+  show(wanted);
+
+  // copy buttons: navigator.clipboard needs a secure origin, and file:// is not
+  document.querySelectorAll('.code').forEach(function (box) {
+    var btn = document.createElement('button');
+    btn.className = 'copy';
+    btn.textContent = 'COPY';
+    btn.addEventListener('click', function () {
+      var text = box.querySelector('code').textContent;
+      var done = function () {
+        btn.textContent = 'OK';
+        btn.classList.add('done');
+        setTimeout(function () { btn.textContent = 'COPY'; btn.classList.remove('done'); }, 1200);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, fallback);
+      } else {
+        fallback();
+      }
+      function fallback() {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); done(); } catch (e) {}
+        document.body.removeChild(ta);
+      }
+    });
+    box.appendChild(btn);
+  });
+
+  // sidebar filter
+  var search = document.getElementById('search');
+  search.addEventListener('input', function () {
+    var q = search.value.trim().toLowerCase();
+    var current = side.querySelector('div[data-lang]:not([hidden])');
+    if (!current) return;
+    current.querySelectorAll('a').forEach(function (a) {
+      var hit = !q || a.textContent.toLowerCase().indexOf(q) >= 0;
+      a.style.display = hit ? '' : 'none';
+      a.classList.toggle('hit', Boolean(q) && hit);
+    });
+  });
+  search.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return;
+    var current = side.querySelector('div[data-lang]:not([hidden])');
+    if (!current) return;
+    var first = Array.prototype.slice.call(current.querySelectorAll('a'))
+      .filter(function (a) { return a.style.display !== 'none'; })[0];
+    if (first) { location.hash = first.getAttribute('href').slice(1); }
+  });
+})();
+</script>
+</body>
+</html>

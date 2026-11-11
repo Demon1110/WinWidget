@@ -159,7 +159,9 @@ pub fn state_json(app: &App) -> Value {
         "pauseFullscreen": cfg.pause_on_fullscreen,
         "editMode": app.edit_mode,
         "hotkeys": hotkeys,
-        "update": app.update,
+        // Goes through `current` so the "auto", "current" and "feed" fields are always there:
+        // a background check only reports the release it found.
+        "update": crate::market::updater::current(app),
         "portable": crate::core::paths::get().portable,
         "dataDir": crate::core::paths::get().data_dir.to_string_lossy(),
         "widgetsDir": crate::core::paths::get().user_widgets_dir().to_string_lossy(),
@@ -304,12 +306,24 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
             Ok(Value::Null)
         }
         "app.guide" => {
-            let url = format!(
-                "http://{}:{}/__docs/index.html",
-                crate::ui::server::CONTROL_HOST,
-                app.port
-            );
-            crate::platform::shell::open(&url).map_err(BridgeError::new)?;
+            // Open the built guide straight off disk: it is a single self-contained
+            // HTML file, so it works with no server, no network and no browser
+            // session. Falling back to the served copy keeps a stripped install
+            // (where the generated file is missing) usable.
+            let local = crate::core::paths::get()
+                .docs_dir()
+                .join("developer-guide.html");
+            if local.is_file() {
+                crate::platform::shell::open_path(&local.to_string_lossy())
+                    .map_err(BridgeError::new)?;
+            } else {
+                let url = format!(
+                    "http://{}:{}/__docs/index.html",
+                    crate::ui::server::CONTROL_HOST,
+                    app.port
+                );
+                crate::platform::shell::open(&url).map_err(BridgeError::new)?;
+            }
             Ok(Value::Null)
         }
         "app.hotkey" => {
@@ -365,7 +379,8 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
                 _ => crate::core::paths::get().data_dir.clone(),
             };
             std::fs::create_dir_all(&path).ok();
-            crate::platform::shell::open(&path.to_string_lossy()).map_err(BridgeError::new)?;
+            // These are folders on this machine, not links: `open` only takes http/https/mailto.
+            crate::platform::shell::open_path(&path.to_string_lossy()).map_err(BridgeError::new)?;
             Ok(Value::Null)
         }
         "app.rescan" => {
@@ -385,12 +400,12 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
             Ok(Value::Null)
         }
         "app.updateCheck" => {
-            crate::market::updater::check(app);
+            crate::market::updater::check_async(app);
             refresh(app, None);
             Ok(Value::Null)
         }
         "app.updateInstall" => {
-            crate::market::updater::install(app);
+            crate::market::updater::install_async(app);
             refresh(app, None);
             Ok(Value::Null)
         }
@@ -618,6 +633,13 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
             app.refresh_tray_menu();
             refresh(app, None);
             Ok(Value::Null)
+        }
+        "instance.clearAll" => {
+            let count = app.cfg().instances.len();
+            app.clear_instances();
+            app.refresh_tray_menu();
+            refresh(app, None);
+            Ok(json!({ "removed": count }))
         }
         "instance.pickFolder" => {
             let inst = instance_of(app, p)?;

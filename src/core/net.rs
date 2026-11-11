@@ -115,7 +115,7 @@ pub fn fetch(allowed: &[String], req: FetchRequest) -> Result<Value, String> {
 /// The proxy Windows itself uses, so a widget reaches what the user's browser reaches: `HTTPS_PROXY`
 /// and friends first (a shell that sets them means it), then the fixed server in Internet Settings.
 /// A PAC file is not resolved; the address of a running proxy is, and that is what a desktop uses.
-fn system_proxy() -> Option<String> {
+pub(crate) fn system_proxy() -> Option<String> {
     for key in [
         "HTTPS_PROXY",
         "https_proxy",

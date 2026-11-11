@@ -244,7 +244,10 @@ function pageMine() {
     </button>`;
   }).join("");
   return `<div class="page-head" data-key="h-mine"><h1>${t("我的組件")}<span class="sub">${t("桌面上有 {n} 個", { n: list.length })}</span></h1>
-      <button class="btn" data-action="goto" data-page="add">${t("＋ 添加組件")}</button></div>
+      <div class="head-tools">
+        <button class="btn quiet danger" data-action="clearAll">${t("清除全部")}</button>
+        <button class="btn" data-action="goto" data-page="add">${t("＋ 添加組件")}</button>
+      </div></div>
     <div class="mine stagger" data-key="mine">
       <div class="list scroll" style="--i:0"><div class="list-mark"></div>${items}</div>
       <section class="editor" style="--i:1">${editor(inst, nm[inst.id])}</section>
@@ -606,6 +609,7 @@ const UPDATE_ERRORS = {
   readonly: "WinWidget 所在的資料夾不能寫入，請到網站下載新版本。",
   dev: "開發用的副本不會自己更新。",
   noChannel: "還沒有設定更新來源，請到網站下載新版本。",
+  noRelease: "GitHub 上還沒有發佈任何版本，之後再來看看吧。",
   failed: "沒有安裝成功，請到網站下載新版本。",
 };
 
@@ -1017,7 +1021,7 @@ function addWidget(widgetId, grant) {
 
 function onAction(a) {
   flushEdits();
-  if (a.dataset.action !== "remove" && a.dataset.action !== "uninstall") disarm();
+  if (!["remove", "uninstall", "clearAll"].includes(a.dataset.action)) disarm();
   const id = ui.sel;
   const inst = S && S.instances.find((i) => i.id === id);
   if (a.dataset.action.startsWith("sheet")) return onSheetAction(a);
@@ -1041,6 +1045,15 @@ function onAction(a) {
       if (armed(a, t("再按一次移除"), "remove:" + id)) {
         const name = inst ? inst.name : "";
         api("instance.remove", { id }).then(() => toast(t("已移除「{name}」，它保存的內容也已刪除", { name })));
+      }
+      break;
+    case "clearAll":
+      if (armed(a, t("再按一次清除"), "clearAll")) {
+        const n = S.instances.length;
+        api("instance.clearAll").then((r) => {
+          ui.sel = null;
+          toast(t("已清除 {n} 個組件", { n: (r && r.removed) || n }));
+        });
       }
       break;
     case "add": {

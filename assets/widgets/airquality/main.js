@@ -68,6 +68,7 @@ async function refresh() {
     const r = await json(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${place.lat}&longitude=${place.lon}` +
       "&current=us_aqi,european_aqi,pm2_5,pm10,ozone&timezone=auto");
     data = { at: Date.now(), place, current: r.current };
+    places.echo(widget, opts, place);
     failed = false;
     await widget.storage.set("last", data);
   } catch (e) {

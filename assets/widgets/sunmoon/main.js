@@ -86,6 +86,7 @@ const locate = () => places.locate(opts.city);
 async function load() {
   try {
     place = await locate();
+    places.echo(widget, opts, place);
     render();
   } catch (err) {
     widget.log(`sunmoon: ${err.message}`);

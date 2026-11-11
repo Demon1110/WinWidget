@@ -62,6 +62,8 @@ fn main() {
         EventLoopBuilder::<Ev>::with_user_event().build();
     let proxy = event_loop.create_proxy();
     let mut app = App::new(proxy);
+    // The saved language is the one everything should speak; "auto" follows Windows.
+    text::set_locale(&app.cfg().language.clone());
     // The safety net behind page-driven dragging: works even when the web view missed the press.
     window::watch_presses(app.proxy.clone());
     app.refresh_tray_menu();

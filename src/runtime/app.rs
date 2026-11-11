@@ -753,6 +753,20 @@ impl App {
         self.rebuild_sampling();
     }
 
+    /// Removes every card at once — the "clear all widgets" button in the control center.
+    pub fn clear_instances(&mut self) {
+        let ids: Vec<String> = self
+            .store
+            .data
+            .instances
+            .iter()
+            .map(|i| i.id.clone())
+            .collect();
+        for id in ids {
+            self.remove_instance(&id);
+        }
+    }
+
     pub fn duplicate_instance(&mut self, id: &str) -> Option<String> {
         let source = self.instance(id)?.clone();
         let mut copy = source.clone();

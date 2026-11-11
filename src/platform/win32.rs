@@ -337,6 +337,8 @@ extern "system" {
     ) -> HICON;
     pub fn MessageBoxW(hwnd: HWND, text: *const u16, caption: *const u16, kind: u32) -> i32;
     pub fn ExitWindowsEx(flags: u32, reason: u32) -> i32;
+    /// Locks the workstation through the same call the Win+L shortcut uses.
+    pub fn LockWorkStation() -> i32;
     pub fn SystemParametersInfoW(action: u32, param: u32, value: *mut c_void, win_ini: u32) -> i32;
     pub fn GetSystemPowerStatus(status: *mut SYSTEM_POWER_STATUS) -> i32;
     pub fn LoadIconW(instance: HINSTANCE, name: usize) -> HICON;

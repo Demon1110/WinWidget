@@ -360,7 +360,29 @@ pub fn run(app: &mut App, action: &str) {
                 app.sync_bounds(id);
             }
         }
-        // Actions the app handles itself (hotkeys other than the built-ins).
+        // A worker thread finished a version check or a download step: keep the state and show it.
+        // `run` splits the action on the first colon, so the payload arrives as the argument.
+        "update" => {
+            if let Some(rest) = arg {
+                if let Ok(value) = serde_json::from_str::<serde_json::Value>(rest) {
+                    let status = value
+                        .get("status")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("idle")
+                        .to_string();
+                    let error = value
+                        .get("error")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    app.update = value;
+                    if status == "error" {
+                        crate::core::logging::warn(&format!("Update: {error}"));
+                    }
+                    app.push_state_to_control(None);
+                }
+            }
+        }
         other => {
             if let Some(rest) = other.strip_prefix("hotkey.") {
                 app.hotkey_pressed(rest);

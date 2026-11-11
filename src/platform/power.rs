@@ -68,8 +68,15 @@ pub fn do_power(action: &str) -> Result<Value, String> {
             Ok(json!({ "ok": true }))
         }
         "lock" => {
-            crate::platform::shell::launch_shell("rundll32.exe user32.dll,LockWorkStation")?;
-            Ok(json!({ "ok": true }))
+            // `ShellExecuteW` takes a file, not a command line: passing "rundll32.exe
+            // user32.dll,LockWorkStation" there fails with "Windows could not open …", which is why
+            // the power card's lock button did nothing. `LockWorkStation` is the same call Win+L uses.
+            let ok = unsafe { w::LockWorkStation() };
+            if ok == 0 {
+                Err("Windows refused to lock the workstation".into())
+            } else {
+                Ok(json!({ "ok": true }))
+            }
         }
         other => Err(format!("unknown power action '{other}'")),
     }

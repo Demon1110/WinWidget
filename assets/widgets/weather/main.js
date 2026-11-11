@@ -58,6 +58,7 @@ async function refresh() {
       "&hourly=temperature_2m,precipitation_probability&daily=temperature_2m_max,temperature_2m_min" +
       `&forecast_days=2&timezone=auto${unit}`);
     data = { at: Date.now(), place, forecast };
+    places.echo(widget, opts, place);
     failed = false;
     await widget.storage.set("last", data);
   } catch (e) {

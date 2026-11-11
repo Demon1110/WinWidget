@@ -70,6 +70,7 @@ async function refresh() {
       `https://api.open-meteo.com/v1/forecast?latitude=${place.lat}&longitude=${place.lon}` +
       `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=7&timezone=auto${unit}`);
     data = { at: Date.now(), place, daily: f.daily, unit: opts.unit };
+    places.echo(widget, opts, place);
     failed = false;
     await widget.storage.set("last", data);
   } catch (e) {

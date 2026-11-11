@@ -114,5 +114,17 @@
     return p;
   }
 
-  window.places = Object.freeze({ locate, NotFound });
+  /** Writes the city the locator settled on into the widget's own "city" setting, so the box in the
+      control center shows which city the card is for. A city the user typed is left alone, and the
+      setting is only written when it was empty, so this cannot start a refresh loop. */
+  function echo(widget, opts, place) {
+    const name = place && place.name;
+    if (!name || String(opts.city || "").trim()) return;
+    opts.city = name; // the next refresh already sees a city
+    try {
+      widget.settings.set("city", name).catch(() => {});
+    } catch { /* a widget built without settings keeps working */ }
+  }
+
+  window.places = Object.freeze({ locate, echo, NotFound });
 })();
