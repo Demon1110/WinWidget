@@ -16,7 +16,13 @@ renders all three languages to HTML, and writes
 Everything is inlined: no images to fetch, no CSS to load, no markdown parser at
 runtime, so it opens with a plain file:// double-click and with no network.
 
-Usage:  python tools/build-docs.py
+Usage:  python scripts/build-docs.py
+
+Needs `zhconv` (pip install zhconv) for the Traditional -> Simplified pass; without
+it the script stops before writing anything, so a half-converted guide never ships.
+
+The Release workflow runs this and then checks that `assets/docs` has no diff, so a
+source edit that forgot to regenerate fails there instead of shipping stale docs.
 """
 
 import html
@@ -545,7 +551,7 @@ def build() -> int:
     # Keep the Simplified Markdown on disk as well, so the docs folder and the
     # HTML never disagree about what the text is.
     header = (
-        "<!-- 由 tools/build-docs.py 从 組件開發指南.md 生成，请改源文件后重新生成。 -->\n\n"
+        "<!-- 由 scripts/build-docs.py 从 組件開發指南.md 生成，请改源文件后重新生成。 -->\n\n"
     )
     ZH_CN.write_text(header + zh_cn_md.lstrip("\ufeff"), encoding="utf-8", newline="")
 

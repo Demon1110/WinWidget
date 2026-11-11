@@ -1,0 +1,287 @@
+# WinWidget 发布流水线（手动触发）
+#
+#   在 Actions 页面点 "Run workflow"，流水线严格按下面顺序走（阶段划分照 MetaAlign 那条
+#   发布流水线，一步不少、一步不乱）：
+#     1. prepare  只算版本号：按 bump 递增 Cargo.toml 的 [package].version，同步 Cargo.lock
+#                 里 winwidget 的版本，把这两个文件上传成 artifact。
+#                 ★ 这一步不提交、不 push、不打 tag。
+#     2. checks   fmt --check / clippy -D warnings / 单元测试（都在新版本上跑）。
+#     3. windows  release 构建 + 打包便携 zip（exe + assets\ + README + LICENSE），附 sha256。
+#     4. docs     ← 顶替原流水线里的 crates.io 一步：WinWidget 是 GPL-3.0 的桌面程序，
+#                 不进 crates.io。这一步把三语开发指南渲染成单文件 HTML，连同
+#                 「文档和源文件是否同步」的检查一起当门禁。
+#     5. release  ★ 前面全部成功后，才提交版本变更、打 tag、创建 GitHub Release。
+#
+#   与本项目无关、因此没照搬的部分（都是事实差异，不是省步骤）：
+#     - 没有 linux 作业：代码是 Windows 专属的（tao/wry + windows crate + 直调 Win32），
+#       Linux 上编不过；从 MetaAlign 拷来的 scripts/package-linux.sh 已删除。
+#     - checks 跑在 windows-latest 而不是 ubuntu：同上，换成 Linux 连依赖都装不起来。
+#     - 没有 wasm 编译检查：本项目没有 wasm 目标。
+#
+#   失败语义（与原流水线一致，是刻意的）：
+#     任何一步失败，分支上都不会留下「只改了版本号」的提交，也不会有 tag / Release；
+#     重跑从当前 Cargo.toml 的版本继续递增，不会重号。
+#
+#   提交信息带 [skip ci]：本流水线只有手动触发，这个标记是给将来可能的 push 触发留的保险。
+#
+#   版本号只有 Cargo.toml 一个来源，打包脚本自己解析，CI 不重复抄。
+#
+#   关于自动更新：src/market/updater.rs::parse_release 挑的是 release 里的 *setup*.exe。
+#   现在发的只有便携 zip，所以应用内自更新会如实报「這個版本沒有適合這份 WinWidget 的檔案」；
+#   等做了安装包，把 setup exe 也放进 dist/ 上传即可，这条流水线不用改。
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 版本递增方式
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
+
+permissions:
+  contents: write
+
+# 同一时间只允许一条发布流水线，避免两次触发把版本号撞在一起
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # ---------------- 1. 算版本号（只改工作区，不落库） ----------------
+  prepare:
+    name: Bump version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+      tag: ${{ steps.bump.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Bump version
+        id: bump
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          set -euo pipefail
+          KIND="${BUMP:-patch}"
+          VER="$(grep -m1 '^version = ' Cargo.toml | cut -d '"' -f2)"
+          IFS=. read -r MAJ MIN PAT <<< "$VER"
+          case "$KIND" in
+            major) MAJ=$((MAJ + 1)); MIN=0; PAT=0 ;;
+            minor) MIN=$((MIN + 1)); PAT=0 ;;
+            patch) PAT=$((PAT + 1)) ;;
+            *) echo "::error::未知的递增方式 $KIND"; exit 1 ;;
+          esac
+          NV="$MAJ.$MIN.$PAT"
+          echo "版本：$VER -> $NV"
+
+          # tag 已存在就拒绝，避免覆盖已发布的版本
+          if git rev-parse -q --verify "refs/tags/v$NV" >/dev/null; then
+            echo "::error::tag v$NV 已存在，拒绝覆盖；请先删除该 tag 或改用更大的版本号"
+            exit 1
+          fi
+
+          # 单包仓库：[package] 只有一处行首 version，整行替换即可
+          sed -i "s/^version = .*/version = \"$NV\"/" Cargo.toml
+          # Cargo.lock 里 winwidget 紧跟 name 的那行版本
+          sed -i -E "/^name = \"winwidget\"\$/{n;s/^version = \"[^\"]*\"/version = \"$NV\"/;}" Cargo.lock
+
+          git diff --stat
+          git diff -- Cargo.lock
+
+          {
+            echo "version=$NV"
+            echo "tag=v$NV"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### 待发布版本：v$NV"
+            echo ""
+            echo "- 递增方式：\`$KIND\`（$VER -> $NV）"
+            echo "- 该版本尚未提交、未打 tag；全部发布成功后才落库"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # 后续 job 用同一份 Cargo.toml / Cargo.lock，保证全流水线版本一致
+      - name: Upload bumped manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-manifest
+          path: |
+            Cargo.toml
+            Cargo.lock
+          if-no-files-found: error
+
+  # ---------------- 2. 质量门禁 ----------------
+  checks:
+    name: Checks (fmt / clippy / test)
+    needs: prepare
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Use bumped manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: release-manifest
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: checks
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      # 单元测试要碰 Win32（LockWorkStation、注册表、路径），只能在 Windows 上跑
+      - name: Test
+        run: cargo test
+
+  # ---------------- 3. Windows：release 构建 + 便携 zip ----------------
+  windows:
+    name: Windows x64
+    needs: [prepare, checks]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Use bumped manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: release-manifest
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: windows
+
+      # 脚本内部：cargo build --release → 组装 dist\stage（exe + assets\）→ 压 zip → 写 sha256
+      - name: Package
+        shell: pwsh
+        run: pwsh -NoProfile -File scripts/package-windows.ps1
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: WinWidget-Windows
+          path: |
+            dist/*.zip
+            dist/*.zip.sha256
+          if-no-files-found: error
+
+  # ---------------- 4. 开发者文档（顶替 crates.io 那一步） ----------------
+  docs:
+    name: Developer guide
+    needs: [prepare, checks]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install zhconv
+        run: python -m pip install --disable-pip-version-check zhconv
+
+      # 三语 Markdown → 单文件自包含 HTML（洗掉运行时依赖，双击就能看）
+      - name: Build the guide
+        run: python scripts/build-docs.py
+
+      # 改了 Markdown 却忘了重新生成 → 这一步失败，别把过期的文档发出去
+      - name: Docs are in sync
+        run: git diff --exit-code -- assets/docs
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: WinWidget-Docs
+          path: assets/docs/developer-guide.html
+          if-no-files-found: error
+
+  # ---------------- 5. 全部成功后再提交、打 tag、发 Release ----------------
+  release:
+    name: Commit, tag, GitHub Release
+    needs: [prepare, windows, docs]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Use bumped manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: release-manifest
+
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Commit version bump
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$GITHUB_REF_NAME"
+
+          git diff --stat
+          git add Cargo.toml Cargo.lock
+          if git diff --cached --quiet; then
+            echo "分支上已经是 v$VERSION，跳过提交"
+          else
+            git commit -m "chore(release): v$VERSION [skip ci]"
+            git push origin "HEAD:$GITHUB_REF_NAME"
+          fi
+
+      - name: Create tag
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          git tag "$TAG"
+          git push origin "$TAG"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          ls -lhR dist
+          # 文档也作为独立资产发出去：没装程序的人也能直接读这份指南
+          mv dist/developer-guide.html "dist/WinWidget-${VERSION}-developer-guide.html"
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "WinWidget v$VERSION" \
+            --generate-notes \
+            dist/*
+
+      - name: Summary
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          echo "已发布 https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"

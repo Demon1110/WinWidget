@@ -163,9 +163,13 @@ fn fetch_release(url: &str) -> Value {
                 .get("url")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
-            let newer = compare(&latest, crate::APP_VERSION) > 0 && download.is_some();
+            let newer = compare(&latest, crate::APP_VERSION) > 0;
+            // A newer release with nothing to run is not "you are up to date": say so, because
+            // 404-free releases that only carry a zip are exactly what a portable build looks like.
+            let missing = newer && download.is_none();
             json!({
-                "status": if newer { "available" } else { "latest" },
+                "status": if !newer { "latest" } else if missing { "error" } else { "available" },
+                "error": if missing { json!("noAsset") } else { Value::Null },
                 "current": crate::APP_VERSION,
                 "latest": latest,
                 "size": info.get("size").cloned().unwrap_or(json!(0)),
@@ -472,5 +476,16 @@ mod tests {
         let own = parse_release(r#"{"version":"1.3.0","url":"https://x/b.exe","notes":"n"}"#)
             .expect("own feed");
         assert_eq!(own["version"], "1.3.0");
+    }
+
+    #[test]
+    fn a_release_with_only_a_zip_has_nowhere_to_install_from() {
+        let text = r#"{"tag_name":"v1.2.0","html_url":"https://x/rel",
+            "assets":[{"name":"WinWidget-1.2.0-windows-x64.zip","size":999,
+            "browser_download_url":"https://x/a.zip"}]}"#;
+        let v = parse_release(text).expect("github release");
+        assert_eq!(v["version"], "1.2.0");
+        // 挑资产时明确不拿 zip 当更新包：zip 不是能直接跑起来的东西
+        assert!(v["url"].is_null());
     }
 }

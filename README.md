@@ -87,6 +87,32 @@ winwidget add winwidget.notes  # 在桌面上放一张便签（需先退出正�
 winwidget remove <instance-id>
 ```
 
+## 打包与发布
+
+脚本都在 `scripts/`，本地跑的就是 CI 跑的那几个：
+
+```powershell
+pwsh -File scripts/run.ps1                        # 构建（调试）并启动；-Kill 先结束旧实例，-Release 用发布配置
+pwsh -File scripts/package-windows.ps1            # 便携包：dist\WinWidget-<版本>-windows-x64.zip + .sha256
+pwsh -File scripts/package-windows.ps1 -Portable  # 数据落到 exe 旁边的 data\（U 盘 / 绿色版用法）
+pwsh -File scripts/package-windows.ps1 -Upx       # 打包前用 UPX 压缩 exe
+python scripts/build-docs.py                      # 三语开发指南 → assets/docs/developer-guide.html（+ index.html）
+```
+
+打包会组装出 `dist\stage\WinWidget-<版本>-windows-x64\`：`winwidget.exe` + 整棵 `assets\`（38 个组件、SDK、主题、控制中心、开发文档）+ README/LICENSE。资源必须跟着 exe 走，程序是从 exe 旁边的 `assets\` 读组件和文档的；`assets\docs\m*` 那些里程碑截图只是仓库里的说明素材，不进包。
+
+发布走 GitHub Actions 的 **Release** 工作流（手动 `Run workflow`，选 `patch` / `minor` / `major`），阶段顺序固定：
+
+| 阶段 | 干什么 | 落库吗 |
+| --- | --- | --- |
+| `prepare` | 只算新版本号，改 `Cargo.toml` + `Cargo.lock` 上传成 artifact | 否 |
+| `checks` | `cargo fmt --check` / `clippy -D warnings` / `cargo test` | 否 |
+| `windows` | `scripts/package-windows.ps1` → zip + sha256 | 否 |
+| `docs` | 渲染三语开发指南，并校验「文档和 Markdown 源文件是否同步」 | 否 |
+| `release` | 全部成功后才提交版本号、打 tag、建 GitHub Release | 是 |
+
+任何一步失败，分支上都不会留下「只改了版本号」的提交，也不会有 tag / Release；重跑从当前版本继续递增，不会重号。
+
 ## 自己写一个组件
 
 一个组件就是一个文件夹，放进 `%APPDATA%\WinWidget\widgets\`（或内置目录 `assets/widgets/`）：
@@ -129,7 +155,9 @@ widget.call("shell.open", { target: "https://example.com" });  // 需在 permiss
 
 - 样式基线由主题提供：`w-label`、`w-num`、`w-btn`、`w-display` 等类名直接用，背景/圆角/字色会跟着主题走。
 - 完整 API（`widget.call` / `widget.on` / `widget.settings` / `widget.storage` / 权限清单 / 调试 / 打包）见
-  [`assets/docs/組件開發指南.md`](assets/docs/組件開發指南.md)，或在运行时打开控制中心"添加组件 → 开发文档"（`/__docs/`）。
+  **`assets/docs/developer-guide.html`**（三语单文件，双击就能读，不联网）——它由
+  [`assets/docs/組件開發指南.md`](assets/docs/組件開發指南.md) 经 `python scripts/build-docs.py` 生成；
+  也可以从控制中心「設定 → 開發文檔 → 打開」直接打开，或走宿主的 `/__docs/`。
 - 编辑期把 `widget.d.ts` 放到同一目录，VS Code 里 `widget.` 会有完整补全与注释。
 
 ## 主题与样式
