@@ -93,13 +93,25 @@ winwidget remove <instance-id>
 
 ```powershell
 pwsh -File scripts/run.ps1                        # 构建（调试）并启动；-Kill 先结束旧实例，-Release 用发布配置
-pwsh -File scripts/package-windows.ps1            # 便携包：dist\WinWidget-<版本>-windows-x64.zip + .sha256
-pwsh -File scripts/package-windows.ps1 -Portable  # 数据落到 exe 旁边的 data\（U 盘 / 绿色版用法）
-pwsh -File scripts/package-windows.ps1 -Upx       # 打包前用 UPX 压缩 exe
+pwsh -File scripts/package-windows.ps1            # 一次出两样：便携 zip + 安装包 setup.exe，各附 .sha256
+pwsh -File scripts/package-windows.ps1 -Portable  # 便携包的数据落到 exe 旁边的 data\（U 盘 / 绿色版用法）
+pwsh -File scripts/package-windows.ps1 -Upx       # 便携包打包前用 UPX 压缩 exe
+pwsh -File scripts/package-windows.ps1 -NoSetup   # 只出便携 zip（没装 Inno Setup 时）
 python scripts/build-docs.py                      # 三语开发指南 → assets/docs/developer-guide.html（+ index.html）
 ```
 
-打包会组装出 `dist\stage\WinWidget-<版本>-windows-x64\`：`winwidget.exe` + 整棵 `assets\`（38 个组件、SDK、主题、控制中心、开发文档）+ README/LICENSE。资源必须跟着 exe 走，程序是从 exe 旁边的 `assets\` 读组件和文档的；`assets\docs\m*` 那些里程碑截图只是仓库里的说明素材，不进包。
+打包先组装 `dist\stage\WinWidget-<版本>-windows-x64\`：`winwidget.exe` + 整棵 `assets\`（38 个组件、SDK、主题、控制中心、开发文档）+ README/LICENSE。资源必须跟着 exe 走，程序是从 exe 旁边的 `assets\` 读组件和文档的；`assets\docs\m*` 那些里程碑截图只是仓库里的说明素材，不进包。
+
+然后由这份 stage 产出两件发布件：
+
+| 文件 | 给谁 | 是什么 |
+| --- | --- | --- |
+| `dist\WinWidget-<版本>-setup.exe` | 普通用户、**应用内更新** | Inno Setup 安装包：装到 `%LOCALAPPDATA%\WinWidget`，开始菜单/可选桌面快捷方式、自带卸载，**不需要管理员权限** |
+| `dist\WinWidget-<版本>-windows-x64.zip` | 不想装的人 | 便携版，解压即用（配 `portable` 标记就是绿色版） |
+
+安装包的位置是有讲究的：`updater.rs::parse_release` 只认名字里带 `setup` 的 `.exe`，所以「設定 → 檢查更新」下载并拉起的正是这个 setup。装完/升级后用户数据（`%APPDATA%\WinWidget` 里的配置、组件、存储）原样保留——安装包只动 `%LOCALAPPDATA%\WinWidget` 里的程序和 `assets\`。安装前会先结束正在跑的 `winwidget.exe`（`installer.iss` 的 `PrepareToInstall`），所以从应用内点更新不会卡在「文件被占用」。
+
+`scripts\installer.iss` 就是这个安装包的脚本，中文文案在 `[Messages]` 里；改完用上面的命令重新编一次即可（Inno Setup 6 需要先装：`winget install JRSoftware.InnoSetup`）。
 
 发布走 GitHub Actions 的 **Release** 工作流（手动 `Run workflow`，选 `patch` / `minor` / `major`），阶段顺序固定：
 
@@ -107,7 +119,7 @@ python scripts/build-docs.py                      # 三语开发指南 → asset
 | --- | --- | --- |
 | `prepare` | 只算新版本号，改 `Cargo.toml` + `Cargo.lock` 上传成 artifact | 否 |
 | `checks` | `cargo fmt --check` / `clippy -D warnings` / `cargo test` | 否 |
-| `windows` | `scripts/package-windows.ps1` → zip + sha256 | 否 |
+| `windows` | `scripts/package-windows.ps1` → setup.exe + 便携 zip + 各自 sha256 | 否 |
 | `docs` | 渲染三语开发指南，并校验「文档和 Markdown 源文件是否同步」 | 否 |
 | `release` | 全部成功后才提交版本号、打 tag、建 GitHub Release | 是 |
 

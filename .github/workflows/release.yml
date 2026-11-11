@@ -6,7 +6,8 @@
 #                 里 winwidget 的版本，把这两个文件上传成 artifact。
 #                 ★ 这一步不提交、不 push、不打 tag。
 #     2. checks   fmt --check / clippy -D warnings / 单元测试（都在新版本上跑）。
-#     3. windows  release 构建 + 打包便携 zip（exe + assets\ + README + LICENSE），附 sha256。
+#     3. windows  release 构建 + 便携 zip + Inno Setup 安装包（exe + assets\ + README + LICENSE），
+#                 每样都附 sha256。
 #     4. docs     ← 顶替原流水线里的 crates.io 一步：WinWidget 是 GPL-3.0 的桌面程序，
 #                 不进 crates.io。这一步把三语开发指南渲染成单文件 HTML，连同
 #                 「文档和源文件是否同步」的检查一起当门禁。
@@ -26,9 +27,10 @@
 #
 #   版本号只有 Cargo.toml 一个来源，打包脚本自己解析，CI 不重复抄。
 #
-#   关于自动更新：src/market/updater.rs::parse_release 挑的是 release 里的 *setup*.exe。
-#   现在发的只有便携 zip，所以应用内自更新会如实报「這個版本沒有適合這份 WinWidget 的檔案」；
-#   等做了安装包，把 setup exe 也放进 dist/ 上传即可，这条流水线不用改。
+#   关于自动更新：src/market/updater.rs::parse_release 只挑名字里带 setup 的 .exe，
+#   所以发布件里那个 WinWidget-<版本>-setup.exe 就是应用内更新真正下载并拉起的文件
+#   （zip 留给不想装的人）。装到 %LOCALAPPDATA%\WinWidget，不需要管理员权限；
+#   用户数据仍在 %APPDATA%\WinWidget，升级和卸载都不动它。
 
 name: Release
 
@@ -152,7 +154,7 @@ jobs:
       - name: Test
         run: cargo test
 
-  # ---------------- 3. Windows：release 构建 + 便携 zip ----------------
+  # ---------------- 3. Windows：release 构建 + 便携 zip + 安装包 ----------------
   windows:
     name: Windows x64
     needs: [prepare, checks]
@@ -173,7 +175,22 @@ jobs:
         with:
           key: windows
 
-      # 脚本内部：cargo build --release → 组装 dist\stage（exe + assets\）→ 压 zip → 写 sha256
+      # 安装包用 Inno Setup 编译；runner 上不一定预装，缺了才装
+      - name: Ensure Inno Setup
+        shell: pwsh
+        run: |
+          $found = @(
+            "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          ) | Where-Object { Test-Path -LiteralPath $_ }
+          if ($found) {
+            Write-Host "Inno Setup 已存在：$($found[0])"
+          } else {
+            choco install innosetup --no-progress -y
+          }
+
+      # 脚本内部：cargo build --release → 组装 dist\stage（exe + assets\）
+      # → 压便携 zip → 用 Inno Setup 编出 setup exe → 各自写 sha256
       - name: Package
         shell: pwsh
         run: pwsh -NoProfile -File scripts/package-windows.ps1
@@ -185,6 +202,8 @@ jobs:
           path: |
             dist/*.zip
             dist/*.zip.sha256
+            dist/*.exe
+            dist/*.exe.sha256
           if-no-files-found: error
 
   # ---------------- 4. 开发者文档（顶替 crates.io 那一步） ----------------
@@ -271,14 +290,21 @@ jobs:
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           set -euo pipefail
-          ls -lhR dist
-          # 文档也作为独立资产发出去：没装程序的人也能直接读这份指南
+          ls -lh dist
+
+          # 只挑文件：dist/ 下还有打包用的 stage 目录，不能用 dist/* 一把抓
+          # 安装包（setup.exe）是应用内更新要下载的那个，zip 给不想装的人；
+          # 文档单独发一份，没装程序的人也能直接读。
           mv dist/developer-guide.html "dist/WinWidget-${VERSION}-developer-guide.html"
           gh release create "$TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --title "WinWidget v$VERSION" \
             --generate-notes \
-            dist/*
+            dist/*.zip \
+            dist/*.zip.sha256 \
+            dist/*.exe \
+            dist/*.exe.sha256 \
+            "dist/WinWidget-${VERSION}-developer-guide.html"
 
       - name: Summary
         env:
