@@ -615,7 +615,12 @@ impl App {
             .map_err(|e| e.to_string())?;
         let proxy = self.proxy.clone();
         let drop_proxy = proxy.clone();
-        let webview = wry::WebViewBuilder::new()
+        // Same browser context as the cards: a second environment without it would make WebView2
+        // put the default profile back next to the exe.
+        let mut browser = crate::runtime::window::browser()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let webview = wry::WebViewBuilder::new_with_web_context(&mut browser)
             .with_url(self.control_url())
             .with_initialization_script(crate::runtime::shim::SCRIPT)
             .with_devtools(self.store.data.developer_mode)

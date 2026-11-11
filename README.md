@@ -202,7 +202,7 @@ WebView2 的 `chrome.webview.postMessage` 在 wry 下**只能传字符串**（�
 | `%APPDATA%\WinWidget\storage\` | 每张卡片 `widget.storage` 的数据 |
 | `%LOCALAPPDATA%\WinWidget\logs\app.log` | 运行日志（含本地服务端口、页面 `ready`、错误） |
 | `%LOCALAPPDATA%\WinWidget\exports\` | 导出的 `.fwz` |
-| `%LOCALAPPDATA%\WinWidget\WebView2\` | WebView2 用户数据目录：整台进程只开一个浏览器进程、一份档案，所有卡片共用（便携版是 `data\local\WebView2`）。程序绝不会再在 exe 旁边生成 `<exe 名>.WebView2`；早期版本留下的那一份会在启动时删掉并记一行日志 |
+| `%LOCALAPPDATA%\WinWidget\WebView2\` | WebView2 用户数据目录：整台进程只开一个浏览器进程、一份档案，卡片和控制中心共用（便携版是 `data\local\WebView2`）。程序绝不会再在 exe 旁边生成 `<exe 名>.WebView2`；早期版本留下的那一份会在启动时删掉并记一行日志 |
 | `%LOCALAPPDATA%\WinWidget\local\` | 市场缓存、媒体缓存、更新下载 |
 
 ## 已验证

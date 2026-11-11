@@ -14,13 +14,15 @@ use tao::platform::windows::{WindowBuilderExtWindows, WindowExtWindows};
 use tao::window::{Window, WindowBuilder};
 use wry::{Rect, WebContext, WebView, WebViewBuilder};
 
-/// One browser process and one profile for the whole app: every card is created on this context.
-/// Without it WebView2 invents `<exe name>.WebView2` next to the executable — a writable-location
-/// gamble (`Program Files` fails outright) and litter in whatever folder the user dropped the exe
-/// into. The folder itself is `paths::webview_data_dir()`.
+/// One browser process and one profile for the whole app: every web view — the cards here and the
+/// control center in `app.rs` — is created on this context. Without it WebView2 invents
+/// `<exe name>.WebView2` next to the executable — a writable-location gamble (`Program Files` fails
+/// outright) and litter in whatever folder the user dropped the exe into. A second window created
+/// without the context is enough to bring that folder back, which is why it is handed out, not kept
+/// private. The folder itself is `paths::webview_data_dir()`.
 static BROWSER: OnceLock<Mutex<WebContext>> = OnceLock::new();
 
-fn browser() -> &'static Mutex<WebContext> {
+pub fn browser() -> &'static Mutex<WebContext> {
     BROWSER.get_or_init(|| {
         let dir = crate::core::paths::get().webview_data_dir();
         let _ = std::fs::create_dir_all(&dir);
