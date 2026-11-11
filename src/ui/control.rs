@@ -150,6 +150,11 @@ pub fn state_json(app: &App) -> Value {
         "version": crate::APP_VERSION,
         "lang": locale,
         "language": cfg.language,
+        // The page decides light or dark from these two: the setting, plus what Windows is doing
+        // right now for "auto". Both are pushed on every change, so a Windows theme flip repaints
+        // the window without a restart.
+        "uiTheme": cfg.ui_theme,
+        "systemLight": crate::platform::system_light(),
         "autostart": crate::platform::autostart_enabled(),
         "lowResource": cfg.low_resource_mode,
         "lowResourceActive": cfg.low_resource_mode,
@@ -346,6 +351,17 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
             for id in ids {
                 app.reload_instance(&id);
             }
+            refresh(app, None);
+            Ok(Value::Null)
+        }
+        "app.uiTheme" => {
+            let mode = req_str(p, "theme")?;
+            let mode = match mode.as_str() {
+                "light" | "dark" => mode,
+                _ => "auto".to_string(),
+            };
+            app.cfg_mut().ui_theme = mode;
+            app.save();
             refresh(app, None);
             Ok(Value::Null)
         }

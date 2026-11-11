@@ -11,6 +11,9 @@ pub struct AppConfig {
     pub first_run_done: bool,
     /// "auto" follows Windows.
     pub language: String,
+    /// The control center's palette: "auto" follows Windows' app theme, or it is pinned to
+    /// "light"/"dark". Cards keep their own theme; this is only the chrome around them.
+    pub ui_theme: String,
     /// Turns off hardware acceleration and asks WebView2 to use less memory (takes a restart).
     pub low_resource_mode: bool,
     /// Enables DevTools (F12) and reload-on-save in widgets.
@@ -41,6 +44,7 @@ impl Default for AppConfig {
             version: 1,
             first_run_done: false,
             language: "auto".into(),
+            ui_theme: "auto".into(),
             low_resource_mode: false,
             developer_mode: false,
             hide_all: false,

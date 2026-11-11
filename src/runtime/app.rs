@@ -120,6 +120,10 @@ pub struct App {
     pub want_devtools: Option<String>,
     pub quitting: bool,
     pub hotkeys_paused: bool,
+    /// What Windows said last time we asked, so a change can be noticed without a notification.
+    /// Only "auto" needs it; a pinned light/dark never reads it.
+    pub system_light: bool,
+    theme_check_ms: i64,
     fullscreen_ticks: u32,
     fullscreen_area: Option<crate::platform::win32::RECT>,
 }
@@ -182,6 +186,8 @@ impl App {
             want_devtools: None,
             quitting: false,
             hotkeys_paused: false,
+            system_light: crate::platform::system_light(),
+            theme_check_ms: 0,
             fullscreen_ticks: 0,
             fullscreen_area: None,
         };
@@ -931,6 +937,21 @@ impl App {
         self.notes = keep;
         for note in fired {
             self.show_note(&note.title, &note.body);
+        }
+        // "Same as Windows" has no notification to lean on (the theme broadcast does not reach a
+        // message-only window), so the registry is re-read on a slow clock: twice a second is
+        // pointless, two seconds is invisible, and a flipped Windows theme repaints the control
+        // center without a restart. Pinned light/dark skips the read entirely.
+        if now >= self.theme_check_ms {
+            self.theme_check_ms = now + 2000;
+            let now_light = crate::platform::system_light();
+            if now_light != self.system_light {
+                self.system_light = now_light;
+                let auto = self.cfg().ui_theme.eq_ignore_ascii_case("auto");
+                if auto {
+                    self.push_state_to_control(None);
+                }
+            }
         }
         // Reasserting the non-client policy on a timer used to look like cheap insurance, but every
         // `DwmSetWindowAttribute` makes the compositor rebuild the frame: with a few transparent

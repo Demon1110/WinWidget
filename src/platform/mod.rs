@@ -76,6 +76,24 @@ pub fn locale() -> String {
     }
 }
 
+// ── Windows' own light/dark choice ───────────────────────────────────────────
+
+const PERSONALIZE_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
+const APPS_LIGHT_NAME: &str = "AppsUseLightTheme";
+
+/// Windows' "apps use light theme" switch — the same one Settings > Personalisation > Colours
+/// exposes. A machine that never touched it has no value at all, and the default there is light.
+pub fn system_light() -> bool {
+    use winreg::enums::HKEY_CURRENT_USER;
+    use winreg::RegKey;
+    RegKey::predef(HKEY_CURRENT_USER)
+        .open_subkey(PERSONALIZE_KEY)
+        .ok()
+        .and_then(|k| k.get_value::<u32, _>(APPS_LIGHT_NAME).ok())
+        .map(|v| v != 0)
+        .unwrap_or(true)
+}
+
 // ── autostart ───────────────────────────────────────────────────────────────
 
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";

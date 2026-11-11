@@ -48,6 +48,7 @@ if (host) {
       clearTimeout(loadTimer);
       S = msg.d;
       LANG = S.lang || "zh-TW";
+      applyPalette();
       try { render(); } catch (err) { console.error(err); loadFailed(); }
     } else if (msg.ev === "stateError") {
       if (S) toast(t("沒有成功：{msg}", { msg: msg.d })); else loadFailed();
@@ -566,6 +567,7 @@ function pageThemes() {
 
 function pageSettings() {
   const langs = [["auto", "跟隨系統"], ["zh-TW", "繁體中文"], ["zh-CN", "简体中文"], ["en", "English"]];
+  const palettes = [["auto", "跟隨系統"], ["light", "淺色"], ["dark", "深色"]];
   const restart = S.lowResource !== S.lowResourceActive
     ? `<div class="notice"><span>${t("重新啟動後生效")}</span><button class="btn small" data-action="restart">${t("立即重新啟動")}</button></div>` : "";
   return `<div class="page-head" data-key="h-settings"><h1>${t("設定")}</h1></div>
@@ -573,6 +575,7 @@ function pageSettings() {
       <section class="panel" style="--i:0"><div class="form">
         <div class="group-title">${t("一般")}</div>
         ${row("語言", "介面、組件裏的文字和日期格式。", control({ key: "language", type: "select", options: langs }, S.language, "app"), { key: "lang" })}
+        ${row("介面外觀", "控制中心的配色；「跟隨系統」會跟著 Windows 的淺色／深色設定切換。", control({ key: "uiTheme", type: "seg", options: palettes }, S.uiTheme, "app"), { key: "palette" })}
         ${row("開機自動啟動", "登入 Windows 後自動打開 WinWidget。", control({ key: "autostart", type: "toggle", label: "開機自動啟動" }, S.autostart, "app"), { key: "auto" })}
         ${row("雙擊 .fwz 安裝", "讓 Windows 用 WinWidget 打開下載的組件檔案。", control({ key: "fileAssociation", type: "toggle", label: "雙擊 .fwz 安裝" }, S.fileAssociation, "app"), { key: "assoc" })}
         <div class="group-title">${t("桌面")}</div>
@@ -747,6 +750,14 @@ window.addEventListener("blur", stopRecording);
 
 // ───────────────────────── rendering ─────────────────────────
 
+/** Which palette the window wears. The host has already answered the "auto" case (it reads
+    Windows' app-theme switch and re-pushes the state when it changes), so the page only puts the
+    answer on the root element and lets the stylesheet pick the matching block. */
+function applyPalette() {
+  const pinned = S?.uiTheme === "light" || S?.uiTheme === "dark";
+  document.documentElement.dataset.uiTheme = pinned ? S.uiTheme : S?.systemLight ? "light" : "dark";
+}
+
 /** Static text in index.html: data-t holds the Traditional Chinese wording. */
 function renderFrame() {
   document.documentElement.lang = LANG === "en" ? "en" : LANG === "zh-CN" ? "zh-Hans" : "zh-Hant";
@@ -891,6 +902,7 @@ function commit(scope, key, value, id = ui.sel) {
       return;
     case "app":
       if (key === "language") return api("app.language", { lang: value });
+      if (key === "uiTheme") return api("app.uiTheme", { theme: value });
       return api(`app.${key}`, { on: value });
   }
 }
