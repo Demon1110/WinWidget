@@ -354,6 +354,7 @@ pub fn boot_json(
         },
         "developer": boot.developer,
         "permissions": boot.permissions,
+        "visible": boot.visible,
     });
     value.to_string()
 }

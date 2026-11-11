@@ -68,6 +68,9 @@ pub struct Boot {
     pub grow: f64,
     pub developer: bool,
     pub permissions: Vec<String>,
+    /// Whether the card is on screen right now, so a page that starts hidden does not pretend it
+    /// was just shown. The page takes it from here until the host sends `show`/`hide`.
+    pub visible: bool,
 }
 
 pub struct ControlWin {
@@ -119,6 +122,11 @@ pub struct App {
     pub pending_windows: Vec<String>,
     pub want_devtools: Option<String>,
     pub quitting: bool,
+    /// When `quitting` is set, how long the pages still get to answer their `unload`: a widget that
+    /// saves on the way out needs the message channel to stay open a moment longer.
+    pub quit_at: Option<std::time::Instant>,
+    /// Set by `finish_quit`, so the loop's second call (from `LoopDestroyed`) does not save twice.
+    quit_done: bool,
     pub hotkeys_paused: bool,
     /// What Windows said last time we asked, so a change can be noticed without a notification.
     /// Only "auto" needs it; a pinned light/dark never reads it.
@@ -185,6 +193,8 @@ impl App {
             pending_windows: Vec::new(),
             want_devtools: None,
             quitting: false,
+            quit_at: None,
+            quit_done: false,
             hotkeys_paused: false,
             system_light: crate::platform::system_light(),
             theme_check_ms: 0,
@@ -299,6 +309,7 @@ impl App {
             grow: manifest.size.grow,
             developer: self.store.data.developer_mode,
             permissions: crate::model::permissions::allowed(&self.store.data, manifest),
+            visible: !self.store.data.hide_all,
         }
     }
 
@@ -487,6 +498,57 @@ impl App {
         for id in ids {
             self.push_state(&id);
         }
+    }
+
+    // ── visibility and lifecycle ───────────────────────────────────────────
+
+    /// The instance behind a tao window, so window events can be routed back to its page.
+    pub fn instance_of_window(&self, window_id: tao::window::WindowId) -> Option<String> {
+        self.windows
+            .iter()
+            .find(|(_, w)| w.window.id() == window_id)
+            .map(|(id, _)| id.clone())
+    }
+
+    /// Shows or hides a card and tells its page, once, so the page can tell "shown" from "hidden".
+    ///
+    /// `from` says what caused it, and reaching the page verbatim as the `show`/`hide` payload's
+    /// `from`: `startup`, `tray`, `control`, `hotkey`, `fullscreen`, `api`. The uTools shim maps
+    /// those onto its own vocabulary rather than inventing a second one.
+    pub fn set_visible(&mut self, instance_id: &str, visible: bool, from: &str) {
+        let Some(before) = self.windows.get(instance_id).map(|w| w.visible) else {
+            return;
+        };
+        if before == visible {
+            return;
+        }
+        if let Some(win) = self.windows.get_mut(instance_id) {
+            if visible {
+                win.show();
+            } else {
+                win.hide();
+            }
+        }
+        let ev = if visible { "show" } else { "hide" };
+        self.event_to(
+            instance_id,
+            ev,
+            json!({ "from": from, "visible": visible }),
+        );
+    }
+
+    /// Shows or hides every card at once, with one reason for all of them.
+    pub fn set_all_visible(&mut self, visible: bool, from: &str) {
+        let ids: Vec<String> = self.windows.keys().cloned().collect();
+        for id in ids {
+            self.set_visible(&id, visible, from);
+        }
+    }
+
+    /// Tells a page it is going away for good (`kill: true`) or just stepping aside (`false`).
+    pub fn unload_instance(&self, instance_id: &str, kill: bool) {
+        crate::core::logging::info(&format!("{instance_id}: unload (kill = {kill})"));
+        self.event_to(instance_id, "unload", json!({ "kill": kill }));
     }
 
     pub fn event_to(&self, instance_id: &str, ev: &str, data: Value) {
@@ -749,6 +811,9 @@ impl App {
     }
 
     pub fn remove_instance(&mut self, id: &str) {
+        // The page is about to lose its window: say so first, while it can still hear it. It cannot
+        // answer (no reply is waited for), so this is "flush what you can", not a transaction.
+        self.unload_instance(id, true);
         if let Some(mut w) = self.windows.remove(id) {
             w.hide();
             w.webview.focus().ok();
@@ -1133,10 +1198,13 @@ impl App {
                     .map(|i| i.id.clone());
                 match target {
                     Some(id) => {
-                        if let Some(win) = self.windows.get_mut(&id) {
-                            win.show();
+                        self.set_visible(&id, true, "hotkey");
+                        if let Some(win) = self.windows.get(&id) {
                             win.window.set_focus();
                         }
+                        // The documented "summon" event, for pages that want to focus an input
+                        // after the hotkey brought the card up.
+                        self.event_to(&id, "summon", json!({}));
                     }
                     None => self.show_control(None),
                 }
@@ -1148,7 +1216,29 @@ impl App {
     // ── quitting ──────────────────────────────────────────────────────────
 
     pub fn quit(&mut self) {
+        if self.quitting {
+            return;
+        }
         self.quitting = true;
+        // Every live card hears `unload` (kill = true) once before the windows go away. The pages
+        // get a short grace period to answer — a widget that saves on the way out needs the message
+        // channel to stay open one more beat.
+        let ids: Vec<String> = self.windows.keys().cloned().collect();
+        for id in ids {
+            self.unload_instance(&id, true);
+        }
+        self.quit_at = Some(std::time::Instant::now() + std::time::Duration::from_millis(150));
+    }
+
+    /// The last step once the grace period after `quit()` is over: flush, save, drop the tray icon.
+    /// Called from the loop when the deadline expires, and again from `LoopDestroyed`, so it guards
+    /// itself: the second call has nothing left to do.
+    pub fn finish_quit(&mut self) {
+        self.quit_at = None;
+        if self.quit_done {
+            return;
+        }
+        self.quit_done = true;
         self.storage.flush_all();
         self.save();
         if let Some(tray) = &self.tray {
@@ -1214,24 +1304,24 @@ impl App {
         crate::core::logging::info(&message);
         let hide_all = self.cfg().hide_all;
         let area = active;
-        for win in self.windows.values_mut() {
+        let ids: Vec<String> = self.windows.keys().cloned().collect();
+        for id in ids {
             // Only the cards on that monitor step aside, as FullWidget did.
-            let covered = area.as_ref().map(|r| {
-                let card = win.card;
-                let cx = (card.left + card.right) / 2;
-                let cy = (card.top + card.bottom) / 2;
-                cx >= r.left && cx < r.right && cy >= r.top && cy < r.bottom
-            });
-            match covered {
-                Some(true) => {
-                    if win.visible {
-                        win.hide();
-                    }
+            let covered = match (area.as_ref(), self.windows.get(&id)) {
+                (Some(r), Some(win)) => {
+                    let card = win.card;
+                    let cx = (card.left + card.right) / 2;
+                    let cy = (card.top + card.bottom) / 2;
+                    Some(cx >= r.left && cx < r.right && cy >= r.top && cy < r.bottom)
                 }
+                _ => None,
+            };
+            match covered {
+                Some(true) => self.set_visible(&id, false, "fullscreen"),
                 Some(false) => {}
                 None => {
                     if !hide_all {
-                        win.show();
+                        self.set_visible(&id, true, "fullscreen");
                     }
                 }
             }

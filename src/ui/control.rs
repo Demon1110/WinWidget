@@ -470,13 +470,7 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
         "app.hideAll" => {
             let on = jbool(p, "on").unwrap_or(false);
             app.cfg_mut().hide_all = on;
-            for win in app.windows.values_mut() {
-                if on {
-                    win.hide();
-                } else {
-                    win.show();
-                }
-            }
+            app.set_all_visible(!on, "control");
             app.save();
             app.refresh_tray_menu();
             refresh(app, None);
@@ -630,8 +624,8 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
         }
         "instance.identify" => {
             let inst = instance_of(app, p)?;
-            if let Some(win) = app.windows.get_mut(&inst.id) {
-                win.show();
+            app.set_visible(&inst.id, true, "control");
+            if let Some(win) = app.windows.get(&inst.id) {
                 win.window.set_focus();
             }
             app.event_to(&inst.id, "identify", json!({ "ms": 1600 }));

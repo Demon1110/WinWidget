@@ -7,6 +7,7 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use serde_json::json;
 use std::time::Duration;
 use tao::event::{Event, StartCause, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoopBuilder};
@@ -98,10 +99,6 @@ fn main() {
 
     event_loop.run(move |event, target, control| {
         app.flush_windows(target);
-        if app.quitting {
-            *control = ControlFlow::Exit;
-            return;
-        }
 
         match event {
             Event::NewEvents(StartCause::Init) => {
@@ -166,6 +163,27 @@ fn main() {
                 }
                 *control = ControlFlow::Wait;
             }
+            // A card's size is the page's business: a widget uses it to lay itself out again.
+            // (Focus is deliberately not reported: a card never takes the keyboard focus, so a
+            // focus event would only ever be a promise the host does not keep.)
+            Event::WindowEvent {
+                window_id,
+                event: WindowEvent::Resized(_size),
+                ..
+            } => {
+                if let Some(id) = app.instance_of_window(window_id) {
+                    // The card's own size, not the window's: the shadow margin around it is not part
+                    // of the layout, and `window.getSize()` reports the same number, in CSS pixels.
+                    if let Some(win) = app.windows.get(&id) {
+                        let scale = win.scale;
+                        let card = win.card;
+                        let width = (card.width() as f64 / scale).round();
+                        let height = (card.height() as f64 / scale).round();
+                        app.event_to(&id, "resize", json!({ "width": width, "height": height }));
+                    }
+                }
+                *control = ControlFlow::Wait;
+            }
             Event::WindowEvent {
                 window_id,
                 event: WindowEvent::Destroyed,
@@ -175,14 +193,23 @@ fn main() {
                 *control = ControlFlow::Wait;
             }
             Event::LoopDestroyed => {
-                app.quit();
+                app.finish_quit();
                 return;
             }
             _ => {}
         }
 
         if app.quitting {
-            *control = ControlFlow::Exit;
+            // Cards get a beat to answer their unload before the loop is torn down; the deadline
+            // doubles as the wait target, so the heartbeat is not needed to wake us.
+            match app.quit_at {
+                Some(at) if std::time::Instant::now() < at => *control = ControlFlow::WaitUntil(at),
+                Some(_) => {
+                    app.finish_quit();
+                    *control = ControlFlow::Exit;
+                }
+                None => *control = ControlFlow::Exit,
+            }
         }
     });
 }

@@ -484,6 +484,86 @@ widget.log("message", { any: "data" });
 
 ---
 
+## Lifecycle: ready → show → hide → unload
+
+From being loaded to being removed, a card gets its events in a fixed order. Subscribe to all of them with `widget.on(name, callback)`; the return value unsubscribes.
+
+| Event | When it comes | Payload |
+|---|---|---|
+| `ready` | The page is up — one task after DOMContentLoaded, so a subscription made in a DOMContentLoaded handler still hears it | `{ visible }` |
+| `show` | The card came on screen. **The startup show counts too**, with `initial: true` | `{ from, visible: true, initial }` |
+| `hide` | The card left the screen: hide all, the tray, a full-screen app, `window.hide()` | `{ from, visible: false, initial: false }` |
+| `resize` | The card's size changed (resize grip, the Control Center). Bursts are **debounced 80 ms** and only the size it settles on is reported | `{ width, height }` in CSS pixels |
+| `unload` | The card is being removed, or the app is quitting | `{ kill: true }` |
+
+`from` says who caused the show or hide:
+
+| `from` | Who |
+|---|---|
+| `startup` | Came up with the app at launch |
+| `tray` | The tray menu (hide/show all, hide/show one card) |
+| `control` | The Control Center (Locate, the hide-all switch) |
+| `hotkey` | Brought up by a global shortcut |
+| `fullscreen` | A full-screen app made this card step aside, or it came back |
+| `api` | The card called `widget.window.show()` / `hide()` itself |
+
+### Ordering guarantees
+
+1. `ready` always comes before the first `show`. Put one-time startup work in `ready` and `show` cannot cut in front of it.
+2. A card that is already on screen (the default at launch) gets `show{ initial: true }` right after `ready`; one that starts hidden (hide-all is on) gets nothing until it is really shown.
+3. `show` and `hide` come in pairs, and the same state is never repeated: `hide` after `hide` is not sent twice, nor is `show` after `show`. `widget.visible` always tells you where you are.
+4. `hide` arrives while the card is still alive; `unload` means this time it is really leaving. Do-once work (save, clear timers) belongs in `unload`; pausing animation belongs in `hide`.
+
+```js
+// Cheap while running: stop when invisible, recompute when back
+let timer = 0;
+function start() {
+  if (timer || !widget.visible) return;
+  timer = setInterval(tick, 1000);
+  tick();
+}
+function stop() {
+  clearInterval(timer);
+  timer = 0;
+}
+
+widget.on("ready", () => start());
+widget.on("show", ({ from, initial }) => {
+  widget.log("shown", from, initial);   // from, see the table above
+  start();
+});
+widget.on("hide", () => stop());
+widget.on("unload", ({ kill }) => {
+  stop();
+  if (kill) widget.storage.set("lastSeen", Date.now());
+});
+
+// Re-layout when the size changes (no need for window resize: that is the window, with DPI math)
+widget.on("resize", ({ width }) => {
+  document.body.dataset.compact = width < 260 ? "1" : "";
+});
+```
+
+`widget.visible` is the current state, kept in step by `show` / `hide`. A card deliberately never takes the keyboard focus, so there is no focus / blur event: a widget that needs typing puts an input in its own page, and the user clicks it.
+
+### Against the seven uTools events
+
+uTools' events are a "plugin vs main window" model; a WinWidget card is its own top-level window, so only the same-shaped ones line up:
+
+| uTools | WinWidget | Difference |
+|---|---|---|
+| `onPluginReady(cb)` | `widget.on("ready", cb)` | Once, after load, same. uTools waits for the returned Promise; here it does not — use `utools.onPluginReady` when you need "wait before entering" |
+| `onPluginEnter(cb)` | `widget.on("show", cb)` | Same payload shape below; fires on every show, not only the first |
+| `onPluginOut(cb)` | `widget.on("hide", cb)` and `widget.on("unload", cb)` | `hide` is `isKill: false`, `unload` is `isKill: true` |
+| `onPluginDetach(cb)` | none | A card is already a separate window: there is no detach step. `utools.onPluginDetach` registers but never calls back |
+| `onScheduleTrigger(cb)` | none | No scheduler. Use `setInterval` in the page, and stop it on `hide` |
+| `onMainPush(cb, onSelect?)` | none | No uTools-style search box to push results into |
+| `onDbPull(cb)` | none | No cross-device sync; data stays in local `widget.storage` |
+
+`utools.onPluginEnter` gets its payload in uTools' `PluginEnterAction` shape: `{ code, type: "text", payload: "", from }`, with `from` in uTools' vocabulary (`main` / `panel` / `hotkey` / `redirect`), mapped from the table above: `startup`, `fullscreen` → `main`; `tray` → `panel`; `hotkey` → `hotkey`; `control`, `api` → `redirect`. `option` only exists when the enter came from a pushed result, which never happens here.
+
+---
+
 ## Looks: follow the theme
 
 WinWidget comes with several themes, and users can adjust background, text color, accent color, font, text size, corners, padding and opacity in the Control Center. Use the variables and classes below and all of that just works for your widget.
@@ -678,7 +758,7 @@ console.log(utools.__compat.unsupported); // not there at all
 
 | uTools category | What WinWidget gives you |
 |---|---|
-| Events | `onPluginReady`, `onPluginEnter`, `onPluginOut`; the enter event is synthesised at load as `{ code: widget id, type: "text", payload: "" }` |
+| Events | `onPluginReady`, `onPluginEnter`, `onPluginOut(isKill)` all exist, in uTools' order (ready finishes, then enter; hidden is `false`, removed/quit is `true`); `onPluginDetach` registers but never fires, and `onScheduleTrigger` / `onMainPush` / `onDbPull` throw `utools.unsupported` on registration. The host's own lifecycle events are in the Lifecycle chapter |
 | Window | `hideMainWindow`, `showMainWindow`, `outPlugin`, `getWindowType`, `setExpendHeight` (height only, and asynchronous) |
 | System | `showNotification`, `shellOpenPath`, `shellOpenExternal`, `shellShowItemInFolder`, `shellTrashItem`, `shellBeep`, `getPath`, `getFileIconAsync`, `showOpenDialog`, `showSaveDialog`, `isDev`, `isWindows` and friends; `getPluginLocalDataPath` returns an empty string (there is no filesystem) |
 | Screen | `captureScreen()` grabs the whole virtual desktop as a PNG data URL (needs the `screen` permission); uTools' interactive snipping is not reproduced |
@@ -892,6 +972,10 @@ Anything returning a Promise can be awaited; "sync" means it returns immediately
 
 | Event | When | Payload |
 |---|---|---|
+| `ready` | the page is up | `{ visible }` |
+| `show` / `hide` | the card came on screen / left the screen | `{ from, visible, initial }` |
+| `resize` | the card's size changed (80 ms debounce) | `{ width, height }` |
+| `unload` | the card is removed or the app is quitting | `{ kill }` |
 | `settings` | the user changed settings | all settings |
 | `appearance` | theme or appearance changed | the new appearance |
 | `state` | locked, layer or click-through changed | `{ locked, layer, clickThrough }` |

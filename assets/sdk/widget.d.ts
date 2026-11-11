@@ -245,6 +245,33 @@ declare namespace WinWidget {
     appearance: Appearance;
     /** Locked, layer or click-through changed. */
     state: WidgetState;
+    /** The page is up: one task after the widget's own DOMContentLoaded handlers. */
+    ready: { visible: boolean };
+    /** The card came on screen. `from` says why; the same event fires for the first show. */
+    show: { from: ShowFrom; visible: true; initial: boolean };
+    /** The card went off screen (hidden by the user, the tray, full screen, or the API). */
+    hide: { from: ShowFrom; visible: false; initial: false };
+    /** The card was resized; debounced until the size settles. CSS pixels. */
+    resize: { width: number; height: number };
+    /** The card is going away: `kill: true` means it is being removed or the app is quitting. */
+    unload: { kill: boolean };
+  }
+
+  /** Why a card was shown or hidden. Mirrors the tray, the control center and the API. */
+  type ShowFrom = "startup" | "tray" | "control" | "hotkey" | "fullscreen" | "api";
+
+  /** The uTools-shaped "entered" payload. `from` is the uTools vocabulary, mapped from ShowFrom. */
+  interface PluginEnterAction {
+    /** widget.json id (uTools: feature.code). */
+    code: string;
+    /** Always "text": a card has no command matching of its own. */
+    type: "text";
+    /** Always "": nothing was matched on the way in. */
+    payload: string;
+    /** main = startup / full screen, panel = tray, hotkey = global hotkey, redirect = control center or API. */
+    from: "main" | "panel" | "hotkey" | "redirect";
+    /** Only present when the enter came from a pushed result — never in WinWidget today. */
+    option?: { text?: string };
   }
 
   interface Widget {
@@ -265,6 +292,8 @@ declare namespace WinWidget {
     readonly layer: Layer;
     /** Current theme id, e.g. "instrument". Also set as <html data-theme="…">. */
     readonly theme: string;
+    /** Is the card on screen right now? Kept in step by the show/hide events. */
+    readonly visible: boolean;
 
     /** Picks the text for the user's language: t({ "zh-TW": "早安", en: "Morning" }). */
     t<T = string>(text: Localized<T>): T;
@@ -468,9 +497,20 @@ namespace WinWidget {
       unsupported: readonly string[];
       supports(name: string): boolean;
     };
-    onPluginReady(fn: () => void): void;
-    onPluginEnter(fn: (enter: { code: string; type: "text"; payload: string }) => void): void;
-    onPluginOut(fn: () => void): void;
+    /** Runs after the page is up; a returned Promise is awaited before onPluginEnter fires. */
+    onPluginReady(fn: () => void | Promise<void>): void;
+    /** The card came on screen. Fires once per show, with the uTools-shaped action object. */
+    onPluginEnter(fn: (enter: PluginEnterAction) => void): void;
+    /** Hidden (isKill = false) or removed / app quitting (isKill = true). */
+    onPluginOut(fn: (isKill: boolean) => void): void;
+    /** Registered but never called: every card is already its own window. */
+    onPluginDetach(fn: () => void): void;
+    /** Not available: no scheduler. Throws code "utools.unsupported". */
+    onScheduleTrigger(fn: (action: { code: string }) => void): never;
+    /** Not available: no search box. Throws code "utools.unsupported". */
+    onMainPush(fn: (action: unknown) => unknown, onSelect?: (action: PluginEnterAction) => boolean | undefined): never;
+    /** Not available: no cross-device sync. Throws code "utools.unsupported". */
+    onDbPull(fn: (docs: unknown[]) => void): never;
     hideMainWindow(): Promise<void>;
     showMainWindow(): Promise<void>;
     outPlugin(): Promise<void>;

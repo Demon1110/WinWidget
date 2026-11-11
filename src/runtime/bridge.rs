@@ -586,16 +586,12 @@ fn call(app: &mut App, instance: &str, method: &str, p: &Value, id: i64) -> Brid
 
         // ── the card's own visibility ─────────────────────────────────────
         "window.hide" => {
-            if let Some(win) = app.windows.get_mut(instance) {
-                win.hide();
-            }
+            app.set_visible(instance, false, "api");
             app.refresh_tray_menu();
             Ok(Reply::Now(Value::Null))
         }
         "window.show" => {
-            if let Some(win) = app.windows.get_mut(instance) {
-                win.show();
-            }
+            app.set_visible(instance, true, "api");
             app.refresh_tray_menu();
             Ok(Reply::Now(Value::Null))
         }

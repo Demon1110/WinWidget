@@ -217,13 +217,7 @@ pub fn run(app: &mut App, action: &str) {
         "hideAll.toggle" => {
             let next = !app.cfg().hide_all;
             app.cfg_mut().hide_all = next;
-            for win in app.windows.values_mut() {
-                if next {
-                    win.hide();
-                } else {
-                    win.show();
-                }
-            }
+            app.set_all_visible(!next, "tray");
             app.save();
             app.refresh_tray_menu();
             app.push_state_to_control(None);
@@ -256,13 +250,7 @@ pub fn run(app: &mut App, action: &str) {
         "instance.toggle" => {
             if let Some(id) = arg {
                 let visible = app.windows.get(id).map(|w| w.visible).unwrap_or(false);
-                if let Some(win) = app.windows.get_mut(id) {
-                    if visible {
-                        win.hide();
-                    } else {
-                        win.show();
-                    }
-                }
+                app.set_visible(id, !visible, "tray");
                 app.refresh_tray_menu();
                 app.push_state_to_control(None);
             }
@@ -313,9 +301,7 @@ pub fn run(app: &mut App, action: &str) {
         }
         "menu.hide" => {
             if let Some(id) = arg {
-                if let Some(win) = app.windows.get_mut(id) {
-                    win.hide();
-                }
+                app.set_visible(id, false, "tray");
                 app.refresh_tray_menu();
             }
         }

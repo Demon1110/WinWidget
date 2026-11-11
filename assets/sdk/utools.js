@@ -46,13 +46,27 @@
     setExpendHeight: "uTools 里同步改窗口高度；这里是异步的，宽度不变",
     readCurrentFolderPath: "读不到前台资源管理器路径",
     readCurrentBrowserUrl: "读不到前台浏览器地址",
+    onPluginDetach: "每张卡片本身就是独立窗口，没有「从主窗口分离」这一步；回调会登记但永不触发",
   };
   const UNSUPPORTED = [
-    "AI 能力（utools.ai 等）", "定时任务", "模拟操作（键盘/鼠标注入）", "动态功能", "快捷入口",
+    "AI 能力（utools.ai 等）", "定时任务（onScheduleTrigger / requestSchedule）",
+    "搜索框推送（onMainPush）", "跨设备同步（onDbPull）",
+    "模拟操作（键盘/鼠标注入）", "动态功能", "快捷入口",
     "uBrowser 内嵌浏览器", "Sharp 图片处理", "FFmpeg 音视频处理", "支付",
   ];
 
-  const listeners = { ready: [], enter: [], out: [] };
+  const listeners = { ready: [], enter: [], out: [], detach: [] };
+
+  // uTools 用 main / panel / hotkey / redirect 描述「从哪儿进来」；WinWidget 自己的 show 事件带的是
+  // startup / tray / control / hotkey / fullscreen / api。这里只做词表映射，不改语义。
+  const ENTRY_FROM = {
+    startup: "main",
+    tray: "panel",
+    control: "redirect",
+    hotkey: "hotkey",
+    fullscreen: "main",
+    api: "redirect",
+  };
 
   function unsupportedError(api) {
     const err = new Error(
@@ -167,19 +181,49 @@
     __compat: compat,
 
     // ── 事件 ────────────────────────────────────────────────────────────
-    /** 页面加载完就回调一次；uTools 的「进入插件应用」在这里合成。 */
+    /**
+     * 页面 ready 后按注册顺序执行；返回 Promise 会被等待。全部跑完才触发 enter，
+     * 与 uTools 的「Runtime 等 onPluginReady 完成再进入」一致。
+     */
     onPluginReady: (fn) => {
       if (typeof fn !== "function") return;
       listeners.ready.push(fn);
     },
-    /** 卡片被打开（或页面被重载）时回调一次：{ code, type: "text", payload: "" }。 */
+    /**
+     * 卡片出现在屏幕上时触发，参数与 uTools 同形：
+     * { code, type: "text", payload: "", from: "main"|"panel"|"hotkey"|"redirect" }。
+     * 卡片被隐藏后再显示会再触发一次。
+     */
     onPluginEnter: (fn) => {
       if (typeof fn !== "function") return;
       listeners.enter.push(fn);
     },
+    /**
+     * 卡片隐藏（isKill = false，进程还在）或销毁 / 退出程序（isKill = true）时触发。
+     */
     onPluginOut: (fn) => {
       if (typeof fn !== "function") return;
       listeners.out.push(fn);
+    },
+    /**
+     * WinWidget 的每张卡片天生就是独立窗口，没有「从主窗口分离」这一步，
+     * 所以这里只登记回调，永不触发——写在 DEGRADED 里说明原因。
+     */
+    onPluginDetach: (fn) => {
+      if (typeof fn !== "function") return;
+      listeners.detach.push(fn);
+    },
+    /** 定时任务：WinWidget 没有调度器，注册即抛 utools.unsupported。 */
+    onScheduleTrigger: () => {
+      throw unsupportedError("onScheduleTrigger");
+    },
+    /** 搜索框推送：WinWidget 没有 uTools 那种搜索框，注册即抛 utools.unsupported。 */
+    onMainPush: () => {
+      throw unsupportedError("onMainPush");
+    },
+    /** 跨设备同步：WinWidget 没有同步机制，注册即抛 utools.unsupported。 */
+    onDbPull: () => {
+      throw unsupportedError("onDbPull");
     },
 
     // ── 窗口 ────────────────────────────────────────────────────────────
@@ -306,39 +350,78 @@
     enumerable: true,
   });
 
-  // ── 合成进入事件：页面 ready 之后再回调，免得插件还没注册就错过 ─────────
-  function enterPayload() {
-    return { code: widget.id, type: "text", payload: "" };
+  // ── 生命周期：ready → enter → out，顺序与 uTools 对齐 ───────────────────
+  let readyDone = false;
+  let readyChain = null;
+  let entered = false;
+  let pendingEnter = null;
+
+  function enterAction(from) {
+    return {
+      code: widget.id,
+      type: "text",
+      payload: "",
+      from: ENTRY_FROM[from] || "main",
+    };
   }
-  function fireEnter() {
-    const payload = enterPayload();
-    for (const fn of listeners.ready.splice(0)) {
-      try {
-        fn();
-      } catch (e) {
-        console.error("utools.onPluginReady:", e);
+
+  /** Runs onPluginReady callbacks in order and only then lets the enter through. */
+  function runReady() {
+    if (readyChain) return readyChain;
+    const queue = listeners.ready.splice(0);
+    readyChain = (async () => {
+      for (const fn of queue) {
+        try {
+          await fn();
+        } catch (e) {
+          console.error("utools.onPluginReady:", e);
+        }
       }
+      readyDone = true;
+      if (pendingEnter) {
+        const from = pendingEnter;
+        pendingEnter = null;
+        fireEnter(from);
+      }
+    })();
+    return readyChain;
+  }
+
+  function fireEnter(from) {
+    if (!readyDone) {
+      pendingEnter = from || "startup";
+      runReady();
+      return;
     }
+    entered = true;
+    const action = enterAction(from);
     for (const fn of listeners.enter.slice()) {
       try {
-        fn(payload);
+        fn(action);
       } catch (e) {
         console.error("utools.onPluginEnter:", e);
       }
     }
   }
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", fireEnter, { once: true });
-  } else {
-    fireEnter();
-  }
-  window.addEventListener("beforeunload", () => {
+
+  function fireOut(kill) {
+    if (!entered && !kill) return;
+    entered = false;
     for (const fn of listeners.out.slice()) {
       try {
-        fn();
+        fn(!!kill);
       } catch (e) {
-        /* ignore */
+        console.error("utools.onPluginOut:", e);
       }
     }
-  });
+  }
+
+  if (typeof widget.on === "function") {
+    widget.on("ready", () => runReady());
+    widget.on("show", (d) => fireEnter((d && d.from) || "startup"));
+    widget.on("hide", () => fireOut(false));
+    widget.on("unload", () => fireOut(true));
+  }
+  // 页面卸载兜底：宿主没来得及发 unload（窗口被系统销毁）时，仍按「进程结束」算一次。
+  window.addEventListener("beforeunload", () => fireOut(true), { once: true });
 })();

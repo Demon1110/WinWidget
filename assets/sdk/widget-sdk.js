@@ -14,6 +14,7 @@
     clickThrough: !!boot.clickThrough,
     edit: !!(boot.state && boot.state.edit),
     label: (boot.state && boot.state.label) || "",
+    visible: boot.visible !== false,
   };
 
   // ── messaging ──────────────────────────────────────────────
@@ -59,6 +60,19 @@
     }
   }
 
+  // A drag or a resize grip produces a burst of sizes; the page only wants the one it settles on.
+  let resizePending = null;
+  let resizeTimer = 0;
+  function queueResize(size) {
+    resizePending = size;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      const s = resizePending;
+      resizePending = null;
+      if (s) emit("resize", { width: Number(s.width) || 0, height: Number(s.height) || 0 });
+    }, 80);
+  }
+
   if (host) {
     host.addEventListener("message", (e) => {
       const msg = e.data || {};
@@ -94,6 +108,21 @@
           break;
         case "identify":
           identify();
+          break;
+        // ── lifecycle ───────────────────────────────────────────
+        case "show":
+          state.visible = true;
+          emit("show", { from: (d && d.from) || "api", visible: true, initial: false });
+          break;
+        case "hide":
+          state.visible = false;
+          emit("hide", { from: (d && d.from) || "api", visible: false, initial: false });
+          break;
+        case "resize":
+          queueResize(d || {});
+          break;
+        case "unload":
+          emit("unload", { kill: !!(d && d.kill) });
           break;
         default:
           if (msg.ev) emit(msg.ev, d);
@@ -408,6 +437,15 @@
     label.textContent = state.label;
     document.body.appendChild(label);
     send("ready");
+    // "ready" fires one task after the page's own DOMContentLoaded handlers, so a widget that
+    // subscribes there still hears it. A card that is already on screen reports the show it woke
+    // up in, which is what makes the first show indistinguishable from any later one.
+    setTimeout(() => {
+      emit("ready", { visible: state.visible });
+      if (state.visible) {
+        emit("show", { from: boot.showFrom || "startup", visible: true, initial: true });
+      }
+    }, 0);
   });
 
   // ── public API ─────────────────────────────────────────────
@@ -424,11 +462,18 @@
     get layer() { return state.layer; },
     /** Current theme id, e.g. "instrument", "type", "paper". */
     get theme() { return state.appearance.theme || ""; },
+    /** Is the card on screen right now? Kept in step by the host's show/hide events. */
+    get visible() { return state.visible; },
 
     /** Picks the string for the user's language from { "zh-TW": ..., "zh-CN": ..., en: ... }. */
     t,
 
-    /** Listen to host events: "settings", "appearance", "state", or custom ones. Returns an unsubscribe function. */
+    /**
+     * Listen to host events. Lifecycle: "ready" ({visible}: page is up), "show"/"hide"
+     * ({from, visible}), "resize" ({width, height} in CSS pixels, debounced), "unload" ({kill}).
+     * Plus data events "settings", "appearance", "state", "system", and custom ones.
+     * Returns an unsubscribe function.
+     */
     on,
 
     settings: Object.freeze({
