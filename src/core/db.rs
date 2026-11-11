@@ -40,7 +40,12 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
                 .get("doc")
                 .cloned()
                 .ok_or_else(|| BridgeError::new("doc is required"))?;
-            Ok(Reply::Now(store.put(doc)?))
+            let answered = store.put(doc)?;
+            let id = answered.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            if !id.is_empty() {
+                announce(ctx, &store, &[id]);
+            }
+            Ok(Reply::Now(answered))
         }
         "db.get" => {
             let id = jstr(p, "id").unwrap_or_default();
@@ -51,7 +56,9 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
                 Some(doc) => jstr(doc, "_id").unwrap_or_default(),
                 None => jstr(p, "id").unwrap_or_default(),
             };
-            Ok(Reply::Now(store.remove(&id)?))
+            let answered = store.remove(&id)?;
+            announce(ctx, &store, &[id]);
+            Ok(Reply::Now(answered))
         }
         "db.bulkDocs" => {
             let docs = p
@@ -60,11 +67,20 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
                 .cloned()
                 .ok_or_else(|| BridgeError::new("docs is required"))?;
             let mut out = Vec::new();
+            let mut written = Vec::new();
             for doc in docs {
                 out.push(match store.put(doc) {
-                    Ok(result) => result,
+                    Ok(result) => {
+                        if let Some(id) = result.get("id").and_then(|v| v.as_str()) {
+                            written.push(id.to_string());
+                        }
+                        result
+                    }
                     Err(e) => json!({ "ok": false, "error": e.0 }),
                 });
+            }
+            if !written.is_empty() {
+                announce(ctx, &store, &written);
             }
             Ok(Reply::Now(Value::Array(out)))
         }
@@ -111,6 +127,40 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
         // answer uTools gives when cloud sync is off.
         "db.replicateStateFromCloud" => Ok(Reply::Now(Value::Null)),
         other => Err(BridgeError::new(format!("unknown method '{other}'"))),
+    }
+}
+
+/// Tells the widget's *other* cards what just changed, which is WinWidget's stand-in for uTools'
+/// `onDbPull`: there is no cloud to sync from, but a second copy of the same widget on screen stays
+/// in step with the first.
+fn announce(ctx: &mut Ctx, store: &Store, ids: &[String]) {
+    let widget = ctx.manifest.id.clone();
+    let me = ctx.instance;
+    let targets: Vec<String> = ctx
+        .app
+        .cfg()
+        .instances
+        .iter()
+        .filter(|i| i.widget.eq_ignore_ascii_case(&widget) && i.id != me)
+        .map(|i| i.id.clone())
+        .collect();
+    if targets.is_empty() {
+        return;
+    }
+    let docs: Vec<Value> = ids
+        .iter()
+        .map(|id| store.get(id))
+        .filter(|doc| !doc.is_null())
+        .collect();
+    if docs.is_empty() {
+        return;
+    }
+    for instance in targets {
+        ctx.app.event_to(
+            &instance,
+            "dbPull",
+            json!({ "direction": "pull", "docs": docs }),
+        );
     }
 }
 

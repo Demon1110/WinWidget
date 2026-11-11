@@ -39,7 +39,7 @@
     "captureScreen", "screen", "screen.capture", "screen.captureDisplay", "screen.getCursorScreenPoint",
     "screen.getPrimaryDisplay", "screen.getAllDisplays", "screen.getDisplayNearestPoint",
     "screen.getDisplayMatching", "screen.screenToDipPoint", "screen.dipToScreenPoint",
-    "screen.screenToDipRect", "screen.dipToScreenRect", "screenColorPick",
+    "screen.screenToDipRect", "screen.dipToScreenRect", "screenColorPick", "screen.captureInteractive",
     // 输入
     "hideMainWindowPasteText", "hideMainWindowPasteFile", "hideMainWindowPasteImage",
     "hideMainWindowTypeString",
@@ -66,6 +66,8 @@
     screenColorPick: "uTools 弹放大镜等点击；这里直接取光标下的像素",
     "db": "文档库落在宿主 data/db 下，不是 CouchDB HTTP 服务；dbStorage 仍是 localStorage",
     onScheduleTrigger: "回调里必须自己调 schedule.result？不必：抛错/reject 会被记成失败",
+    onMainPush: "WinWidget 没有 uTools 那种主输入框：从控制中心 / 其他组件带着 payload 唤起本组件时触发，action.from 为 redirect",
+    onDbPull: "没有云端可拉：同一组件的其他卡片写入或删除文档时，本地广播 { direction: \"pull\", docs }",
     sharp: "只实现 image 能覆盖的算子，tint/median/composite/trim/normalize 会按名抛错",
     ubrowser: "只有页面抓取，没有内嵌浏览器：click/input 之类会抛 utools.unsupported",
     requestSchedule: "Promise 完成只代表登记成功那一刻，任务真正跑起来要看 onScheduleTrigger",
@@ -81,7 +83,6 @@
   };
   const UNSUPPORTED = [
     "AI 能力（utools.ai 等）", "FFmpeg 音视频处理", "支付",
-    "搜索框推送（onMainPush）", "跨设备同步（onDbPull）",
     "内嵌浏览器交互（ubrowser 的 click/input 等）",
   ];
 
@@ -605,17 +606,39 @@
       if (typeof fn !== "function") return;
       listeners.detach.push(fn);
     },
-    /** 定时任务：WinWidget 没有调度器，注册即抛 utools.unsupported。 */
+    /** 定时任务：到点时跑回调；抛错/reject 会被记成失败。 */
     onScheduleTrigger: () => {
       throw unsupportedError("onScheduleTrigger");
     },
-    /** 搜索框推送：WinWidget 没有 uTools 那种搜索框，注册即抛 utools.unsupported。 */
-    onMainPush: () => {
-      throw unsupportedError("onMainPush");
+    /**
+     * 「主输入框把内容推给插件」。WinWidget 没有 uTools 那个输入框，等价场景是：从控制中心或
+     * 其他组件带着 payload 唤起本组件（redirect(label, payload)），此时回调收到
+     * { code, type: "text"|"img"|"files", payload, from: "redirect" }。
+     */
+    onMainPush: (fn) => {
+      if (typeof fn !== "function") return;
+      widget.on("mainPush", (action) => {
+        const a = action || {};
+        try {
+          fn(a, a.payload);
+        } catch (e) {
+          console.error("onMainPush:", e);
+        }
+      });
     },
-    /** 跨设备同步：WinWidget 没有同步机制，注册即抛 utools.unsupported。 */
-    onDbPull: () => {
-      throw unsupportedError("onDbPull");
+    /**
+     * uTools 的跨设备同步这里没有云端，改为本地广播：同一组件的其他卡片改了文档，本卡片会收到
+     * { direction: "pull", docs: [...] }。
+     */
+    onDbPull: (fn) => {
+      if (typeof fn !== "function") return;
+      widget.on("dbPull", (payload) => {
+        try {
+          fn(payload || { direction: "pull", docs: [] });
+        } catch (e) {
+          console.error("onDbPull:", e);
+        }
+      });
     },
 
     // ── 窗口 ────────────────────────────────────────────────────────────
@@ -809,6 +832,11 @@
     capture: (display) => widget.call("screen.capture").then(nativeImage),
     captureDisplay: (display) =>
       widget.call("screen.captureDisplay", { display: round(display) }).then(nativeImage),
+    /** 交互截屏：交给 Windows 的截图浮层（ms-screenclip:），选完从剪贴板取图；取消得到 null。 */
+    captureInteractive: (timeout) =>
+      widget.call("screen.captureInteractive", { timeout: round(timeout) || 45000 }).then((url) =>
+        url ? nativeImage(url) : null
+      ),
   };
 
   /** 光标下的颜色：{ hex: "#RRGGBB", rgb: "rgb(r, g, b)" }。 */

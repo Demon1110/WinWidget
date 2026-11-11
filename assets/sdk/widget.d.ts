@@ -444,6 +444,14 @@ declare namespace WinWidget {
       readText(): Promise<string | null>;
       /** Puts text on the clipboard; false when Windows refused it. */
       writeText(text: string): Promise<boolean>;
+      /** The copied picture as a PNG data URL, or null when there is none. */
+      readImage(): Promise<string | null>;
+      /** A data URL, a bare base64 string, a path or a NativeImage; false when Windows refused it. */
+      writeImage(image: string | NativeImage): Promise<boolean>;
+      /** The copied files. */
+      readFiles(): Promise<CopiedFile[]>;
+      /** Puts files on the clipboard so the next Ctrl+V drops them. */
+      writeFiles(paths: string[]): Promise<boolean>;
     };
 
     /** Windows' own known folders (OneDrive redirection included). No permission needed. */
@@ -456,7 +464,80 @@ declare namespace WinWidget {
     screen: {
       /** The whole virtual desktop as a PNG data URL, or null when GDI refused. */
       capture(): Promise<string | null>;
+      /** Windows' snipping overlay; the selection as a PNG data URL, or null when cancelled. */
+      captureInteractive(options?: { timeout?: number }): Promise<string | null>;
+      /** One display by index (0-based), as a PNG data URL. */
+      captureDisplay(display: number): Promise<string | null>;
+      /** Every display; bounds and workArea are in DIP. */
+      displays(): Promise<Display[]>;
+      /** The display Windows calls primary. */
+      primary(): Promise<Display>;
+      /** The display a point falls on. */
+      nearest(point: Point): Promise<Display>;
+      /** The display a rectangle overlaps most. */
+      matching(rect: RectLike): Promise<Display>;
+      /** The mouse position, in physical screen pixels. */
+      cursor(): Promise<Point>;
+      /** Point or rectangle from physical pixels to DIP. */
+      toDip(value: Point | RectLike): Promise<Point | RectLike>;
+      /** Point or rectangle from DIP to physical pixels. */
+      toScreen(value: Point | RectLike): Promise<Point | RectLike>;
+      /** The colour under the cursor. */
+      colorPick(): Promise<{ hex: string; rgb: string }>;
     };
+
+    /** The document store: `data\db\<widget>.json` plus an attachments folder. */
+    db: {
+      put(doc: DbDoc): Promise<DbResult>;
+      get(id: string): Promise<DbDoc | null>;
+      remove(docOrId: string | DbDoc): Promise<DbResult>;
+      bulkDocs(docs: DbDoc[]): Promise<DbResult[]>;
+      allDocs(options?: { idStartsWith?: string; ids?: string[] }): Promise<DbDoc[]>;
+      postAttachment(id: string, data: string, type: string): Promise<DbResult>;
+      /** The attachment as a PNG data URL. */
+      getAttachment(id: string): Promise<string | null>;
+      getAttachmentType(id: string): Promise<string>;
+    };
+
+    /** Timed tasks, kept in `data\schedules.json`. Needs the "schedule" permission. */
+    schedule: {
+      request(task: Schedule): Promise<void>;
+      list(): Promise<ScheduleInfo[]>;
+      remove(code: string): Promise<void>;
+      /** Runs when a task is due; a throw or a rejection is recorded as a failure. */
+      onTrigger(listener: (trigger: ScheduleTrigger) => void | Promise<void>): () => void;
+    };
+
+    /** Keyboard and mouse injection. Needs the "input" permission; coordinates are physical pixels. */
+    simulate: {
+      keyboardTap(key: string, ...modifiers: ("shift" | "ctrl" | "alt" | "command")[]): Promise<void>;
+      mouseMove(x: number, y: number): Promise<void>;
+      mouseClick(x: number, y: number): Promise<void>;
+      mouseDoubleClick(x: number, y: number): Promise<void>;
+      mouseRightClick(x: number, y: number): Promise<void>;
+    };
+
+    /** The commands this widget adds while it runs, kept in `data\features.json`. */
+    features: {
+      get(codes?: string[]): Promise<Feature[]>;
+      set(feature: Feature): Promise<void>;
+      remove(code: string): Promise<boolean>;
+    };
+
+    /** Opening another widget by one of its commands. */
+    redirect: {
+      to(label: string | [string, string], payload?: MatchPayload): Promise<boolean>;
+      hotkey(cmdLabel: string, autocopy?: boolean): Promise<boolean>;
+      hotkeyGet(cmdLabel: string): Promise<string | null>;
+    };
+
+    /** Fetching a page without a browser window. Needs the "ubrowser" permission. */
+    ubrowser: {
+      fetch(url: string, options?: { timeout?: number }): Promise<{ url: string; title: string; text: string; html: string; skipped: string[] }>;
+    };
+
+    /** Image processing in the host. Needs the "sharp" permission; chain calls, then read the result. */
+    sharp(input?: SharpInput, options?: { format?: "png" | "jpeg" | "webp" | "tiff"; quality?: number }): SharpImage;
 
     /** A file type's icon as a data URL: a path, an extension (".pdf") or "folder". Needs "shell.launch". */
     fileIcon(spec: string, options?: { size?: number }): Promise<string | null>;
@@ -637,6 +718,11 @@ namespace WinWidget {
     height: number;
   }
 
+  interface Point {
+    x: number;
+    y: number;
+  }
+
   interface Display {
     id: number;
     label: string;
@@ -662,6 +748,7 @@ namespace WinWidget {
     dipToScreenRect(rect: RectLike): Promise<RectLike>;
     capture(display?: unknown): Promise<NativeImage>;
     captureDisplay(display: number): Promise<NativeImage>;
+    captureInteractive(timeout?: number): Promise<NativeImage | null>;
   }
 
   interface CopiedFile {

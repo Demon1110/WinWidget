@@ -38,7 +38,32 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
             };
             let target = find_widget(ctx, &plugin, &label);
             match target {
-                Some(widget_id) => Ok(Reply::Now(json!(open(ctx, &widget_id)))), 
+                Some(widget_id) => {
+                    let payload = p.get("payload").cloned();
+                    match open(ctx, &widget_id) {
+                        Some(instance) => {
+                            // uTools' "main push": the input that selected this command travels
+                            // with it, so the widget can act on it from `onMainPush`.
+                            if let Some(payload) = payload {
+                                let code = crate::core::features::match_command(&widget_id, &label)
+                                    .map(|(code, _)| code)
+                                    .unwrap_or_default();
+                                ctx.app.event_to(
+                                    &instance,
+                                    "mainPush",
+                                    json!({
+                                        "code": code,
+                                        "type": payload_kind(&payload),
+                                        "payload": payload,
+                                        "from": "redirect",
+                                    }),
+                                );
+                            }
+                            Ok(Reply::Now(Value::Bool(true)))
+                        }
+                        None => Ok(Reply::Now(Value::Bool(false))),
+                    }
+                }
                 None => Ok(Reply::Now(Value::Bool(false))),
             }
         }
@@ -98,6 +123,11 @@ fn find_widget(ctx: &Ctx, plugin: &str, label: &str) -> Option<String> {
         {
             return Some(manifest.id.clone());
         }
+        // Nothing matched that label exactly: ask the `Cmd` rules themselves, so a widget that
+        // declares a `type: "regex"` or `type: "over"` command answers the text the way uTools does.
+        if crate::core::features::match_command(&manifest.id, label).is_some() {
+            return Some(manifest.id.clone());
+        }
     }
     None
 }
@@ -121,7 +151,8 @@ fn command_matches(feature: &Value, label: &str) -> bool {
 }
 
 /// Shows the widget's first card, or adds one when the widget is installed but not on screen.
-fn open(ctx: &mut Ctx, widget_id: &str) -> bool {
+/// Answers the instance that ended up on screen, so the caller can send it an event.
+fn open(ctx: &mut Ctx, widget_id: &str) -> Option<String> {
     if let Some(instance) = ctx
         .app
         .cfg()
@@ -132,13 +163,22 @@ fn open(ctx: &mut Ctx, widget_id: &str) -> bool {
     {
         ctx.app.set_visible(&instance, true, "api");
         ctx.app.refresh_tray_menu();
-        return true;
+        return Some(instance);
     }
     match ctx.app.add_widget(widget_id, None) {
-        Ok(_) => true,
+        Ok(instance) => Some(instance),
         Err(e) => {
             crate::core::logging::warn(&format!("redirect: {e}"));
-            false
+            None
         }
+    }
+}
+
+/// What kind of payload the "main push" carried: text, a picture, or dropped files.
+fn payload_kind(payload: &Value) -> &'static str {
+    match payload {
+        Value::Array(files) if files.iter().all(|f| f.is_string()) => "files",
+        Value::String(text) if text.starts_with("data:image") => "img",
+        _ => "text",
     }
 }

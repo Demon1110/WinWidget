@@ -71,10 +71,17 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
                 "rgb": format!("rgb({}, {}, {})", rgb.0, rgb.1, rgb.2),
             })))
         }
-        "screen.captureInteractive" => Err(BridgeError::new(
-            "interactive region capture needs an overlay window; use screen.capture and crop it \
-             in the page (see docs: 屏幕)",
-        )),
+        // uTools draws its own selection overlay; WinWidget hands the job to Windows' snipping
+        // tool (`ms-screenclip:`), waits for the clipboard to change, and answers the new picture.
+        "screen.captureInteractive" => {
+            ctx.require("screen")?;
+            let timeout = jnum(p, "timeout").unwrap_or(45_000.0) as u64;
+            ctx.spawn_value(move || match w::capture_interactive_png(timeout) {
+                Some(png) => Value::String(format!("data:image/png;base64,{}", w::base64(&png))),
+                None => Value::Null,
+            });
+            Ok(Reply::Later)
+        }
 
         // ── displays ─────────────────────────────────────────────────────────────────────────
         "screen.displays" => {

@@ -557,9 +557,9 @@ uTools' events are a "plugin vs main window" model; a WinWidget card is its own 
 | `onPluginEnter(cb)` | `widget.on("show", cb)` | Same payload shape below; fires on every show, not only the first |
 | `onPluginOut(cb)` | `widget.on("hide", cb)` and `widget.on("unload", cb)` | `hide` is `isKill: false`, `unload` is `isKill: true` |
 | `onPluginDetach(cb)` | none | A card is already a separate window: there is no detach step. `utools.onPluginDetach` registers but never calls back |
-| `onScheduleTrigger(cb)` | none | No scheduler. Use `setInterval` in the page, and stop it on `hide` |
-| `onMainPush(cb, onSelect?)` | none | No uTools-style search box to push results into |
-| `onDbPull(cb)` | none | No cross-device sync; data stays in local `widget.storage` |
+| `onScheduleTrigger(cb)` | `utools.onScheduleTrigger(cb)` | Same; the host's own cron really calls back with `{ code, label, at }` |
+| `onMainPush(cb, onSelect?)` | `utools.onMainPush(cb)` | Exists, with the meaning "woken up with a payload": after `redirect(label, payload)` matches this widget's features, the woken card gets a `mainPush`, and `cb(action, payload)` receives `{ code, type, payload, from }`. `onSelect` is not implemented (there is no result list to select from) |
+| `onDbPull(cb)` | `utools.onDbPull(cb)` | Exists but **degraded**: there is no cloud, so it only broadcasts `{ direction: "pull", docs: [...] }` to this widget's cards when another card of the same widget changed a document |
 
 `utools.onPluginEnter` gets its payload in uTools' `PluginEnterAction` shape: `{ code, type: "text", payload: "", from }`, with `from` in uTools' vocabulary (`main` / `panel` / `hotkey` / `redirect`), mapped from the table above: `startup`, `fullscreen` → `main`; `tray` → `panel`; `hotkey` → `hotkey`; `control`, `api` → `redirect`. `option` only exists when the enter came from a pushed result, which never happens here.
 
@@ -881,6 +881,8 @@ const dip = await utools.screen.screenToDipPoint({ x: 400, y: 300 });
 
 `NativeImage`'s `getSize` / `toPNG` / `toJPEG` / `crop` / `resize` / `toDataURL` all return Promises: the host fetches the PNG first, then the page decodes it. `utools.screenColorPick()` answers `{ hex, rgb }` for the pixel under the cursor instead of opening uTools' magnifier.
 
+`utools.screen.captureInteractive(timeout?)` uses **Windows' own snipping overlay** (`ms-screenclip:`, the region picker of the Snipping Tool): the host starts it, polls the clipboard sequence number, and after the user drags a rectangle it reads the picture back. It resolves to a `NativeImage`; Esc or the timeout (45 s by default) resolves to `null`. What the user sees is the system UI, not a WinWidget-drawn selection, and the mouse belongs to that overlay while it is up.
+
 ### Input
 
 ```js
@@ -959,6 +961,18 @@ await utools.removeFeature("site");   // boolean
 
 Kept in `data/features.json`; the control center reads the same file.
 
+All five `Cmd` `type` values really take part in matching, instead of being stored and ignored:
+
+| `type` | What it matches |
+|---|---|
+| a bare string | an exact command label |
+| `over` (default) | `match` appears in the typed text as a substring |
+| `regex` | `match` is a regular expression (`regex-lite`), with `exclude` to reject; a broken pattern never matches |
+| `files` | dropped files, by `extensions` suffix (case-insensitive) |
+| `img` / `window` | never matches text |
+
+The text typed into the search box (say `https://example.com/x`) is filtered by `minLength` / `maxLength` (counted in characters) and then matched command by command. `utools.redirect("https://example.com/x", payload)` can therefore wake a widget from that match and hand it the `payload` — see `onMainPush` below.
+
 ### Quick entries
 
 ```js
@@ -1030,18 +1044,18 @@ WinWidget now splits its capabilities the way the uTools reference does, with on
 
 | uTools category | What WinWidget gives you |
 |---|---|
-| Events | `onPluginReady`, `onPluginEnter`, `onPluginOut(isKill)` all exist, in uTools' order (ready finishes, then enter; hidden is `false`, removed/quit is `true`); `onPluginDetach` registers but never fires (every card already is its own window); `onScheduleTrigger` now really fires. `onMainPush` / `onDbPull` throw `utools.unsupported` on registration |
+| Events | `onPluginReady`, `onPluginEnter`, `onPluginOut(isKill)` all exist, in uTools' order (ready finishes, then enter; hidden is `false`, removed/quit is `true`); `onPluginDetach` registers but never fires (every card already is its own window); `onScheduleTrigger` really fires. `onMainPush` really fires too (when `redirect(label, payload)` wakes this widget with a payload); `onDbPull` is degraded to a local broadcast when another card of the same widget changed a document |
 | Window | `createBrowserWindow` (windows of your own, see that chapter), `hideMainWindow`, `showMainWindow`, `outPlugin`, `getWindowType` (`"main"` / `"custom"`), `sendToParent`, `setExpendHeight` (height only, and asynchronous), `findInPage` / `stopFindInPage` (through `window.find`) |
 | System | `showNotification`, `shellOpenPath`, `shellOpenExternal`, `shellShowItemInFolder`, `shellTrashItem`, `shellBeep`, `getPath`, `getFileIconAsync`, `showOpenDialog`, `showSaveDialog`, `isDev`, `isWindows` and friends; `getPluginLocalDataPath` returns an empty string (there is no filesystem) |
 | Screen | `utools.screen`: `getAllDisplays` / `getPrimaryDisplay` / `getDisplayNearestPoint` / `getDisplayMatching` (uTools `Display`, in DIP), `screenToDipPoint` / `dipToScreenPoint` / `screenToDipRect` / `dipToScreenRect`, `capture()` / `captureDisplay(n)` returning a `NativeImage`, and `utools.screenColorPick()` for the pixel under the cursor. Interactive snipping is not reproduced |
-| Input | `hideMainWindowPasteText` / `…PasteFile` / `…PasteImage` / `…TypeString`: hide the card, give the keyboard back to the previous window, then paste or type. Coordinate injection lives under Simulation |
+| Input | `hideMainWindowPasteText` / `…PasteFile` / `…PasteImage` / `…TypeString`: hide the card, give the keyboard back to the previous window, then paste or type. Coordinate injection lives under Simulation. `input.startDrag` is still unimplemented and reports that it needs an OLE drag source |
 | Copy | `copyText`, `copyImage` (data URL / path / `NativeImage`), `copyFile` (one or more paths, written as `CF_HDROP`), `getCopyedFiles()` returning `{ path, isDirectory, isFile, name }` (a Promise here) |
-| Database | The whole `utools.db` family: `put` / `get` / `remove` / `bulkDocs` / `allDocs` / `postAttachment` / `getAttachment` / `getAttachmentType` / `replicateStateFromCloud`, stored in `data/db/<widget>.json` plus an attachments folder; `dbStorage` stays this widget's local storage. **No cloud sync** — `replicateStateFromCloud()` answers `null` |
+| Database | The whole `utools.db` family: `put` / `get` / `remove` / `bulkDocs` / `allDocs` / `postAttachment` / `getAttachment` / `getAttachmentType` / `replicateStateFromCloud`, stored in `data/db/<widget>.json` plus an attachments folder; `dbStorage` stays this widget's local storage. **No cloud sync** — `replicateStateFromCloud()` answers `null`; `put` / `remove` / `bulkDocs` broadcast `dbPull` to the widget's other cards (that is `onDbPull`) |
 | AI | A reserved category file, **not implemented**: calls report `reserved in the ai category` |
 | Scheduled tasks | `requestSchedule(schedule)` / `getSchedules()` / `removeSchedule(code)` / `onScheduleTrigger(fn)`: standard 5-field cron (`minute hour day month weekday`) or a one-shot timestamp, with `startTime` / `endTime` windows; tasks past `endTime` remove themselves. A throwing or rejecting callback counts as a failure, visible as `successCount` / `failureCount` / `lastStatus` |
 | Simulation | `simulateKeyboardTap(key, ...modifiers)`, `simulateMouseMove` / `Click` / `DoubleClick` / `RightClick(x, y)`. Coordinates are **physical pixels**, exactly as uTools defines them |
-| Dynamic features | `getFeatures(codes?)` / `setFeature(feature)` / `removeFeature(code)`, kept in `data/features.json`, the same file the control center reads |
-| Quick entries | `utools.redirect(label, payload)` (a `[pluginName, label]` pair, or a bare label looked up in display names and runtime features), `redirectHotKeySetting(cmdLabel, autocopy)` (opens the control center's shortcut page), `getCmdHotKey(cmdLabel)` |
+| Dynamic features | `getFeatures(codes?)` / `setFeature(feature)` / `removeFeature(code)`, kept in `data/features.json`, the same file the control center reads. The `Cmd` `type` really takes part in matching (`over` / `regex` / `files` / `img` / `window`) |
+| Quick entries | `utools.redirect(label, payload)` (a `[pluginName, label]` pair or a bare label; when no label matches, the runtime features' `Cmd` are matched against the input, `type: "regex"` included; a payload is pushed as `mainPush` to the woken card), `redirectHotKeySetting(cmdLabel, autocopy)` (opens the control center's shortcut page), `getCmdHotKey(cmdLabel)` |
 | uBrowser | Fetching only: `utools.ubrowser.goto(url).run()` returns `{ url, title, text, html, skipped }`; there is no embedded browser, so `click` / `input` throw `utools.unsupported` |
 | Sharp | `utools.sharp(input)` chains: `resize` / `rotate` / `flip` / `flop` / `extract` / `extend` / `grayscale` / `negate` / `blur` / `sharpen` / `threshold` / `gamma` / `flatten`, output `png` / `jpeg` / `webp` / `tiff` through `toBuffer` / `toUint8Array` / `toFile` / `metadata`. `tint` / `median` / `composite` / `trim` / `normalize` are refused by name |
 | FFmpeg | A reserved category file, **not implemented** |
@@ -1130,7 +1144,7 @@ The SDK wraps all of these. The table shows the underlying names so you can matc
 | `shell.open` / `launch` / `info` / `pick` / `save` / `reveal` / `trash` / `paths` | `widget.shell.*` |
 | `file.icon` | `widget.fileIcon(spec, { size })`: `spec` is a path, an extension such as `.pdf`, or `"folder"` |
 | `clipboard.readText` / `writeText` / `readImage` / `writeImage` / `readFiles` / `writeFiles` | `widget.clipboard.*` (needs the `clipboard` permission) |
-| `screen.capture` / `captureDisplay` / `displays` / `primary` / `nearest` / `matching` / `cursor` / `toDip` / `toScreen` / `colorPick` | `widget.screen.*`, `utools.screen.*` (needs the `screen` permission) |
+| `screen.capture` / `captureDisplay` / `captureInteractive` / `displays` / `primary` / `nearest` / `matching` / `cursor` / `toDip` / `toScreen` / `colorPick` | `widget.screen.*`, `utools.screen.*` (needs the `screen` permission; `captureInteractive` starts Windows' own snipping overlay) |
 | `input.pasteText` / `pasteFile` / `pasteImage` / `typeString` | `utools.hideMainWindowPaste*` / `hideMainWindowTypeString` (`typeString` needs `input`) |
 | `db.put` / `get` / `remove` / `bulkDocs` / `allDocs` / `postAttachment` / `getAttachment` / `getAttachmentType` / `replicateStateFromCloud` | `utools.db.*`, stored in `data/db/<widget>.json` |
 | `schedule.request` / `list` / `remove` / `result` | `utools.requestSchedule` / `getSchedules` / `removeSchedule` (needs `schedule`), event `schedule` |
@@ -1269,6 +1283,22 @@ Anything returning a Promise can be awaited; "sync" means it returns immediately
 | `summon` | the hotkey brought the widget up | none |
 | `identify` | "Locate" was pressed in the control center | none (the SDK draws the ring) |
 | anything else | a `ev` the SDK does not know | passed through as-is |
+
+The two uTools events that push something in from outside also work:
+
+```js
+// Another widget (or the control center) woke this widget with a payload: redirect("Open link", text)
+utools.onMainPush((action, payload) => {
+  // action = { code: "furl", type: "text" | "img" | "files", payload, from: "redirect" }
+  openWith(payload);
+});
+
+// Another card of the same widget wrote or removed a document: local broadcast, not cloud sync
+utools.onDbPull(({ direction, docs }) => {
+  // direction is always "pull"; docs holds the changed documents (deletions are absent, re-check with db.get)
+  refresh(docs);
+});
+```
 
 ### Folding of language objects
 

@@ -52,6 +52,26 @@
     return () => set.delete(fn);
   }
 
+  /** A rectangle in the { left, top, width, height } shape the host reads. */
+  function rectOf(rect) {
+    const r = rect || {};
+    return {
+      left: Number(r.left ?? r.x) || 0,
+      top: Number(r.top ?? r.y) || 0,
+      width: Number(r.width) || 0,
+      height: Number(r.height) || 0,
+    };
+  }
+
+  /** Whatever the caller has — data URL, bare base64, path, or a picture object — as one string. */
+  function imageSource(image) {
+    if (image == null) return "";
+    if (typeof image === "string") return image;
+    if (image.__dataUrl) return String(image.__dataUrl);
+    if (image.url) return String(image.url);
+    return String(image);
+  }
+
   function emit(event, data) {
     const set = handlers.get(event);
     if (!set) return;
@@ -448,6 +468,90 @@
     }, 0);
   });
 
+  // ── sharp: the chain stays in the page, the pixels are processed by the host ─────────
+  const SHARP_REFUSED = ["tint", "median", "composite", "trim", "normalize"];
+
+  /** Base64 bytes (the host's answer to `sharp.run … buffer`) as a Uint8Array. */
+  function base64Bytes(text) {
+    const bin = atob(String(text || ""));
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  function sharpChain(input, options) {
+    const ops = [];
+    let format = (options && options.format) || "png";
+    let quality = (options && options.quality) || 0;
+    const source = (() => {
+      if (input == null) return { create: { width: 1, height: 1 } };
+      if (typeof input === "string") {
+        return /^data:/i.test(input) ? { data: input } : { path: input };
+      }
+      if (input && typeof input === "object" && (input.width || input.height || input.create)) {
+        return input.create ? { create: input.create } : { create: input };
+      }
+      if (input && input.__dataUrl) return { data: input.__dataUrl };
+      return { data: imageSource(input) };
+    })();
+
+    const run = (output) => call("sharp.run", { input: source, ops, output });
+
+    const api = {
+      resize: (width, height) => {
+        ops.push({
+          op: "resize",
+          width: width == null ? undefined : Number(width),
+          height: height == null ? undefined : Number(height),
+        });
+        return api;
+      },
+      rotate: (angle) => { ops.push({ op: "rotate", angle: Number(angle) || 0 }); return api; },
+      flip: () => { ops.push({ op: "flip" }); return api; },
+      flop: () => { ops.push({ op: "flop" }); return api; },
+      extract: (rect) => { ops.push({ op: "extract", ...rectOf(rect) }); return api; },
+      extend: (edges) => { ops.push({ op: "extend", ...(edges || {}) }); return api; },
+      grayscale: () => { ops.push({ op: "grayscale" }); return api; },
+      negate: () => { ops.push({ op: "negate" }); return api; },
+      blur: (sigma) => { ops.push({ op: "blur", sigma: Number(sigma) || 1 }); return api; },
+      sharpen: (sigma, flat, jagged) => {
+        ops.push({
+          op: "sharpen",
+          sigma: Number(sigma) || 1,
+          threshold: Number(flat) || 0,
+          jagged: Number(jagged) || 0,
+        });
+        return api;
+      },
+      threshold: (level) => { ops.push({ op: "threshold", threshold: Number(level) || 128 }); return api; },
+      gamma: (value) => { ops.push({ op: "gamma", gamma: Number(value) || 1 }); return api; },
+      flatten: (background) => { ops.push({ op: "flatten", background: background && String(background) }); return api; },
+      jpeg: (opts) => {
+        format = "jpeg";
+        if (opts && opts.quality) quality = Number(opts.quality);
+        return api;
+      },
+      png: () => { format = "png"; return api; },
+      webp: () => { format = "webp"; return api; },
+      tiff: () => { format = "tiff"; return api; },
+      clone: () => sharpChain(input, options),
+      /** The processed picture as a Uint8Array in the chosen format. */
+      toBuffer: () =>
+        run({ format, target: "buffer", quality: quality || undefined }).then((r) => base64Bytes(r.data)),
+      toUint8Array: () => api.toBuffer(),
+      /** Writes it to `path`; answers { format, width, height, path }. */
+      toFile: (path) =>
+        run({ format, target: "file", path: String(path), quality: quality || undefined }),
+      /** { format, width, height } of the source, after the ops that were queued. */
+      metadata: () => run({ format, target: "metadata" }),
+    };
+    for (const name of SHARP_REFUSED) {
+      api[name] = () =>
+        Promise.reject(new Error("sharp." + name + " is not available in WinWidget"));
+    }
+    return api;
+  }
+
   // ── public API ─────────────────────────────────────────────
   const widget = Object.freeze({
     apiVersion: 1,
@@ -583,6 +687,14 @@
       readText: () => call("clipboard.readText"),
       /** Puts text on the clipboard; false when Windows refused it. */
       writeText: (text) => call("clipboard.writeText", { text: String(text ?? "") }),
+      /** The copied picture as a PNG data URL, or null when there is none. */
+      readImage: () => call("clipboard.readImage"),
+      /** A data URL, a bare base64 string, a path or a `NativeImage`; false when Windows refused it. */
+      writeImage: (image) => call("clipboard.writeImage", { image: imageSource(image) }),
+      /** The copied files: [{ path, isDirectory, isFile, name }]. */
+      readFiles: () => call("clipboard.readFiles"),
+      /** Puts files on the clipboard so the next Ctrl+V drops them ("copy", not "cut"). */
+      writeFiles: (paths) => call("clipboard.writeFiles", { paths: [].concat(paths || []).map(String) }),
     }),
 
     /** Windows' own known folders, OneDrive redirection included. */
@@ -591,10 +703,31 @@
       named: (name) => call("paths.named", { name: String(name || "") }),
     }),
 
-    /** The screen; capture() needs the "screen" permission. */
+    /** The screen; everything here needs the "screen" permission and speaks DIP where it can. */
     screen: Object.freeze({
       /** The whole virtual desktop as a PNG data URL, or null when it failed. */
       capture: () => call("screen.capture"),
+      /** Windows' snipping overlay; the selection as a PNG data URL, or null when cancelled. */
+      captureInteractive: (options) =>
+        call("screen.captureInteractive", { timeout: (options && options.timeout) || 45000 }),
+      /** One display by its index (0-based), as a PNG data URL. */
+      captureDisplay: (display) => call("screen.captureDisplay", { display: Number(display) || 0 }),
+      /** [{ id, label, primary, bounds, workArea, workAreaSize, scaleFactor, rotation, size }], in DIP. */
+      displays: () => call("screen.displays"),
+      /** The display Windows calls primary. */
+      primary: () => call("screen.primary"),
+      /** The display a point falls on: nearest({ x, y }). */
+      nearest: (point) => call("screen.nearest", { x: Number(point && point.x) || 0, y: Number(point && point.y) || 0 }),
+      /** The display a rectangle overlaps most: matching({ left, top, width, height }). */
+      matching: (rect) => call("screen.matching", rectOf(rect)),
+      /** { x, y } of the mouse, in physical screen pixels like uTools' version. */
+      cursor: () => call("screen.cursor"),
+      /** Point or rectangle from physical pixels to DIP. */
+      toDip: (value) => call("screen.toDip", value),
+      /** Point or rectangle from DIP to physical pixels. */
+      toScreen: (value) => call("screen.toScreen", value),
+      /** The colour under the cursor: { hex: "#RRGGBB", rgb: "rgb(r, g, b)" }. */
+      colorPick: () => call("screen.colorPick"),
     }),
 
     /** A file type's icon as a data URL. Accepts a path, an extension (".pdf") or "folder". */
@@ -603,6 +736,98 @@
 
     /** Simplified ↔ Traditional Chinese, character by character (Windows' own tables). */
     convertChinese: (text, to) => call("text.chinese", { text: String(text ?? ""), to: to === "simplified" ? "simplified" : "traditional" }),
+
+    /** The document store: `data\db\<widget>.json` and an attachments folder beside it. */
+    db: Object.freeze({
+      /** Stores a document; `_id` is required. Answers { id, rev, ok }. */
+      put: (doc) => call("db.put", { doc }),
+      /** One document with its `_rev`, or null. */
+      get: (id) => call("db.get", { id: String(id) }),
+      /** Drops a document; a bare id or the document itself are both accepted. */
+      remove: (docOrId) => call("db.remove", typeof docOrId === "string" ? { id: docOrId } : { doc: docOrId }),
+      /** Several at once: [{ _id, … }] → [{ id, ok }]. */
+      bulkDocs: (docs) => call("db.bulkDocs", { docs: docs || [] }),
+      /** allDocs({ idStartsWith?, ids? }) → [{ _id, _rev, … }]. */
+      allDocs: (options) => call("db.allDocs", options || {}),
+      /** Base64 bytes attached to a document, 10 MB at most. */
+      postAttachment: (id, data, type) =>
+        call("db.postAttachment", { id: String(id), data: String(data ?? ""), type: String(type || "image/png") }),
+      /** The attachment as a PNG data URL. */
+      getAttachment: (id) => call("db.getAttachment", { id: String(id) }),
+      /** Its MIME type, or "" when there is none. */
+      getAttachmentType: (id) => call("db.getAttachmentType", { id: String(id) }),
+    }),
+
+    /** Timed tasks, kept in `data\schedules.json`; needs the "schedule" permission. */
+    schedule: Object.freeze({
+      /** request({ code, label, trigger }) — cron is the standard five fields, or a timestamp. */
+      request: (task) => call("schedule.request", { schedule: task }),
+      /** [{ code, label, trigger, successCount, failureCount, lastStatus, lastExecuteAt }]. */
+      list: () => call("schedule.list"),
+      /** remove(code); throws when there is no such task. */
+      remove: (code) => call("schedule.remove", { code: String(code) }),
+      /**
+       * fn({ code, label, at }) runs when a task is due. Return a promise and the host waits: a
+       * throw or a rejection is recorded as a failure, anything else as a success.
+       */
+      onTrigger: (fn) => {
+        if (typeof fn !== "function") return () => {};
+        return on("schedule", (d) => {
+          const payload = d || {};
+          const report = (ok, message) =>
+            call("schedule.result", { code: payload.code, ok, message }).catch(() => {});
+          let settled;
+          try {
+            settled = Promise.resolve(fn(payload));
+          } catch (e) {
+            report(false, String((e && e.message) || e));
+            return;
+          }
+          settled.then(() => report(true), (e) => report(false, String((e && e.message) || e)));
+        });
+      },
+    }),
+
+    /** Keyboard and mouse injection; needs the "input" permission. Coordinates are physical pixels. */
+    simulate: Object.freeze({
+      keyboardTap: (key, ...modifiers) =>
+        call("simulate.keyboardTap", { key: String(key), modifiers: modifiers.map(String) }),
+      mouseMove: (x, y) => call("simulate.mouseMove", { x: Number(x), y: Number(y) }),
+      mouseClick: (x, y) => call("simulate.mouseClick", { x: Number(x), y: Number(y) }),
+      mouseDoubleClick: (x, y) => call("simulate.mouseDoubleClick", { x: Number(x), y: Number(y) }),
+      mouseRightClick: (x, y) => call("simulate.mouseRightClick", { x: Number(x), y: Number(y) }),
+    }),
+
+    /** The commands this widget adds while it runs, kept in `data\features.json`. */
+    features: Object.freeze({
+      /** get() → everything; get(["a","b"]) → only those codes. */
+      get: (codes) => call("features.get", { codes: codes || null }),
+      /** set({ code, cmds: [ "label" | { type, label, match, … } ], description?, icon? }). */
+      set: (feature) => call("features.set", { feature }),
+      /** remove(code) → true when something was there. */
+      remove: (code) => call("features.remove", { code: String(code) }),
+    }),
+
+    /** Opening another widget by one of its commands. */
+    redirect: Object.freeze({
+      /** to(label) or to([widgetName, label]); false when nothing matched. */
+      to: (label, payload) => call("redirect.to", { label, payload }),
+      /** Opens the control center's shortcut page for that command; false when it has none. */
+      hotkey: (cmdLabel, autocopy) =>
+        call("redirect.hotkey", { cmdLabel: String(cmdLabel || ""), autocopy: !!autocopy }),
+      /** The keys bound to that command ("Ctrl+Shift+A"), or null. */
+      hotkeyGet: (cmdLabel) => call("redirect.hotkeyGet", { cmdLabel: String(cmdLabel || "") }),
+    }),
+
+    /** Fetching a page without a browser window; needs the "ubrowser" permission. */
+    ubrowser: Object.freeze({
+      /** fetch(url, { timeout }) → { url, title, text, html, skipped }. */
+      fetch: (url, options) =>
+        call("ubrowser.fetch", { url: String(url), timeout: Number(options && options.timeout) || 20000 }),
+    }),
+
+    /** Image processing in the host; needs the "sharp" permission. Chain calls, then read the result. */
+    sharp: (input, options) => sharpChain(input, options),
 
     /** A Windows notification; needs the "notify" permission. */
     notify,

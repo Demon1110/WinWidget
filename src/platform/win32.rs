@@ -563,6 +563,7 @@ extern "system" {
     pub fn GlobalFree(mem: isize) -> isize;
     pub fn GlobalLock(mem: isize) -> *mut c_void;
     pub fn GlobalUnlock(mem: isize) -> i32;
+    pub fn GlobalSize(mem: isize) -> usize;
 }
 
 #[link(name = "ole32")]
@@ -1269,6 +1270,8 @@ extern "system" {
     fn GetClipboardData(format: u32) -> HANDLE;
     fn SetClipboardData(format: u32, mem: HANDLE) -> HANDLE;
     fn IsClipboardFormatAvailable(format: u32) -> i32;
+    fn GetClipboardSequenceNumber() -> u32;
+    fn RegisterClipboardFormatW(name: *const u16) -> u32;
 }
 
 #[link(name = "gdi32")]
@@ -1554,17 +1557,23 @@ extern "system" {
     fn DragQueryFileW(drop: HANDLE, index: u32, file: *mut u16, size: u32) -> u32;
 }
 
-/// The clipboard's picture, re-encoded as PNG. Only 24/32-bit uncompressed DIBs are read: that is
-/// what Explorer, browsers and every screenshot tool put there.
+/// The clipboard's picture, re-encoded as PNG. A ready-made `PNG` payload is taken as is (that is
+/// what the snipping overlay and browsers publish); otherwise a 24/32-bit uncompressed or
+/// `BI_BITFIELDS` DIB is decoded. Anything else is refused.
 pub fn clipboard_png() -> Option<Vec<u8>> {
     unsafe {
-        if IsClipboardFormatAvailable(CF_DIB_FORMAT) == 0 {
+        let has_png = registered_format("PNG") != 0;
+        if IsClipboardFormatAvailable(CF_DIB_FORMAT) == 0 && !has_png {
             return None;
         }
         for _ in 0..10 {
             if OpenClipboard(0) == 0 {
                 std::thread::sleep(std::time::Duration::from_millis(20));
                 continue;
+            }
+            if let Some(png) = clipboard_registered_png() {
+                CloseClipboard();
+                return Some(png);
             }
             let handle = GetClipboardData(CF_DIB_FORMAT);
             if handle == 0 {
@@ -1585,6 +1594,36 @@ pub fn clipboard_png() -> Option<Vec<u8>> {
     }
 }
 
+/// The id of a registered clipboard format (0 when the name was never registered).
+fn registered_format(name: &str) -> u32 {
+    let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+    unsafe { RegisterClipboardFormatW(wide.as_ptr()) }
+}
+
+/// A `PNG` format already holding encoded bytes, copied out while the clipboard is open.
+unsafe fn clipboard_registered_png() -> Option<Vec<u8>> {
+    let format = registered_format("PNG");
+    if format == 0 || IsClipboardFormatAvailable(format) == 0 {
+        return None;
+    }
+    let handle = GetClipboardData(format);
+    if handle == 0 {
+        return None;
+    }
+    let base = GlobalLock(handle) as *const u8;
+    if base.is_null() {
+        return None;
+    }
+    let len = GlobalSize(handle);
+    let bytes = if len > 8 { std::slice::from_raw_parts(base, len).to_vec() } else { Vec::new() };
+    GlobalUnlock(handle);
+    if bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
+        Some(bytes)
+    } else {
+        None
+    }
+}
+
 unsafe fn dib_to_png(base: *const u8) -> Option<Vec<u8>> {
     let header = std::slice::from_raw_parts(base, 40);
     let header_size = u32::from_le_bytes([header[0], header[1], header[2], header[3]]) as usize;
@@ -1592,13 +1631,16 @@ unsafe fn dib_to_png(base: *const u8) -> Option<Vec<u8>> {
     let height = i32::from_le_bytes([header[8], header[9], header[10], header[11]]);
     let bits = u16::from_le_bytes([header[14], header[15]]);
     let compression = u32::from_le_bytes([header[16], header[17], header[18], header[19]]);
-    if width <= 0 || height == 0 || compression != 0 || (bits != 24 && bits != 32) {
+    // 0 is BI_RGB; 3 is BI_BITFIELDS, which every screenshot tool now writes for 32-bit pictures —
+    // those three 12 bytes of channel masks sit right behind the 40-byte header.
+    let masked = compression == 3 && bits == 32 && header_size == 40;
+    if width <= 0 || height == 0 || (compression != 0 && !masked) || (bits != 24 && bits != 32) {
         return None;
     }
     let w = width as usize;
     let h = height.unsigned_abs() as usize;
     let stride = (w * (bits as usize) / 8 + 3) & !3;
-    let pixels = base.add(header_size);
+    let pixels = base.add(if masked { header_size + 12 } else { header_size });
     let mut rgba = vec![0u8; w * h * 4];
     for y in 0..h {
         // A positive height means bottom-up, which is the usual case.
@@ -1616,6 +1658,46 @@ unsafe fn dib_to_png(base: *const u8) -> Option<Vec<u8>> {
         }
     }
     crate::core::img::encode_png(w as u32, h as u32, &rgba).ok()
+}
+
+/// How many times the clipboard has been written since boot; it only goes up, so a change means
+/// "something new was copied".
+pub fn clipboard_sequence() -> u32 {
+    unsafe { GetClipboardSequenceNumber() }
+}
+
+/// Opens Windows' own snipping overlay (`ms-screenclip:`), waits for the clipboard to change, and
+/// returns the selection as PNG. `None` means the user cancelled or nothing arrived in time.
+pub fn capture_interactive_png(timeout_ms: u64) -> Option<Vec<u8>> {
+    let before = clipboard_sequence();
+    // The URI is handled by the shell; explorer.exe knows the protocol and starts the overlay.
+    let launched = std::process::Command::new("explorer.exe")
+        .arg("ms-screenclip:")
+        .spawn();
+    if launched.is_err() {
+        // No explorer on PATH: ask the shell directly, which is what it would do for a double click.
+        let uri: Vec<u16> = "ms-screenclip:\0".encode_utf16().collect();
+        let verb: Vec<u16> = "open\0".encode_utf16().collect();
+        unsafe {
+            ShellExecuteW(0, verb.as_ptr(), uri.as_ptr(), std::ptr::null(), std::ptr::null(), 1);
+        }
+    }
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
+    while std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        if clipboard_sequence() != before {
+            // The overlay writes the DIB and then closes; give it a moment and try a few times,
+            // because OpenClipboard can fail while the owner is still shutting down.
+            for _ in 0..12 {
+                if let Some(png) = clipboard_png() {
+                    return Some(png);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(150));
+            }
+            return None;
+        }
+    }
+    None
 }
 
 /// Puts a PNG/JPEG on the clipboard as a 32-bit DIB, which is what every Windows app reads.
