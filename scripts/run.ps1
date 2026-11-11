@@ -6,8 +6,8 @@
     默认用调试配置构建后启动 target\debug\winwidget.exe；加 -Release 改用发布配置。
     构建失败或找不到产物会立刻报错退出，不会悄悄启动上一次的旧 exe。
 
-    资源目录（组件、SDK、主题、控制中心页面、开发文档）优先用 exe 旁边的 assets\，
-    找不到就往上找构建目录附近的 assets\，所以从仓库里直接跑不用拷来拷去。
+    资源目录（组件、SDK、主题、控制中心页面、开发文档）优先用 WINWIDGET_DEV_ROOT，本脚本启动前
+    会把它设成仓库根（调试版本来也会往上找 target\ 旁边的 assets\），所以从仓库里直接跑不用拷来拷去。
 
     单实例：已有实例在跑时，新进程会把控制中心交给旧进程然后自己退出，
     于是看不到刚构建的版本 —— 加 -Kill 先结束旧实例再启动。
@@ -91,4 +91,7 @@ if ($NoLaunch) {
 }
 
 Write-Host "==> 启动：$exe"
+# 发布版只认 exe 旁边的 assets\ 或二进制里那份（不再往上找仓库）：从仓库里跑发布版时，
+# 用 WINWIDGET_DEV_ROOT 明确指向源码树，改 assets\ 依旧即时生效。
+$env:WINWIDGET_DEV_ROOT = $root
 Start-Process -FilePath $exe -WorkingDirectory $root

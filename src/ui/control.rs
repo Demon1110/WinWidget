@@ -306,22 +306,20 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
             Ok(Value::Null)
         }
         "app.guide" => {
-            // Open the built guide straight off disk: it is a single self-contained
-            // HTML file, so it works with no server, no network and no browser
-            // session. Falling back to the served copy keeps a stripped install
-            // (where the generated file is missing) usable.
-            let local = crate::core::paths::get()
-                .docs_dir()
-                .join("developer-guide.html");
-            if local.is_file() {
+            // The guide is one self-contained HTML file, so it needs no server when it exists on
+            // disk: opening it straight from the folder keeps the page free of the port and works
+            // even with the app closed afterwards. A single exe has no such file — the copy is
+            // inside the binary — so that one is served by the local HTTP server instead, and the
+            // `file://` form never appears in a shipped build.
+            let paths = crate::core::paths::get();
+            let local = paths.docs_dir().join("developer-guide.html");
+            if !paths.embedded() && local.is_file() {
                 crate::platform::shell::open_path(&local.to_string_lossy())
                     .map_err(BridgeError::new)?;
             } else {
-                let url = format!(
-                    "http://{}:{}/__docs/index.html",
-                    crate::ui::server::CONTROL_HOST,
-                    app.port
-                );
+                // `127.0.0.1`, not the card host: this URL is handed to the user's browser, and
+                // Windows itself does not resolve `widgets.localhost` (only Chromium invents it).
+                let url = format!("http://127.0.0.1:{}/__docs/index.html", app.port);
                 crate::platform::shell::open(&url).map_err(BridgeError::new)?;
             }
             Ok(Value::Null)

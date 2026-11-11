@@ -55,6 +55,12 @@ fn main() {
         return;
     }
 
+    // One line saying where widgets, sdk and docs come from: a folder, or the copy inside the exe
+    // (`embedded:/assets`). It is the first thing to look at when a packaged build behaves like the
+    // source tree. The stray-profile sweep belongs here too: it may need the previous instance gone.
+    logging::info(&format!("Assets: {}", paths::get().resource_root.display()));
+    paths::clean_stray_profile();
+
     text::set_locale("auto");
     if config_low_resource() {
         // WebView2 reads this when it starts its browser process, so it has to be set first.

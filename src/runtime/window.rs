@@ -8,11 +8,25 @@ use crate::platform::win32 as w;
 use crate::runtime::app::Ev;
 use serde_json::Value;
 use std::collections::HashSet;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use tao::dpi::{PhysicalPosition, PhysicalSize};
 use tao::platform::windows::{WindowBuilderExtWindows, WindowExtWindows};
 use tao::window::{Window, WindowBuilder};
-use wry::{Rect, WebView, WebViewBuilder};
+use wry::{Rect, WebContext, WebView, WebViewBuilder};
+
+/// One browser process and one profile for the whole app: every card is created on this context.
+/// Without it WebView2 invents `<exe name>.WebView2` next to the executable — a writable-location
+/// gamble (`Program Files` fails outright) and litter in whatever folder the user dropped the exe
+/// into. The folder itself is `paths::webview_data_dir()`.
+static BROWSER: OnceLock<Mutex<WebContext>> = OnceLock::new();
+
+fn browser() -> &'static Mutex<WebContext> {
+    BROWSER.get_or_init(|| {
+        let dir = crate::core::paths::get().webview_data_dir();
+        let _ = std::fs::create_dir_all(&dir);
+        Mutex::new(WebContext::new(Some(dir)))
+    })
+}
 
 pub struct WidgetWin {
     pub window: Window,
@@ -377,27 +391,33 @@ pub fn build(
 
     let id = inst.id.clone();
     let ipc_id = id.clone();
-    let webview = WebViewBuilder::new()
-        .with_url(&url)
-        .with_transparent(true)
-        .with_devtools(developer)
-        .with_initialization_script(crate::runtime::shim::SCRIPT)
-        .with_ipc_handler(move |request| {
-            let body = request.body().clone();
-            crate::runtime::app::post(
-                &proxy,
-                Ev::Ipc {
-                    win: ipc_id.clone(),
-                    msg: body,
-                },
-            );
-        })
-        .with_bounds(Rect {
-            position: wry::dpi::PhysicalPosition::new(0, 0).into(),
-            size: wry::dpi::PhysicalSize::new(outer.width().max(1), outer.height().max(1)).into(),
-        })
-        .build(&window)
-        .map_err(|e| format!("WebView2 could not be created: {e}"))?;
+    let webview = {
+        let mut context = browser()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        WebViewBuilder::new_with_web_context(&mut context)
+            .with_url(&url)
+            .with_transparent(true)
+            .with_devtools(developer)
+            .with_initialization_script(crate::runtime::shim::SCRIPT)
+            .with_ipc_handler(move |request| {
+                let body = request.body().clone();
+                crate::runtime::app::post(
+                    &proxy,
+                    Ev::Ipc {
+                        win: ipc_id.clone(),
+                        msg: body,
+                    },
+                );
+            })
+            .with_bounds(Rect {
+                position: wry::dpi::PhysicalPosition::new(0, 0).into(),
+                size: wry::dpi::PhysicalSize::new(outer.width().max(1), outer.height().max(1))
+                    .into(),
+            })
+            .build(&window)
+            .map_err(|e| format!("WebView2 could not be created: {e}"))?
+    };
 
     Ok(WidgetWin {
         window,
@@ -419,7 +439,6 @@ pub fn build(
 
 use std::collections::HashMap;
 use std::sync::LazyLock;
-use std::sync::OnceLock;
 
 /// What a drag needs to know while the pointer moves. It sits beside the window handle rather than
 /// in the app, because the window procedure runs while the app is blocked inside the move loop.

@@ -92,7 +92,7 @@ winwidget remove <instance-id>
 
 `build.rs` 在编译时把 `assets/` 整棵扫一遍（跳过 `docs/m*` 截图），大于 256 字节的文件 deflate 压缩，落到 `OUT_DIR/asset-blobs/`，再生成一张「路径 / 是否压缩 / 字节」表；`src/core/assets.rs` 用 `include!` 把这张表和 `include_bytes!` 的压缩块一起收进二进制。发布版因此只有一个 exe，运行时直接从内存读，不落盘、不解压到临时目录。
 
-读取顺序（`src/core/paths.rs::resolve_resource_root`）：`WINWIDGET_DEV_ROOT` → exe 旁边的 `assets\` → exe 往上三级祖先里的 `assets\`（`cargo run` 落到的就是仓库那份）→ 都没有就用二进制里那份。最后一种情况下 `paths::get().resource_root()` 是虚拟路径 `embedded:/assets`，`paths::get().embedded()` 为真，所有读文件的地方（本地 HTTP 服务、组件清单、主题、图标、预览图、`.fwz` 导出、新建组件模板）都会自动改从资源表取。
+读取顺序（`src/core/paths.rs::resolve_resource_root`）：`WINWIDGET_DEV_ROOT` → exe 旁边的 `assets\` → **调试版**再往上找三级祖先里的 `assets\`（`cargo run` 落到的就是仓库那份）→ 都没有就用二进制里那份。祖先那一档只在 `debug` 构建里生效：不然把发布版 exe 丢进 `dist\` 跑，它会悄悄用仓库的 `assets\`，文档也会以 `file://` 打开。要从仓库里跑**发布版**又想吃源码里的 `assets\`，用 `WINWIDGET_DEV_ROOT`（`scripts/run.ps1` 会替你设）。用二进制里那份时 `paths::get().resource_root()` 是虚拟路径 `embedded:/assets`，`paths::get().embedded()` 为真，所有读文件的地方（本地 HTTP 服务、组件清单、主题、图标、预览图、`.fwz` 导出、新建组件模板）都会自动改从资源表取。启动日志第一行 `Assets: …` 会直接告诉你走的是哪一路。
 
 三条由此产生的事实：
 
@@ -202,7 +202,7 @@ WebView2 的 `chrome.webview.postMessage` 在 wry 下**只能传字符串**（�
 | `%APPDATA%\WinWidget\storage\` | 每张卡片 `widget.storage` 的数据 |
 | `%LOCALAPPDATA%\WinWidget\logs\app.log` | 运行日志（含本地服务端口、页面 `ready`、错误） |
 | `%LOCALAPPDATA%\WinWidget\exports\` | 导出的 `.fwz` |
-| `%LOCALAPPDATA%\WinWidget\WebView2\` | WebView2 用户数据目录 |
+| `%LOCALAPPDATA%\WinWidget\WebView2\` | WebView2 用户数据目录：整台进程只开一个浏览器进程、一份档案，所有卡片共用（便携版是 `data\local\WebView2`）。程序绝不会再在 exe 旁边生成 `<exe 名>.WebView2`；早期版本留下的那一份会在启动时删掉并记一行日志 |
 | `%LOCALAPPDATA%\WinWidget\local\` | 市场缓存、媒体缓存、更新下载 |
 
 ## 已验证
@@ -211,6 +211,8 @@ WebView2 的 `chrome.webview.postMessage` 在 wry 下**只能传字符串**（�
 - 单文件脱离 `assets\`：把 `dist\WinWidget-1.0.0-windows-x64.exe` 单独拷到空目录，`list` 仍列出 **38 个内置组件**；再往 `%APPDATA%\WinWidget\widgets` 放一个测试组件，同一目录下 `list` 变成 **39 个**（内置 + 用户目录的合集）。
 - 空目录里直接跑：日志 `Catalog: 38 widget(s)`、`Themes: instrument, paper, type; system accent #…`、`Serving pages on 127.0.0.1:9818`、两张卡 `ready`；本地服务对嵌入资源全部 200 —— `/__fw/base.css`(8.9 KB)、`/__fw/widget-sdk.js`(23.7 KB)、`/__fw/themes/instrument/theme.css`、`/__ui/control-center/index.html`、`/__ui/control-center/img/theme-paper.png`(222 KB)、`/__docs/developer-guide.html`(225 KB)、`/__templates/hello-widget/widget.json`、`/__preview/builtin/clock/preview/instrument.zh-CN.webp`。
 - 自更新：旧实例在跑时，替换器等到 `copy` 成功（约 3 s）才覆盖并拉起新副本；日志 `apply-update: … -> …` / `copied, starting the new build` / `started … (pid …)`，替换后目标 exe 字节数与「新版本」一致，新实例日志照常 38 个组件。
+- 资源来源与档案位置：把发布版 exe 拷到仓库里的 `dist\_t\`（上游两级就有仓库的 `assets\`）再启动，日志第一行是 `Assets: embedded:/assets` —— 说明它用的是自己肚子里那份，不会被源码树带偏；同一次启动打印 `removed the old WebView2 profile …winwidget.exe.WebView2 (4096 bytes)`，启动后目录里只有 `winwidget.exe`、`portable`、`data\`，浏览器档案落在 `data\local\WebView2`（单文件/便携形态实测）。
+- 文档入口：单文件版本走服务，`/__docs/index.html` 在 `http://127.0.0.1:<端口>` 上 200（230,465 B），`/__fw/base.css` 200（8,942 B）；`widgets.localhost` 是卡片入口专用的主机名，Windows 自己解析不了，所以交给浏览器的链接一律写 `127.0.0.1`。
 - 启动日志：`Catalog: 38 widget(s)`、`Themes: instrument, paper, type; system accent #…`、`Serving pages on 127.0.0.1:<port>`。
 - 卡片实际渲染：时钟卡片（深色圆角卡 + 大字号时间 + 24 小时刻度条）、系统监控卡片（双环形仪表 + 磁盘/网络）；把 `theme_id` 改成 `paper` 后同一张卡片换成浅色纸张排版 —— 三张截图都用 `PrintWindow` 抓真实窗口内容。
 - 控制中心实际渲染：三栏布局、组件列表、内容/外观/位置与行为三页签；设置项开关状态与 `widget.json` 的默认值一致（`24 小时制 / 显示秒 / 显示日期` 全为开）。

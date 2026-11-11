@@ -130,9 +130,13 @@ fn resolve_resource_root() -> PathBuf {
     }
     let exe = exe_dir();
     candidates.push(exe.join("assets"));
-    // `cargo run` keeps the build under `target\<profile>`, so try the folders around it too.
-    for ancestor in exe.ancestors().skip(1).take(3) {
-        candidates.push(ancestor.join("assets"));
+    // `cargo run` keeps the build under `target\<profile>`, so try the folders around it too — but
+    // only for debug builds. A release exe dropped inside the source tree (say `dist\`) must use the
+    // copy inside itself, or it would quietly serve the repo's `assets\` and open docs as `file://`.
+    if cfg!(debug_assertions) {
+        for ancestor in exe.ancestors().skip(1).take(3) {
+            candidates.push(ancestor.join("assets"));
+        }
     }
     for c in &candidates {
         if c.join("sdk").join("base.css").is_file() {
@@ -188,6 +192,58 @@ pub fn data_dir() -> PathBuf {
 
 pub fn resource_root() -> PathBuf {
     get().resource_root.clone()
+}
+
+/// WebView2 used to put its profile in `<exe name>.WebView2` next to the executable, because no
+/// user data folder was passed. Every card now shares `%LOCALAPPDATA%\WinWidget\WebView2` (see
+/// `webview_data_dir`), so that folder is dead weight: browser cache, cookies and localStorage for
+/// the loopback pages, nothing the app reads back. Delete it once at startup, and only when it sits
+/// beside our own exe.
+pub fn clean_stray_profile() {
+    let Ok(exe) = std::env::current_exe() else {
+        return;
+    };
+    let Some(name) = exe.file_name().map(|n| n.to_string_lossy().to_string()) else {
+        return;
+    };
+    let dir = exe.with_file_name(format!("{name}.WebView2"));
+    if !dir.is_dir() {
+        return;
+    }
+    // A profile the user pointed us at is never removed: only the default next to the exe.
+    if dir == get().webview_data_dir() {
+        return;
+    }
+    let bytes = dir_size(&dir);
+    match std::fs::remove_dir_all(&dir) {
+        Ok(()) => crate::core::logging::info(&format!(
+            "removed the old WebView2 profile {} ({bytes} bytes); the browser cache now lives in {}",
+            dir.display(),
+            get().webview_data_dir().display()
+        )),
+        // Usually the previous version is still running and holds the folder open.
+        Err(e) => crate::core::logging::warn(&format!(
+            "could not remove the old WebView2 profile {}: {e}",
+            dir.display()
+        )),
+    }
+}
+
+/// Recursive byte count, for the log line above; unreadable entries count as zero.
+fn dir_size(dir: &Path) -> u64 {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    let mut total = 0u64;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            total += dir_size(&path);
+        } else if let Ok(meta) = entry.metadata() {
+            total += meta.len();
+        }
+    }
+    total
 }
 
 pub fn sdk_dir() -> PathBuf {
