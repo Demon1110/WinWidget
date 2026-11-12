@@ -695,6 +695,32 @@
       readFiles: () => call("clipboard.readFiles"),
       /** Puts files on the clipboard so the next Ctrl+V drops them ("copy", not "cut"). */
       writeFiles: (paths) => call("clipboard.writeFiles", { paths: [].concat(paths || []).map(String) }),
+
+      // ── 历史（宿主自己记，最近 300 条） ────────────────────────────────
+      /**
+       * The records, newest first: `{_id, hash, type, value, size, timestamp, pinned}`.
+       * `type` is `text` / `files` / `image`; `opts` filters with `{ type, pinned, limit }`.
+       * The first call starts the watcher, so later copies show up by themselves.
+       */
+      history: (opts) => call("clipboard.history", opts || {}),
+      /** How many records of each kind: `{ all, text, image, files, pinned }`. */
+      stats: () => call("clipboard.history.stats"),
+      /** Marks records as favourites (the 收藏 tab); `pinned` defaults to true. */
+      pin: (ids, pinned) =>
+        call("clipboard.history.pin", {
+          ids: [].concat(ids || []).map(String),
+          pinned: pinned === undefined ? true : !!pinned,
+        }),
+      /** Deletes records by id (or hash). */
+      remove: (ids) => call("clipboard.history.remove", { ids: [].concat(ids || []).map(String) }),
+      /** Empties the list; `keepPinned` keeps the favourites. */
+      clear: (opts) => call("clipboard.history.clear", opts || {}),
+      /** Puts one record back on the clipboard — the "copy" button. */
+      copy: (id) => call("clipboard.recopy", { id: String(id) }),
+      /** The picture of an image record, as a PNG data URL. */
+      image: (id) => call("clipboard.image", { id: String(id) }),
+      /** The files of a record still exist on disk: `[bool]`, one per path. */
+      filesExist: (paths) => call("clipboard.filesExist", { paths: [].concat(paths || []).map(String) }),
     }),
 
     /** Windows' own known folders, OneDrive redirection included. */

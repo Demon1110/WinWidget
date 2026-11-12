@@ -61,7 +61,7 @@
     timer = setInterval(async () => {
       let list;
       try {
-        list = newest(await callWhenAllowed("clipboard.history", {}));
+        list = await hydrateImages(newest(await callWhenAllowed("clipboard.history", {})));
       } catch {
         return;
       }
@@ -96,11 +96,55 @@
     return paths;
   };
 
+  /** data URL → ArrayBuffer, because a plugin posts the picture back as an attachment. */
+  function bytesOfDataUrl(url) {
+    const comma = typeof url === "string" ? url.indexOf(",") : -1;
+    if (comma < 0) return null;
+    try {
+      const binary = atob(url.slice(comma + 1));
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return bytes.buffer;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  const attached = new Set(); // image hashes already posted to this widget's attachment store
+
+  /**
+   * uTools' 剪贴板 renders a picture record through `utools.db.getAttachment("attachment/" + hash)`,
+   * so a host-side picture only becomes visible once it exists as an attachment of this widget.
+   * Posted lazily, once per hash, and `value` is rewritten to the attachment id the way uTools
+   * stores it (the collect flow reuses that id).
+   */
+  async function hydrateImages(list) {
+    if (!window.utools || !window.utools.db) return list;
+    for (const record of list) {
+      if (!record || record.type !== "image" || !record.hash) continue;
+      const hash = String(record.hash);
+      if (!attached.has(hash)) {
+        try {
+          const url = await call("clipboard.image", { id: record._id || hash });
+          const buffer = bytesOfDataUrl(url);
+          if (buffer) {
+            await window.utools.db.postAttachment("attachment/" + hash, buffer, "image/png");
+            attached.add(hash);
+          }
+        } catch (err) {
+          console.warn("[WinWidget] services: picture " + hash + " is not available —", err && err.message);
+        }
+      }
+      record.value = "attachment/" + hash;
+    }
+    return list;
+  }
+
   window.IS_APP_PUBLIC = true;
 
   window.services = {
     // ── records ──
-    readAllRecords: async () => newest(await callWhenAllowed("clipboard.history", {})),
+    readAllRecords: async () => hydrateImages(newest(await callWhenAllowed("clipboard.history", {}))),
     clearAllRecords: async () => {
       stopWatching();
       await call("clipboard.history.clear", {});
@@ -130,6 +174,10 @@
     // ── copy / paste, routed to the uTools API the page already has ──
     executeCopy: (records) => {
       const list = records || [];
+      // One record: let the host put it back on the clipboard, which also covers pictures.
+      if (list.length === 1 && list[0] && list[0]._id) {
+        return call("clipboard.recopy", { id: list[0]._id });
+      }
       const kinds = new Set(list.map((r) => r && r.type));
       if (kinds.size === 1 && kinds.has("text")) {
         return window.utools.copyText(list.map((r) => r.value).join("\n"));
@@ -144,14 +192,36 @@
       warn("executeCopy (mixed record types)");
       return undefined;
     },
-    executePaste: (records) => {
+    executePaste: async (records) => {
       const list = records || [];
+      // A picture: the host writes it back, and uTools' own paste API presses Ctrl+V for us.
+      if (list.length === 1 && list[0] && list[0].type === "image") {
+        const url = await call("clipboard.image", { id: list[0]._id });
+        if (url) return window.utools.hideMainWindowPasteImage(url);
+        return undefined;
+      }
       const texts = list.filter((r) => r && r.type === "text").map((r) => r.value);
       const paths = recordPaths(list);
       if (texts.length) window.utools.hideMainWindowPasteText(texts.join("\n"));
       if (paths.length) window.utools.hideMainWindowPasteFile(paths);
-      if (!texts.length && !paths.length) warn("executePaste (pictures are not bridged)");
+      if (!texts.length && !paths.length) warn("executePaste (no text or files in the selection)");
     },
+
+    // ── the list's own actions, so a page can drive them without reimplementing anything ──
+    /** `{ all, text, image, files, pinned }` — the counts the tabs print. */
+    recordStats: () => call("clipboard.history.stats"),
+    /** Marks records as favourites; the returns come back as the 收藏 tab's documents. */
+    pinRecords: (ids, pinned) =>
+      call("clipboard.history.pin", {
+        ids: [].concat(ids || []).map(String),
+        pinned: pinned === undefined ? true : !!pinned,
+      }),
+    clearAll: (opts) => {
+      stopWatching();
+      seen = new Set();
+      return call("clipboard.history.clear", opts || {});
+    },
+
     dragToFiles: noop("dragToFiles"),
     pinScreen: noop("pinScreen"),
     pinScreenListenReceiveData: noop("pinScreenListenReceiveData"),

@@ -24,8 +24,12 @@ const OWNS: &[&str] = &[
     "clipboard.readFiles",
     "clipboard.writeFiles",
     "clipboard.history",
+    "clipboard.history.stats",
+    "clipboard.history.pin",
     "clipboard.history.remove",
     "clipboard.history.clear",
+    "clipboard.recopy",
+    "clipboard.image",
     "clipboard.filesExist",
 ];
 
@@ -117,19 +121,62 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
         "clipboard.history" => {
             ctx.require("clipboard")?;
             watch();
-            Ok(Reply::Now(Value::Array(history().iter().cloned().collect())))
+            let want = jstr(p, "type").unwrap_or_else(|| "all".into());
+            let pinned_only = p.get("pinned").and_then(|v| v.as_bool());
+            let limit = p.get("limit").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+            let list: Vec<Value> = history()
+                .into_iter()
+                .filter(|r| type_of(r) == want || want == "all" || want.is_empty())
+                .filter(|r| match pinned_only {
+                    Some(want_pinned) => is_pinned(r) == want_pinned,
+                    None => true,
+                })
+                .take(if limit == 0 { usize::MAX } else { limit })
+                .collect();
+            Ok(Reply::Now(Value::Array(list)))
+        }
+        "clipboard.history.stats" => {
+            ctx.require("clipboard")?;
+            watch();
+            let records = history();
+            let mut counts = json!({ "all": records.len(), "text": 0, "image": 0, "files": 0, "pinned": 0 });
+            for record in &records {
+                if let Some(object) = counts.as_object_mut() {
+                    let key = type_of(record);
+                    let bumped = object.get(&key).and_then(|v| v.as_u64()).unwrap_or(0) + 1;
+                    object.insert(key, json!(bumped));
+                    if is_pinned(record) {
+                        let pinned = object.get("pinned").and_then(|v| v.as_u64()).unwrap_or(0) + 1;
+                        object.insert("pinned".into(), json!(pinned));
+                    }
+                }
+            }
+            Ok(Reply::Now(counts))
+        }
+        "clipboard.history.pin" => {
+            ctx.require("clipboard")?;
+            let ids = ids_of(p);
+            let pinned = p.get("pinned").and_then(|v| v.as_bool()).unwrap_or(true);
+            let mut touched = 0u64;
+            let kept = {
+                let mut guard = store().lock().unwrap_or_else(|e| e.into_inner());
+                for record in guard.iter_mut() {
+                    let id = record.get("_id").and_then(|v| v.as_str()).unwrap_or_default();
+                    if ids.iter().any(|x| x == id) {
+                        if let Some(object) = record.as_object_mut() {
+                            object.insert("pinned".into(), Value::Bool(pinned));
+                            touched += 1;
+                        }
+                    }
+                }
+                guard.clone()
+            };
+            save(&kept);
+            Ok(Reply::Now(json!({ "ok": true, "pinned": pinned, "changed": touched })))
         }
         "clipboard.history.remove" => {
             ctx.require("clipboard")?;
-            let ids: Vec<String> = p
-                .get("ids")
-                .and_then(|v| v.as_array())
-                .map(|a| {
-                    a.iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                        .collect()
-                })
-                .unwrap_or_default();
+            let ids = ids_of(p);
             let kept = {
                 let mut guard = store().lock().unwrap_or_else(|e| e.into_inner());
                 guard.retain(|r| {
@@ -143,9 +190,60 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
         }
         "clipboard.history.clear" => {
             ctx.require("clipboard")?;
-            store().lock().unwrap_or_else(|e| e.into_inner()).clear();
-            save(&[]);
-            Ok(Reply::Now(json!({ "ok": true })))
+            let keep_pinned = p.get("keepPinned").and_then(|v| v.as_bool()).unwrap_or(false);
+            let kept = {
+                let mut guard = store().lock().unwrap_or_else(|e| e.into_inner());
+                if keep_pinned {
+                    guard.retain(|r| is_pinned(r));
+                } else {
+                    guard.clear();
+                }
+                guard.clone()
+            };
+            save(&kept);
+            Ok(Reply::Now(json!({ "ok": true, "kept": kept.len() })))
+        }
+        // Put a record back on the system clipboard. That is what the list's copy button does, and
+        // what "paste" does before it presses Ctrl+V.
+        "clipboard.recopy" => {
+            ctx.require("clipboard")?;
+            let record = find_record(p).ok_or_else(|| BridgeError::new("no such record"))?;
+            let kind = type_of(&record);
+            let done = match kind.as_str() {
+                "files" => {
+                    let paths: Vec<String> = record
+                        .get("value")
+                        .and_then(|v| v.as_array())
+                        .map(|a| {
+                            a.iter()
+                                .filter_map(|x| x.get("path").and_then(|v| v.as_str()))
+                                .map(|s| s.to_string())
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    w::set_clipboard_files(&paths)
+                }
+                "image" => image_bytes(&record)
+                    .map(|bytes| w::set_clipboard_png(&bytes))
+                    .unwrap_or(false),
+                _ => w::set_clipboard_text(
+                    record.get("value").and_then(|v| v.as_str()).unwrap_or_default(),
+                ),
+            };
+            Ok(Reply::Now(json!({ "ok": done })))
+        }
+        // The picture a record stands for, as a data URL — enough for a page to show it without
+        // needing an attachment store.
+        "clipboard.image" => {
+            ctx.require("clipboard")?;
+            let record = find_record(p).ok_or_else(|| BridgeError::new("no such record"))?;
+            match image_bytes(&record) {
+                Some(bytes) => Ok(Reply::Now(Value::String(format!(
+                    "data:image/png;base64,{}",
+                    w::base64(&bytes)
+                )))),
+                None => Err(BridgeError::new("record has no picture")),
+            }
         }
         "clipboard.filesExist" => {
             ctx.require("clipboard")?;
@@ -171,14 +269,79 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
 // ── history ────────────────────────────────────────────────────────────────
 //
 // One JSON file, newest first, capped at `MAX`. Records use the shape uTools' 剪贴板 plugin reads
-// from its preload: `{_id, hash, type, value, timestamp, size}`, where `type` is `text` or `files`
-// and `files` values are `{name, path, isFile, isDirectory}` — pictures are left out for now, since
-// the plugin expects an attachment id we do not issue.
+// from its preload: `{_id, hash, type, value, timestamp, size, pinned}`, where `type` is `text`,
+// `files` or `image`. `files` values are `{name, path, isFile, isDirectory}`; pictures are stored
+// as PNG next to the index (see `image_dir`) and carry the file path in `value`.
 
 const MAX: usize = 300;
+/// A picture is not a string: keep the bytes out of the index file and cap how big one may be.
+const MAX_IMAGE_BYTES: usize = 12 * 1024 * 1024;
 
 fn history_file() -> std::path::PathBuf {
     crate::core::paths::data_dir().join("clipboard-history.json")
+}
+
+fn image_dir() -> std::path::PathBuf {
+    crate::core::paths::data_dir().join("clipboard").join("images")
+}
+
+/// `text` / `files` / `image`, in the words the plugin's tabs use.
+fn type_of(record: &Value) -> String {
+    record
+        .get("type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("text")
+        .to_string()
+}
+
+fn is_pinned(record: &Value) -> bool {
+    record
+        .get("pinned")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+}
+
+/// `ids`, `id` or `hash` — the three ways a caller names a record.
+fn ids_of(p: &Value) -> Vec<String> {
+    if let Some(Value::Array(a)) = p.get("ids") {
+        return a
+            .iter()
+            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .collect();
+    }
+    jstr(p, "id").or_else(|| jstr(p, "hash")).into_iter().collect()
+}
+
+fn find_record(p: &Value) -> Option<Value> {
+    let ids = ids_of(p);
+    if ids.is_empty() {
+        return None;
+    }
+    history().into_iter().find(|r| {
+        let id = r.get("_id").and_then(|v| v.as_str()).unwrap_or_default();
+        let hash = r.get("hash").and_then(|v| v.as_str()).unwrap_or_default();
+        ids.iter().any(|x| x == id || x == hash)
+    })
+}
+
+/// The PNG behind a picture record, either from `value` (a path) or from the `hash` file name.
+fn image_bytes(record: &Value) -> Option<Vec<u8>> {
+    if type_of(record) != "image" {
+        return None;
+    }
+    let value = record.get("value").and_then(|v| v.as_str()).unwrap_or_default();
+    let hash = record.get("hash").and_then(|v| v.as_str()).unwrap_or_default();
+    let candidate = if value.is_empty() {
+        image_dir().join(format!("{hash}.png"))
+    } else {
+        std::path::PathBuf::from(value)
+    };
+    let bytes = std::fs::read(candidate).ok()?;
+    if bytes.is_empty() {
+        None
+    } else {
+        Some(bytes)
+    }
 }
 
 fn store() -> &'static Mutex<Vec<Value>> {
@@ -236,6 +399,12 @@ fn record_now() {
     let text = w::clipboard_text().unwrap_or_default();
     let files = w::clipboard_files();
     if text.trim().is_empty() && files.is_empty() {
+        // Nothing textual: a screenshot on the clipboard is the third kind of record.
+        if let Some(png) = w::clipboard_png() {
+            if png.len() <= MAX_IMAGE_BYTES {
+                push_image(&png);
+            }
+        }
         return;
     }
     let record = if !files.is_empty() {
@@ -265,6 +434,31 @@ fn record_now() {
             "size": text.chars().count(),
         })
     };
+    push_record(record);
+}
+
+/// A picture record: the PNG goes to `data/clipboard/images/<hash>.png`, the index keeps the path,
+/// its size in bytes and the `hash` the plugin uses as an attachment name.
+fn push_image(png: &[u8]) {
+    let hash = fingerprint(&w::base64(png));
+    let path = image_dir().join(format!("{hash}.png"));
+    if !path.exists() {
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let _ = std::fs::write(&path, png);
+    }
+    let record = json!({
+        "hash": hash,
+        "type": "image",
+        "value": path.to_string_lossy().to_string(),
+        "size": png.len(),
+    });
+    push_record(record);
+}
+
+/// Newest first, deduplicated against the top entry, persisted.
+fn push_record(record: Value) {
     let hash = record.get("hash").and_then(|v| v.as_str()).unwrap_or_default().to_string();
     let mut guard = store().lock().unwrap_or_else(|e| e.into_inner());
     let newest_same = guard
@@ -279,6 +473,7 @@ fn record_now() {
     if let Some(obj) = full.as_object_mut() {
         obj.insert("_id".into(), Value::String(format!("clip-{stamp}-{hash}")));
         obj.insert("timestamp".into(), json!(stamp));
+        obj.insert("pinned".into(), Value::Bool(false));
     }
     guard.insert(0, full);
     guard.truncate(MAX);

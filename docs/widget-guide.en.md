@@ -923,7 +923,30 @@ Two things to remember:
 - **History is only recorded while the host runs**, and it starts on the first `clipboard.history` call. Pictures are not recorded yet, so the 图像 tab stays empty.
 - **The install sheet is the consent.** Previously an import wrote `permissions` and then every call failed with "permission denied" until the user found the switch; now installing writes the listed permissions into `grants` and reloads pages that were already open.
 
-Not bridged yet: `setSubInput` (the search box above a plugin is drawn by uTools' own window), picture entries, pin/edge windows, dragging an entry out as a file.
+Not bridged yet: `setSubInput` (the search box above a plugin is drawn by uTools' own window), pin/edge windows, dragging an entry out as a file.
+
+### Clipboard history: one full API for JavaScript
+
+The host keeps its own history (`data\clipboard-history.json`, last 300 entries, `type` being `text` / `image` / `files`, newest first) and exposes all of it as methods. Inside a widget it is `widget.clipboard.*`; inside a uTools plugin it is `window.services.*`:
+
+| method (`widget.clipboard.*`) | arguments | what it does |
+| --- | --- | --- |
+| `history(opts)` | `{type, pinned, limit}` | read records; `type` is `text` / `image` / `files` / `all`, `pinned` keeps favourites only |
+| `stats()` | — | `{all, text, image, files, pinned}` — the numbers on the tabs |
+| `pin(ids, pinned)` | ids or hashes | favourite / unfavourite (`pinned` defaults to `true`) |
+| `remove(ids)` | ids | delete entries |
+| `clear(opts)` | `{keepPinned}` | empty the list, or keep only the favourites |
+| `copy(id)` | a record id | put that entry back on the clipboard |
+| `image(id)` | a record id | the PNG of a picture record, as a data URL |
+| `filesExist(paths)` | paths | whether the files still exist, as booleans |
+
+The host-side names are `clipboard.history` / `.stats` / `.pin` / `.remove` / `.clear` / `clipboard.recopy` / `clipboard.image` / `clipboard.filesExist`, all behind the `clipboard` permission.
+
+"Paste" needs no new API: `utools.hideMainWindowPasteText/File/Image` already does hide → restore the previous window → Ctrl+V, so `copy` followed by one of those pastes whatever you put there.
+
+How pictures land: when a screenshot arrives, the host writes the PNG to `data\clipboard\images\<hash>.png` and records its path in `value` with the byte count in `size`. uTools plugins load it through `utools.db.getAttachment("attachment/" + hash)`, so the first time a page reads such a record `services.js` posts the bytes into that widget's own attachment store under `attachment/<hash>` and rewrites `value` to that id — thumbnails and the favourite flow then share one path.
+
+Favourites work two ways: the plugin keeps its own `collect/<hash>` documents and lists them with `utools.db.promises.allDocs("collect/")`, while the host record carries a `pinned` flag (`clipboard.history.pin`). To make the former work, `utools.js` now accepts a prefix string in `db.allDocs` (it used to take only `{idStartsWith}`), `db.getAttachment` returns an object that also has `buffer` / `byteLength` / `length` (uTools hands back a Node `Buffer`, and plugins write `new Blob([n.buffer])`), and `db.postAttachment` takes an `ArrayBuffer` or a `TypedArray`.
 
 
 

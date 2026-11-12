@@ -871,6 +871,45 @@
   };
 
   // ── 数据库：宿主侧文档库（data/db/<widget>.json） ───────────────────────
+  // uTools 的 `allDocs` 收「前缀字符串」或 `{idStartsWith}`，两种都接受。
+  const allDocsArgs = (key) => {
+    if (!key) return {};
+    if (typeof key === "string") return { idStartsWith: key };
+    if (Array.isArray(key)) return { ids: key };
+    return key;
+  };
+  /** data URL → 字节。uTools 的 getAttachment 给的是 Buffer，插件普遍取 `.buffer` 拼 Blob。 */
+  const bytesFromDataUrl = (url) => {
+    const comma = typeof url === "string" ? url.indexOf(",") : -1;
+    if (comma < 0) return new Uint8Array(0);
+    try {
+      const binary = atob(url.slice(comma + 1));
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return bytes;
+    } catch (_) {
+      return new Uint8Array(0);
+    }
+  };
+  /** ArrayBuffer / TypedArray / 已经是 base64 的字符串，统一转成 base64 交给宿主。 */
+  const toBase64 = (data) => {
+    if (data == null) return "";
+    if (typeof data === "string") {
+      // 已经是 base64 的按原样传；data URL 只取逗号之后。
+      const comma = data.startsWith("data:") ? data.indexOf(",") : -1;
+      return comma >= 0 ? data.slice(comma + 1) : data;
+    }
+    const bytes =
+      data instanceof ArrayBuffer
+        ? new Uint8Array(data)
+        : data.buffer instanceof ArrayBuffer
+          ? new Uint8Array(data.buffer, data.byteOffset || 0, data.byteLength || undefined)
+          : null;
+    if (!bytes) return String(data);
+    let binary = "";
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
+  };
   const dbApi = {
     put: (doc) => widget.call("db.put", { doc }),
     get: (id) => widget.call("db.get", { id: String(id) }),
@@ -878,15 +917,27 @@
     remove: (doc) =>
       widget.call("db.remove", typeof doc === "string" ? { id: String(doc) } : { doc }),
     bulkDocs: (docs) => widget.call("db.bulkDocs", { docs: docs || [] }),
-    allDocs: (key) => widget.call("db.allDocs", key || {}),
+    allDocs: (key) => widget.call("db.allDocs", allDocsArgs(key)),
     postAttachment: (id, data, type) =>
       widget.call("db.postAttachment", {
         id: String(id),
         type: String(type || "application/octet-stream"),
-        // uTools 收 Buffer/Uint8Array；这里转 base64 传过去。
-        data: String(data == null ? "" : data),
+        data: toBase64(data),
       }),
-    getAttachment: (id) => widget.call("db.getAttachment", { id: String(id) }).then(nativeImage),
+    getAttachment: (id) =>
+      widget.call("db.getAttachment", { id: String(id) }).then((url) => {
+        const image = nativeImage(url);
+        if (typeof url === "string" && url) {
+          // uTools 返回 Buffer：插件写 `new Blob([n.buffer])`，所以补上 Buffer 的那几个字段。
+          const bytes = bytesFromDataUrl(url);
+          try {
+            image.buffer = bytes.buffer;
+            image.byteLength = bytes.length;
+            image.length = bytes.length;
+          } catch (_) {}
+        }
+        return image;
+      }),
     getAttachmentType: (id) => widget.call("db.getAttachmentType", { id: String(id) }),
     replicateStateFromCloud: () => widget.call("db.replicateStateFromCloud"),
   };
