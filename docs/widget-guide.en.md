@@ -951,7 +951,6 @@ Favourites work two ways: the plugin keeps its own `collect/<hash>` documents an
 The watcher is **change-driven**: every 700 ms the host looks only at `GetClipboardSequenceNumber()` and reads nothing while that counter stands still. The old tick opened the clipboard three times and, when a screenshot was sitting on it, re-encoded the DIB to PNG each round, which alone kept a fifth of a core busy. Pictures are now written **straight into that widget's attachment store** (`attachment/<hash>`) by the host, so a page no longer drags a few hundred kilobytes of base64 across the bridge.
 
 
-
 ---
 
 ## The sixteen categories
@@ -1338,7 +1337,9 @@ Anything returning a Promise can be awaited; "sync" means it returns immediately
 | `widget.files.url(file, {width})` | — | sync | picture URL, optionally a thumbnail |
 | `widget.files.info(key, path)` | — | Promise | size, taken-at |
 | `widget.files.pick(key)` | — | Promise | folder dialog, saved into the setting |
-| `widget.recycleBin.query/empty/open` | built-in | Promise | Recycle Bin |
+| `widget.recycleBin.query` | built-in | Promise | Recycle Bin: answers at once from the last count, `items` of -1 means it is still counting; also `age` / `scanning` / `emptying` / `done` / `total`. Counting is expensive (136 s on a 59 GB bin), so it is cached, never done on the spot |
+| `widget.recycleBin.empty` | built-in | Promise | Returns immediately (the emptying runs in the background); follow it through `done` / `total` from `query` |
+| `widget.recycleBin.open` | built-in | Promise | Opens the Recycle Bin window |
 | `widget.power(action)` | built-in | Promise | `lock` / `sleep` / `restart` / `shutdown` / `signout` |
 | `widget.fetch(url, {method, headers, body, as})` | `network:` | Promise | no CORS, 8 MB per call |
 | `widget.shell.open(url)` | `shell.open` | Promise | open in the default browser |
@@ -1358,6 +1359,7 @@ Anything returning a Promise can be awaited; "sync" means it returns immediately
 | `utools.sendToParent(channel, ...args)` | — | Promise | window → parent window |
 | `utools.getWindowType()` | — | sync | `"main"` (card) / `"custom"` (own window) |
 | `ipcRenderer.on/once/removeListener` | — | sync | receive window messages (`(event, ...args)`) |
+
 
 ### Events
 

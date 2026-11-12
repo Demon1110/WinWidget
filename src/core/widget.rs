@@ -174,18 +174,17 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
         // ── recycle bin / power (built-in widgets only) ───────────────────────────────────────
         "recycle.query" => {
             ctx.builtin_only()?;
-            Ok(Reply::Now(crate::platform::power::recycle_query()))
+            // Answers from the last measurement straight away: walking a bin with 59 GB in it takes
+            // minutes, and the old code walked it once every ten seconds on this very thread.
+            Ok(Reply::Now(crate::platform::power::recycle_state()))
         }
         "recycle.empty" => {
             ctx.builtin_only()?;
-            // Deleting a full bin takes as long as Explorer takes; on the UI thread that is a frozen
-            // card and a frozen control center, so it runs on its own thread.
-            ctx.spawn_reply(|| {
-                crate::platform::power::recycle_empty()
-                    .map(|_| json!(true))
-                    .map_err(BridgeError::new)
-            });
-            Ok(Reply::Later)
+            // Deletion of a big bin runs for minutes, so it gets a thread of its own and the card
+            // follows it through `recycle.query` instead of holding one request open.
+            crate::platform::power::start_empty()
+                .map(|_| Reply::Now(json!(true)))
+                .map_err(BridgeError::new)
         }
         "recycle.open" => {
             ctx.builtin_only()?;

@@ -564,6 +564,9 @@ extern "system" {
     pub fn GlobalLock(mem: isize) -> *mut c_void;
     pub fn GlobalUnlock(mem: isize) -> i32;
     pub fn GlobalSize(mem: isize) -> usize;
+    pub fn GetLogicalDrives() -> u32;
+    pub fn GetDriveTypeW(root: *const u16) -> u32;
+    pub fn SetFileAttributesW(path: *const u16, attributes: u32) -> i32;
 }
 
 #[link(name = "ole32")]
