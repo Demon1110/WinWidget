@@ -209,8 +209,27 @@ impl Store {
     }
 
     fn load(&self) -> Map<String, Value> {
-        let text = std::fs::read_to_string(self.file()).unwrap_or_default();
-        serde_json::from_str::<Map<String, Value>>(&text).unwrap_or_default()
+        let Ok(text) = std::fs::read_to_string(self.file()) else {
+            return Map::new();
+        };
+        match serde_json::from_str::<Map<String, Value>>(&text) {
+            Ok(data) => data,
+            Err(e) => {
+                // An unreadable database must never look like an empty one: the next put would
+                // overwrite the whole store. Keep the broken file for inspection and start empty.
+                let stamp = crate::platform::now_stamp();
+                let broken = self
+                    .file()
+                    .with_file_name(format!("{}.broken-{stamp}.json", self.widget));
+                let _ = std::fs::copy(self.file(), &broken);
+                crate::core::logging::error(&format!(
+                    "{} unreadable ({e}), backed up to {}",
+                    self.file().display(),
+                    broken.display()
+                ));
+                Map::new()
+            }
+        }
     }
 
     fn save(&self, data: &Map<String, Value>) -> BridgeResult<()> {
@@ -220,7 +239,12 @@ impl Store {
         }
         let text =
             serde_json::to_string_pretty(data).map_err(|e| BridgeError::new(e.to_string()))?;
-        std::fs::write(&file, text).map_err(|e| BridgeError::new(e.to_string()))
+        // Write to a sibling temp file and rename it over the target: a crash mid-write then
+        // leaves the previous version intact instead of a truncated store (same scheme as
+        // ConfigStore::save).
+        let tmp = file.with_extension("json.tmp");
+        std::fs::write(&tmp, text).map_err(|e| BridgeError::new(e.to_string()))?;
+        std::fs::rename(&tmp, &file).map_err(|e| BridgeError::new(e.to_string()))
     }
 
     fn put(&self, doc: Value) -> BridgeResult<Value> {

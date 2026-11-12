@@ -1228,6 +1228,15 @@ pub fn instance_of(app: &App, win: u32) -> Option<String> {
 /// A snapshot of one window's state, so the JS side can answer its getters without a round trip.
 pub fn state_json(app: &App, id: u32) -> Value {
     let Some(win) = app.customs.get(&id) else {
+        // A window that was just requested but not built yet (the event loop constructs custom
+        // windows on the next pump) is alive, it simply has nothing to report yet.
+        if app
+            .pending_customs
+            .iter()
+            .any(|(pending, _)| *pending == id)
+        {
+            return json!({ "id": id, "type": "custom", "destroyed": false, "loaded": false });
+        }
         return json!({ "id": id, "destroyed": true });
     };
     let (x, y, width, height) = win.bounds();

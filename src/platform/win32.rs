@@ -1599,10 +1599,11 @@ pub fn clipboard_png() -> Option<Vec<u8>> {
                 return None;
             }
             let base = GlobalLock(handle) as *const u8;
+            let size = GlobalSize(handle);
             let result = if base.is_null() {
                 None
             } else {
-                dib_to_png(base)
+                dib_to_png(base, size)
             };
             GlobalUnlock(handle);
             CloseClipboard();
@@ -1646,7 +1647,13 @@ unsafe fn clipboard_registered_png() -> Option<Vec<u8>> {
     }
 }
 
-unsafe fn dib_to_png(base: *const u8) -> Option<Vec<u8>> {
+unsafe fn dib_to_png(base: *const u8, block_size: usize) -> Option<Vec<u8>> {
+    // The DIB comes from another process and may be truncated or lie about its own dimensions,
+    // so every read below is bounded by the real allocation size (GlobalSize) instead of the
+    // header's word: overrunning the block would be undefined behaviour.
+    if block_size < 40 {
+        return None;
+    }
     let header = std::slice::from_raw_parts(base, 40);
     let header_size = u32::from_le_bytes([header[0], header[1], header[2], header[3]]) as usize;
     let width = i32::from_le_bytes([header[4], header[5], header[6], header[7]]);
@@ -1662,11 +1669,17 @@ unsafe fn dib_to_png(base: *const u8) -> Option<Vec<u8>> {
     let w = width as usize;
     let h = height.unsigned_abs() as usize;
     let stride = (w * (bits as usize) / 8 + 3) & !3;
-    let pixels = base.add(if masked {
+    let offset = if masked {
         header_size + 12
     } else {
         header_size
-    });
+    };
+    // h rows, the last one fully covered by the block.
+    let needed = offset.checked_add(stride.checked_mul(h)?)?;
+    if needed > block_size {
+        return None;
+    }
+    let pixels = base.add(offset);
     let mut rgba = vec![0u8; w * h * 4];
     for y in 0..h {
         // A positive height means bottom-up, which is the usual case.
@@ -1984,6 +1997,34 @@ extern "system" {
 extern "system" {
     fn keybd_event(key: u8, scan: u8, flags: u32, extra: usize);
     fn mouse_event(flags: u32, dx: i32, dy: i32, data: u32, extra: usize);
+    fn SendInput(count: u32, inputs: *mut INPUT, size: i32) -> u32;
+}
+
+const INPUT_KEYBOARD: u32 = 1;
+
+/// Win32 `KEYBDINPUT`; used through `SendInput` because `keybd_event`'s scan code is only a
+/// byte and cannot carry the full UTF-16 unit that `KEYEVENTF_UNICODE` needs.
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct KEYBDINPUT {
+    w_vk: u16,
+    w_scan: u16,
+    dw_flags: u32,
+    time: u32,
+    extra: usize,
+}
+
+/// Same layout as the `INPUT` union: `MOUSEINPUT` is the largest member and keeps the size right.
+#[repr(C)]
+union INPUT_UNION {
+    ki: KEYBDINPUT,
+    padding: [u8; 32],
+}
+
+#[repr(C)]
+struct INPUT {
+    r#type: u32,
+    u: INPUT_UNION,
 }
 
 #[link(name = "kernel32")]
@@ -2110,12 +2151,30 @@ pub fn key_combo(vk: u8, ctrl: bool, shift: bool, alt: bool) {
     }
 }
 
-/// Types text with KEYEVENTF_UNICODE, so any character works without an IME.
+/// Types text with KEYEVENTF_UNICODE, so any character works without an IME. Goes through
+/// `SendInput`, whose scan code is a full WORD — `keybd_event` takes a BYTE and would truncate
+/// every CJK character, emoji, or anything else above U+00FF.
 pub fn type_unicode(text: &str) {
+    let make = |unit: u16, keyup: bool| INPUT {
+        r#type: INPUT_KEYBOARD,
+        u: INPUT_UNION {
+            ki: KEYBDINPUT {
+                w_vk: 0,
+                w_scan: unit,
+                dw_flags: if keyup {
+                    KEYEVENTF_UNICODE | KEYEVENTF_KEYUP
+                } else {
+                    KEYEVENTF_UNICODE
+                },
+                time: 0,
+                extra: 0,
+            },
+        },
+    };
     unsafe {
         for unit in text.encode_utf16() {
-            keybd_event(0, unit as u8, KEYEVENTF_UNICODE, 0);
-            keybd_event(0, unit as u8, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP, 0);
+            let mut pair = [make(unit, false), make(unit, true)];
+            SendInput(2, pair.as_mut_ptr(), std::mem::size_of::<INPUT>() as i32);
         }
     }
 }
