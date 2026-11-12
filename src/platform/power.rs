@@ -42,7 +42,9 @@ pub fn recycle_state() -> Value {
         }
     }
     let measured = *lock(&MEASURED);
-    let age = measured.map(|m| m.at.elapsed().as_secs()).unwrap_or(u64::MAX);
+    let age = measured
+        .map(|m| m.at.elapsed().as_secs())
+        .unwrap_or(u64::MAX);
     let scanning = SCANNING.load(Ordering::SeqCst);
     let emptying = EMPTYING.load(Ordering::SeqCst);
     let (done, total) = *lock(&PROGRESS);
@@ -88,7 +90,9 @@ fn save_snapshot(measured: Measured) {
     let Ok(now) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) else {
         return;
     };
-    let ago = Instant::now().saturating_duration_since(measured.at).as_secs();
+    let ago = Instant::now()
+        .saturating_duration_since(measured.at)
+        .as_secs();
     let stamp = now.as_secs().saturating_sub(ago);
     let text = json!({ "items": measured.items, "size": measured.size, "at": stamp }).to_string();
     let _ = std::fs::write(snapshot_file(), text);
@@ -385,7 +389,9 @@ mod tests {
         std::fs::write(root.join("a/b/one.txt"), b"hello").unwrap();
         std::fs::write(root.join("a/two.bin"), vec![0u8; 64]).unwrap();
         std::fs::write(root.join("three.txt"), b"x").unwrap();
-        let mut perms = std::fs::metadata(root.join("three.txt")).unwrap().permissions();
+        let mut perms = std::fs::metadata(root.join("three.txt"))
+            .unwrap()
+            .permissions();
         perms.set_readonly(true);
         std::fs::set_permissions(root.join("three.txt"), perms).unwrap();
 
@@ -394,7 +400,11 @@ mod tests {
         purge(&root, &mut removed, &mut failed);
         assert_eq!(failed, 0, "every entry should have been removed");
         assert_eq!(removed, 70, "5 + 64 + 1 bytes");
-        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 0, "the folder itself stays");
+        assert_eq!(
+            std::fs::read_dir(&root).unwrap().count(),
+            0,
+            "the folder itself stays"
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -409,4 +419,3 @@ mod tests {
         assert!(state["items"].is_i64());
     }
 }
-

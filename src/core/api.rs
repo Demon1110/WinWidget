@@ -100,7 +100,13 @@ impl<'a> Ctx<'a> {
                 Ok(value) => json!({ "id": id, "r": value }),
                 Err(e) => json!({ "id": id, "e": e.0 }),
             };
-            post(&proxy, Ev::Reply { win: target, body: body.to_string() });
+            post(
+                &proxy,
+                Ev::Reply {
+                    win: target,
+                    body: body.to_string(),
+                },
+            );
         });
     }
 

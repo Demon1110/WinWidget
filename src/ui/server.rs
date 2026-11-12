@@ -273,8 +273,8 @@ fn serve_page(
         let parent_instance = page_instance.or_else(|| instance_id.clone());
         let visible = marked_visible.or(page_visible).unwrap_or(true);
         if marked_custom || page.is_some() {
-            if let Some(mut parent) = parent_instance
-                .and_then(|name| st.instances.get(&name).cloned())
+            if let Some(mut parent) =
+                parent_instance.and_then(|name| st.instances.get(&name).cloned())
             {
                 parent.boot = custom_boot(&parent.boot, id, visible);
                 instance = Some(parent);
@@ -349,7 +349,8 @@ fn inject_page(html: &str, inst: &Instance) -> String {
 /// Turns a card's boot data into a custom window's: same origin, same settings, but the page has to
 /// know which window it is and where it lives.
 fn custom_boot(parent_boot: &str, id: u32, visible: bool) -> String {
-    let mut value: Value = serde_json::from_str(parent_boot).unwrap_or_else(|_| serde_json::json!({}));
+    let mut value: Value =
+        serde_json::from_str(parent_boot).unwrap_or_else(|_| serde_json::json!({}));
     if let Some(obj) = value.as_object_mut() {
         let instance = obj.get("instanceId").cloned().unwrap_or(Value::Null);
         obj.insert("windowType".into(), Value::String("custom".into()));
@@ -360,7 +361,8 @@ fn custom_boot(parent_boot: &str, id: u32, visible: bool) -> String {
     value.to_string()
 }
 
-fn percent_decode(s: &str) -> String {    let bytes = s.as_bytes();
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
     while i < bytes.len() {

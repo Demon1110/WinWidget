@@ -1279,8 +1279,17 @@ extern "system" {
 
 #[link(name = "gdi32")]
 extern "system" {
-    fn BitBlt(dest: isize, x: i32, y: i32, w: i32, h: i32, src: isize, sx: i32, sy: i32, rop: u32)
-        -> i32;
+    fn BitBlt(
+        dest: isize,
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+        src: isize,
+        sx: i32,
+        sy: i32,
+        rop: u32,
+    ) -> i32;
 }
 
 const CF_UNICODETEXT: u32 = 13;
@@ -1372,8 +1381,14 @@ pub fn set_clipboard_text(text: &str) -> bool {
 /// The whole virtual desktop as PNG bytes. `None` when GDI refused.
 pub fn capture_screen_png() -> Option<Vec<u8>> {
     unsafe {
-        let (x, y) = (GetSystemMetrics(SM_XVIRTUALSCREEN), GetSystemMetrics(SM_YVIRTUALSCREEN));
-        let (w, h) = (GetSystemMetrics(SM_CXVIRTUALSCREEN), GetSystemMetrics(SM_CYVIRTUALSCREEN));
+        let (x, y) = (
+            GetSystemMetrics(SM_XVIRTUALSCREEN),
+            GetSystemMetrics(SM_YVIRTUALSCREEN),
+        );
+        let (w, h) = (
+            GetSystemMetrics(SM_CXVIRTUALSCREEN),
+            GetSystemMetrics(SM_CYVIRTUALSCREEN),
+        );
         if w <= 0 || h <= 0 {
             return None;
         }
@@ -1618,7 +1633,11 @@ unsafe fn clipboard_registered_png() -> Option<Vec<u8>> {
         return None;
     }
     let len = GlobalSize(handle);
-    let bytes = if len > 8 { std::slice::from_raw_parts(base, len).to_vec() } else { Vec::new() };
+    let bytes = if len > 8 {
+        std::slice::from_raw_parts(base, len).to_vec()
+    } else {
+        Vec::new()
+    };
     GlobalUnlock(handle);
     if bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
         Some(bytes)
@@ -1643,7 +1662,11 @@ unsafe fn dib_to_png(base: *const u8) -> Option<Vec<u8>> {
     let w = width as usize;
     let h = height.unsigned_abs() as usize;
     let stride = (w * (bits as usize) / 8 + 3) & !3;
-    let pixels = base.add(if masked { header_size + 12 } else { header_size });
+    let pixels = base.add(if masked {
+        header_size + 12
+    } else {
+        header_size
+    });
     let mut rgba = vec![0u8; w * h * 4];
     for y in 0..h {
         // A positive height means bottom-up, which is the usual case.
@@ -1682,7 +1705,14 @@ pub fn capture_interactive_png(timeout_ms: u64) -> Option<Vec<u8>> {
         let uri: Vec<u16> = "ms-screenclip:\0".encode_utf16().collect();
         let verb: Vec<u16> = "open\0".encode_utf16().collect();
         unsafe {
-            ShellExecuteW(0, verb.as_ptr(), uri.as_ptr(), std::ptr::null(), std::ptr::null(), 1);
+            ShellExecuteW(
+                0,
+                verb.as_ptr(),
+                uri.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                1,
+            );
         }
     }
     let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
@@ -1793,7 +1823,11 @@ pub fn set_clipboard_files(paths: &[String]) -> bool {
         return false;
     }
     // DROPFILES (20 bytes) + UTF-16 paths, each NUL terminated, then one more NUL for the list.
-    let list_bytes = 2 + paths.iter().map(|p| p.encode_utf16().count() + 1).sum::<usize>() * 2;
+    let list_bytes = 2 + paths
+        .iter()
+        .map(|p| p.encode_utf16().count() + 1)
+        .sum::<usize>()
+        * 2;
     let total = 20 + list_bytes;
     unsafe {
         let mem = GlobalAlloc(GMEM_MOVEABLE, total);

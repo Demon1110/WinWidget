@@ -117,7 +117,9 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
             ctx.require("media")?;
             let action = req_str(p, "action")?;
             let position = jnum(p, "position").unwrap_or(0.0) as i64;
-            Ok(Reply::Now(crate::platform::media::control(&action, position)))
+            Ok(Reply::Now(crate::platform::media::control(
+                &action, position,
+            )))
         }
         "media.lyrics" => {
             ctx.require("media")?;
@@ -159,7 +161,8 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
             match picked {
                 Some(folder) => {
                     if let Some(inst) = ctx.app.instance_mut(&instance) {
-                        inst.settings.insert(key.clone(), Value::String(folder.clone()));
+                        inst.settings
+                            .insert(key.clone(), Value::String(folder.clone()));
                     }
                     ctx.app.save();
                     ctx.app.push_settings(&instance);
@@ -221,7 +224,9 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
                 base64: jstr(p, "as").map(|a| a == "base64").unwrap_or(false),
             };
             let allowed = ctx.allowed.clone();
-            ctx.spawn_reply(move || crate::core::net::fetch(&allowed, request).map_err(BridgeError::new));
+            ctx.spawn_reply(move || {
+                crate::core::net::fetch(&allowed, request).map_err(BridgeError::new)
+            });
             Ok(Reply::Later)
         }
 

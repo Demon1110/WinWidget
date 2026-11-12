@@ -253,9 +253,7 @@ pub fn save(title: &str, name: &str, filter: &str) -> Option<String> {
         }
         _ => {}
     }
-    dialog
-        .save_file()
-        .map(|p| p.to_string_lossy().to_string())
+    dialog.save_file().map(|p| p.to_string_lossy().to_string())
 }
 
 /// Moves a file or folder to the recycle bin, so a mistake is still recoverable.
@@ -333,7 +331,12 @@ mod tests {
             Err(e) => assert!(e.contains("does not exist"), "{e}"),
             Ok(()) => panic!("a missing folder should not open"),
         }
-        for link in ["https://example.com", "HTTPS://example.com", " mailto:a@b.c", "www.example.com"] {
+        for link in [
+            "https://example.com",
+            "HTTPS://example.com",
+            " mailto:a@b.c",
+            "www.example.com",
+        ] {
             assert!(is_link(link), "{link} should be a link");
         }
         for text in [r"D:\java\git", "/home/user", "C:a.txt", ""] {
@@ -341,4 +344,3 @@ mod tests {
         }
     }
 }
-

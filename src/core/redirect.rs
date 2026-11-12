@@ -10,11 +10,7 @@ use crate::core::api::{Ctx, Reply};
 use crate::core::util::{jstr, BridgeError, BridgeResult};
 use serde_json::{json, Value};
 
-const OWNS: &[&str] = &[
-    "redirect.to",
-    "redirect.hotkey",
-    "redirect.hotkeyGet",
-];
+const OWNS: &[&str] = &["redirect.to", "redirect.hotkey", "redirect.hotkeyGet"];
 
 pub fn call(ctx: &mut Ctx, method: &str, p: &Value) -> Option<BridgeResult<Reply>> {
     if !OWNS.contains(&method) {

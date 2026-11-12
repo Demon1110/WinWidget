@@ -151,7 +151,10 @@ impl Paths {
     pub fn ensure_dirs(&self) {
         let dirs = [
             self.data_dir.clone(),
-            self.log_file().parent().unwrap_or(&self.data_dir).to_path_buf(),
+            self.log_file()
+                .parent()
+                .unwrap_or(&self.data_dir)
+                .to_path_buf(),
             self.user_widgets_dir(),
             self.plugins_dir(),
             self.instances_dir(),
@@ -329,18 +332,13 @@ fn move_path(from: &Path, to: &Path) -> bool {
     }
     // A folder that is already there but still empty is a placeholder, not something to keep: this
     // is what a half-run migration or a pre-created folder looks like.
-    match std::fs::read_dir(to) {
-        Ok(_) => {
-            let empty = std::fs::read_dir(to)
-                .map(|mut d| d.next().is_none())
-                .unwrap_or(false);
-            if to.is_dir() && empty {
-                let _ = std::fs::remove_dir(to);
-            } else {
-                return false;
-            }
+    if let Ok(mut entries) = std::fs::read_dir(to) {
+        let empty = entries.next().is_none();
+        if to.is_dir() && empty {
+            let _ = std::fs::remove_dir(to);
+        } else {
+            return false;
         }
-        Err(_) => {}
     }
     if to.exists() {
         return false;
@@ -406,18 +404,17 @@ fn migrate_legacy(paths: &Paths) {
     let mut moves: Vec<(PathBuf, PathBuf)> = Vec::new();
 
     // Flat data folder → db\
-    moves.push((
-        root.join("clipboard-history.json"),
-        paths.clipboard_file(),
-    ));
-    moves.push((
-        root.join("clipboard").join("images"),
-        paths.clipboard_images_dir(),
-    ));
-    moves.push((root.join("features.json"), paths.features_file()));
-    moves.push((root.join("schedule.json"), paths.schedule_file()));
-    moves.push((root.join("recycle-bin.json"), paths.recycle_file()));
-    moves.push((root.join("market.json"), paths.market_file()));
+    moves.extend([
+        (root.join("clipboard-history.json"), paths.clipboard_file()),
+        (
+            root.join("clipboard").join("images"),
+            paths.clipboard_images_dir(),
+        ),
+        (root.join("features.json"), paths.features_file()),
+        (root.join("schedule.json"), paths.schedule_file()),
+        (root.join("recycle-bin.json"), paths.recycle_file()),
+        (root.join("market.json"), paths.market_file()),
+    ]);
 
     // db\<widget>.json → db\plugins\
     if let Ok(entries) = std::fs::read_dir(root.join("db")) {
@@ -425,8 +422,10 @@ fn migrate_legacy(paths: &Paths) {
             let name = entry.file_name();
             let name = name.to_string_lossy().to_string();
             // The new sub folders are already there; anything else is an old widget database.
-            if matches!(name.as_str(), "plugins" | "instances" | "app" | "clipboard" | "market.json")
-            {
+            if matches!(
+                name.as_str(),
+                "plugins" | "instances" | "app" | "clipboard" | "market.json"
+            ) {
                 continue;
             }
             moves.push((entry.path(), paths.plugins_dir().join(&name)));
@@ -443,15 +442,12 @@ fn migrate_legacy(paths: &Paths) {
     let legacy_local = if paths.portable {
         exe_dir().join("data").join("local")
     } else {
-        let local = std::env::var("LOCALAPPDATA")
-            .unwrap_or_else(|_| root.to_string_lossy().to_string());
+        let local =
+            std::env::var("LOCALAPPDATA").unwrap_or_else(|_| root.to_string_lossy().to_string());
         PathBuf::from(local).join("WinWidget")
     };
     if legacy_local != *root {
-        moves.push((
-            legacy_local.join("logs").join("app.log"),
-            paths.log_file(),
-        ));
+        moves.push((legacy_local.join("logs").join("app.log"), paths.log_file()));
         moves.push((legacy_local.join("exports"), paths.exports_dir()));
         moves.push((legacy_local.join("media"), paths.media_dir()));
         moves.push((legacy_local.join("update"), paths.update_dir()));
@@ -526,14 +522,12 @@ pub fn set_data_dir(target: &str) -> Result<serde_json::Value, String> {
             .to_path_buf();
         let dest = full.join(&name);
         if source.is_dir() {
-            copy_tree(&source, &dest)
-                .map_err(|e| format!("{}: {e}", source.display()))?;
+            copy_tree(&source, &dest).map_err(|e| format!("{}: {e}", source.display()))?;
         } else {
             if let Some(parent) = dest.parent() {
                 let _ = std::fs::create_dir_all(parent);
             }
-            std::fs::copy(&source, &dest)
-                .map_err(|e| format!("{}: {e}", source.display()))?;
+            std::fs::copy(&source, &dest).map_err(|e| format!("{}: {e}", source.display()))?;
         }
         copied += 1;
     }

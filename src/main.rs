@@ -112,7 +112,8 @@ fn main() {
             Event::UserEvent(Ev::Ipc { win, msg }) => {
                 if win == app::CONTROL_WIN {
                     control::handle(&mut app, &msg);
-                } else if let Some(id) = win.strip_prefix("win:").and_then(|v| v.parse::<u32>().ok())
+                } else if let Some(id) =
+                    win.strip_prefix("win:").and_then(|v| v.parse::<u32>().ok())
                 {
                     if let Some(instance) = app.customs.get(&id).map(|w| w.instance.clone()) {
                         bridge::handle_window(&mut app, &instance, id, &msg);

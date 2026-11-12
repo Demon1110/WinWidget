@@ -23,12 +23,11 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
     let widget = ctx.manifest.id.clone();
     match method {
         "features.get" => {
-            let only: Option<Vec<String>> =
-                p.get("codes").and_then(|c| c.as_array()).map(|a| {
-                    a.iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                        .collect()
-                });
+            let only: Option<Vec<String>> = p.get("codes").and_then(|c| c.as_array()).map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect()
+            });
             let data = load();
             let list = data
                 .get(&widget)
@@ -145,7 +144,10 @@ pub fn cmd_matches(cmd: &Value, text: &str, files: &[String]) -> bool {
     if len < min || len > max {
         return false;
     }
-    match jstr(obj, "type").unwrap_or_else(|| "over".to_string()).as_str() {
+    match jstr(obj, "type")
+        .unwrap_or_else(|| "over".to_string())
+        .as_str()
+    {
         "img" => false,
         "window" => false,
         "files" => {
@@ -195,8 +197,9 @@ fn number(obj: &Value, key: &str) -> Option<usize> {
 
 /// `regex-lite` compiles once per pattern and keeps it; a bad pattern is remembered as "never".
 fn regex_hit(pattern: &str, text: &str) -> bool {
-    static CACHE: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, Option<regex_lite::Regex>>>> =
-        std::sync::OnceLock::new();
+    static CACHE: std::sync::OnceLock<
+        std::sync::Mutex<std::collections::HashMap<String, Option<regex_lite::Regex>>>,
+    > = std::sync::OnceLock::new();
     let cache = CACHE.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()));
     let mut map = match cache.lock() {
         Ok(map) => map,
@@ -210,7 +213,6 @@ fn regex_hit(pattern: &str, text: &str) -> bool {
         None => false,
     }
 }
-
 
 fn file() -> std::path::PathBuf {
     crate::core::paths::get().features_file()
@@ -265,12 +267,24 @@ mod tests {
 
     #[test]
     fn img_and_window_cmds_never_answer_text() {
-        assert!(!cmd_matches(&json!({ "type": "img", "label": "识图" }), "x", &[]));
-        assert!(!cmd_matches(&json!({ "type": "window", "label": "贴边" }), "x", &[]));
+        assert!(!cmd_matches(
+            &json!({ "type": "img", "label": "识图" }),
+            "x",
+            &[]
+        ));
+        assert!(!cmd_matches(
+            &json!({ "type": "window", "label": "贴边" }),
+            "x",
+            &[]
+        ));
     }
 
     #[test]
     fn a_broken_pattern_never_matches() {
-        assert!(!cmd_matches(&json!({ "type": "regex", "label": "坏", "match": "([a-" }), "a", &[]));
+        assert!(!cmd_matches(
+            &json!({ "type": "regex", "label": "坏", "match": "([a-" }),
+            "a",
+            &[]
+        ));
     }
 }

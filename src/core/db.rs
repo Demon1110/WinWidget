@@ -41,7 +41,11 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
                 .cloned()
                 .ok_or_else(|| BridgeError::new("doc is required"))?;
             let answered = store.put(doc)?;
-            let id = answered.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let id = answered
+                .get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
             if !id.is_empty() {
                 announce(ctx, &store, &[id]);
             }
@@ -91,7 +95,9 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
                     .filter_map(|x| x.as_str().map(|s| s.to_string()))
                     .collect()
             });
-            Ok(Reply::Now(Value::Array(store.all(prefix.as_deref(), ids.as_deref()))))
+            Ok(Reply::Now(Value::Array(
+                store.all(prefix.as_deref(), ids.as_deref()),
+            )))
         }
         "db.postAttachment" => {
             let id = jstr(p, "id").unwrap_or_default();
@@ -100,8 +106,8 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
                 .get("data")
                 .and_then(|d| d.as_str())
                 .ok_or_else(|| BridgeError::new("data is required"))?;
-            let bytes = w::base64_decode(data)
-                .ok_or_else(|| BridgeError::new("data must be base64"))?;
+            let bytes =
+                w::base64_decode(data).ok_or_else(|| BridgeError::new("data must be base64"))?;
             if bytes.len() > MAX_ATTACHMENT_BYTES {
                 return Err(BridgeError::new("attachment is larger than 10 MB"));
             }
@@ -212,7 +218,8 @@ impl Store {
         if let Some(dir) = file.parent() {
             std::fs::create_dir_all(dir).map_err(|e| BridgeError::new(e.to_string()))?;
         }
-        let text = serde_json::to_string_pretty(data).map_err(|e| BridgeError::new(e.to_string()))?;
+        let text =
+            serde_json::to_string_pretty(data).map_err(|e| BridgeError::new(e.to_string()))?;
         std::fs::write(&file, text).map_err(|e| BridgeError::new(e.to_string()))
     }
 
@@ -287,7 +294,8 @@ impl Store {
         }
         let dir = self.attachment_dir();
         std::fs::create_dir_all(&dir).map_err(|e| BridgeError::new(e.to_string()))?;
-        std::fs::write(dir.join(sanitize(id)), bytes).map_err(|e| BridgeError::new(e.to_string()))?;
+        std::fs::write(dir.join(sanitize(id)), bytes)
+            .map_err(|e| BridgeError::new(e.to_string()))?;
         let mut data = self.load();
         let mut list = data
             .get("attachments")

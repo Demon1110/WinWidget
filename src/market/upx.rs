@@ -52,11 +52,12 @@ pub fn unpack(path: &Path, dir: &Path) -> Result<Summary, String> {
         .read_to_end(&mut raw)
         .map_err(|e| format!("the .upx body could not be inflated: {e}"))?;
 
-    let json_end = json_end(&raw).ok_or_else(|| "the .upx directory is not valid JSON".to_string())?;
+    let json_end =
+        json_end(&raw).ok_or_else(|| "the .upx directory is not valid JSON".to_string())?;
     let text = std::str::from_utf8(&raw[HEADER_BYTES..json_end])
         .map_err(|e| format!("the .upx directory is not text: {e}"))?;
-    let tree: Value =
-        serde_json::from_str(text).map_err(|e| format!("the .upx directory is not valid JSON: {e}"))?;
+    let tree: Value = serde_json::from_str(text)
+        .map_err(|e| format!("the .upx directory is not valid JSON: {e}"))?;
     // 目录后面补到 4 字节边界，数据区的偏移都从这个字节之后算起。
     let base = (json_end + 3) & !3;
 
@@ -94,7 +95,8 @@ pub fn unpack(path: &Path, dir: &Path) -> Result<Summary, String> {
 }
 
 /// `.upxs` 是 uTools 自 v5.0.0 起的新市场安装包：加密 + 开发者签名。宿主没有密钥，读不出内容。
-pub const UPXS_HINT: &str = "this is a uTools UPXS package (encrypted and signed since uTools 5.0). \
+pub const UPXS_HINT: &str =
+    "this is a uTools UPXS package (encrypted and signed since uTools 5.0). \
 WinWidget has no key for it, so the files cannot be read here. Install it in uTools first, then \
 import the plugin from %APPDATA%\\uTools\\plugins\\<hash>.asar";
 
@@ -128,14 +130,15 @@ pub fn unpack_asar(path: &Path, dir: &Path) -> Result<Summary, String> {
         .checked_add(header as usize)
         .filter(|s| *s <= bytes.len())
         .ok_or_else(|| "the .asar header is larger than the file".to_string())?;
-    let json_end = json_end(&bytes).ok_or_else(|| "the .asar directory is not valid JSON".to_string())?;
+    let json_end =
+        json_end(&bytes).ok_or_else(|| "the .asar directory is not valid JSON".to_string())?;
     if json_end > data_start {
         return Err("the .asar directory overlaps its payload".into());
     }
     let text = std::str::from_utf8(&bytes[HEADER_BYTES..json_end])
         .map_err(|e| format!("the .asar directory is not text: {e}"))?;
-    let tree: Value =
-        serde_json::from_str(text).map_err(|e| format!("the .asar directory is not valid JSON: {e}"))?;
+    let tree: Value = serde_json::from_str(text)
+        .map_err(|e| format!("the .asar directory is not valid JSON: {e}"))?;
 
     let mut entries: Vec<AsarEntry> = Vec::new();
     walk_asar(&tree, "", &mut entries);
@@ -153,7 +156,9 @@ pub fn unpack_asar(path: &Path, dir: &Path) -> Result<Summary, String> {
         .map(|p| {
             p.join(format!(
                 "{}.unpacked",
-                path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+                path.file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default()
             ))
         })
         .unwrap_or_default();
@@ -179,7 +184,10 @@ pub fn unpack_asar(path: &Path, dir: &Path) -> Result<Summary, String> {
             .and_then(|s| s.checked_add(entry.size))
             .ok_or_else(|| format!("the .asar offset of \"{}\" is out of range", entry.rel))?;
         if end > bytes.len() {
-            return Err(format!("the .asar offset of \"{}\" is out of range", entry.rel));
+            return Err(format!(
+                "the .asar offset of \"{}\" is out of range",
+                entry.rel
+            ));
         }
         write_entry(dir, &entry.rel, &bytes[data_start + entry.offset..end])?;
     }
@@ -194,11 +202,14 @@ pub fn unpack_asar(path: &Path, dir: &Path) -> Result<Summary, String> {
 pub(crate) fn synthesize(dir: &Path) -> Result<Summary, String> {
     let plugin = crate::core::util::read_text(&dir.join("plugin.json"))
         .map_err(|e| format!("the package has no plugin.json: {e}"))?;
-    let plugin: Value =
-        serde_json::from_str(plugin.trim_start_matches('\u{feff}'))
-            .map_err(|e| format!("plugin.json is not valid JSON: {e}"))?;
+    let plugin: Value = serde_json::from_str(plugin.trim_start_matches('\u{feff}'))
+        .map_err(|e| format!("plugin.json is not valid JSON: {e}"))?;
 
-    let plugin_name = str_of(&plugin, "pluginName", &str_of(&plugin, "name", "uTools plugin"));
+    let plugin_name = str_of(
+        &plugin,
+        "pluginName",
+        &str_of(&plugin, "name", "uTools plugin"),
+    );
     // uTools 用 `name` 当插件 id（一串小写字母数字）；不合格或缺失时按插件名散列一个稳定的 id。
     let id = str_of(&plugin, "name", "")
         .to_lowercase()
@@ -263,10 +274,17 @@ pub(crate) fn synthesize(dir: &Path) -> Result<Summary, String> {
         name: manifest["name"].as_str().unwrap_or_default().to_string(),
         version: manifest["version"].as_str().unwrap_or_default().to_string(),
         author: manifest["author"].as_str().unwrap_or_default().to_string(),
-        description: manifest["description"].as_str().unwrap_or_default().to_string(),
+        description: manifest["description"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string(),
         permissions: manifest["permissions"]
             .as_array()
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
             .unwrap_or_default(),
         node: !preload.is_empty(),
     })
@@ -502,11 +520,19 @@ fn infer_permissions(dir: &Path) -> Vec<String> {
         "clipboard",
     );
     want(
-        has("hidemainwindowpastetext") || has("hidemainwindowpastefile") || has("hidemainwindowpasteimage"),
+        has("hidemainwindowpastetext")
+            || has("hidemainwindowpastefile")
+            || has("hidemainwindowpasteimage"),
         "clipboard",
     );
-    want(has("hidemainwindowtypestring") || has("simulatekeyboardtap") || has("simulatemouse"), "input");
-    want(has("requestschedule(") || has("getschedules(") || has("removeschedule("), "schedule");
+    want(
+        has("hidemainwindowtypestring") || has("simulatekeyboardtap") || has("simulatemouse"),
+        "input",
+    );
+    want(
+        has("requestschedule(") || has("getschedules(") || has("removeschedule("),
+        "schedule",
+    );
     want(has("utools.sharp"), "sharp");
     want(has("ubrowser"), "ubrowser");
     want(

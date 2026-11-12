@@ -61,7 +61,8 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
                 return Ok(Reply::Now(json!({})));
             }
             let instance = ctx.instance.to_string();
-            ctx.app.set_subscription(&instance, topics.clone(), interval);
+            ctx.app
+                .set_subscription(&instance, topics.clone(), interval);
             // Answering with a snapshot means the page has something to draw at once. Building a
             // sampler reads disks, adapters and CPU counters, and nine system cards doing that on
             // the UI thread is a visible freeze, so the first reading comes from a worker.
@@ -172,7 +173,9 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
         "shell.trash" => {
             ctx.require("shell.launch")?;
             let path = req_str(p, "path")?;
-            Ok(Reply::Now(Value::Bool(crate::platform::shell::trash(&path))))
+            Ok(Reply::Now(Value::Bool(crate::platform::shell::trash(
+                &path,
+            ))))
         }
         "shell.pick" => {
             ctx.require("shell.launch")?;
@@ -205,10 +208,12 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
             ctx.require("shell.launch")?;
             let spec = req_str(p, "path")?;
             let size = jnum(p, "size").unwrap_or(32.0) as i32;
-            Ok(Reply::Now(match crate::platform::shell::icon(&spec, size) {
-                Some(icon) => Value::String(icon),
-                None => Value::Null,
-            }))
+            Ok(Reply::Now(
+                match crate::platform::shell::icon(&spec, size) {
+                    Some(icon) => Value::String(icon),
+                    None => Value::Null,
+                },
+            ))
         }
 
         // ── text ─────────────────────────────────────────────────────────────────────────────

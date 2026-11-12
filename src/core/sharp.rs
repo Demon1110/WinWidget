@@ -98,7 +98,9 @@ impl Pipeline {
                 if max_w == 0 || max_h == 0 {
                     return Err(BridgeError::new("extract is outside the picture"));
                 }
-                self.image = self.image.crop_imm(left, top, width.min(max_w), height.min(max_h));
+                self.image = self
+                    .image
+                    .crop_imm(left, top, width.min(max_w), height.min(max_h));
                 Ok(())
             }
             "extend" => {
@@ -108,12 +110,13 @@ impl Pipeline {
                 let left = jnum(step, "left").unwrap_or(0.0).max(0.0) as u32;
                 let color = color_of(step.get("background").and_then(|b| b.as_str()));
                 let (iw, ih) = (self.image.width(), self.image.height());
-                let mut canvas = RgbaImage::from_pixel(
-                    iw + left + right,
-                    ih + top + bottom,
-                    color,
+                let mut canvas = RgbaImage::from_pixel(iw + left + right, ih + top + bottom, color);
+                image::imageops::overlay(
+                    &mut canvas,
+                    &self.image.to_rgba8(),
+                    i64::from(left),
+                    i64::from(top),
                 );
-                image::imageops::overlay(&mut canvas, &self.image.to_rgba8(), i64::from(left), i64::from(top));
                 self.image = DynamicImage::ImageRgba8(canvas);
                 Ok(())
             }
@@ -133,10 +136,8 @@ impl Pipeline {
             }
             "blur" => {
                 let sigma = jnum(step, "sigma").unwrap_or(1.0).max(0.1) as f32;
-                self.image = DynamicImage::ImageRgba8(image::imageops::blur(
-                    &self.image.to_rgba8(),
-                    sigma,
-                ));
+                self.image =
+                    DynamicImage::ImageRgba8(image::imageops::blur(&self.image.to_rgba8(), sigma));
                 Ok(())
             }
             "sharpen" => {
@@ -190,9 +191,11 @@ impl Pipeline {
                 self.image = DynamicImage::ImageRgba8(canvas);
                 Ok(())
             }
-            "tint" | "median" | "composite" | "trim" | "normalize" => Err(BridgeError::new(format!(
-                "sharp.{op} is not available in this build (the image crate has no equivalent)"
-            ))),
+            "tint" | "median" | "composite" | "trim" | "normalize" => {
+                Err(BridgeError::new(format!(
+                    "sharp.{op} is not available in this build (the image crate has no equivalent)"
+                )))
+            }
             other => Err(BridgeError::new(format!("unknown sharp op '{other}'"))),
         }
     }
@@ -250,7 +253,9 @@ fn load_input(input: &Value) -> BridgeResult<DynamicImage> {
         let bytes = crate::core::clipboard::read_image_source(data)?;
         return image::load_from_memory(&bytes).map_err(|e| BridgeError::new(e.to_string()));
     }
-    Err(BridgeError::new("sharp input must be a path, a data URL or { create }"))
+    Err(BridgeError::new(
+        "sharp input must be a path, a data URL or { create }",
+    ))
 }
 
 fn encode(image: &DynamicImage, format: &str, quality: Option<f64>) -> BridgeResult<Vec<u8>> {
@@ -276,7 +281,11 @@ fn encode(image: &DynamicImage, format: &str, quality: Option<f64>) -> BridgeRes
         "tiff" | "tif" => image
             .write_to(&mut std::io::Cursor::new(&mut bytes), ImageFormat::Tiff)
             .map_err(|e| BridgeError::new(e.to_string()))?,
-        other => return Err(BridgeError::new(format!("unsupported output format '{other}'"))),
+        other => {
+            return Err(BridgeError::new(format!(
+                "unsupported output format '{other}'"
+            )))
+        }
     }
     Ok(bytes)
 }

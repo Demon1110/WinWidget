@@ -137,7 +137,10 @@ fn bump(item: &mut Value, ok: bool) {
         let key = if ok { "successCount" } else { "failureCount" };
         let count = obj.get(key).and_then(|v| v.as_u64()).unwrap_or(0) + 1;
         obj.insert(key.into(), json!(count));
-        obj.insert("lastStatus".into(), json!(if ok { "success" } else { "failure" }));
+        obj.insert(
+            "lastStatus".into(),
+            json!(if ok { "success" } else { "failure" }),
+        );
     }
 }
 
@@ -298,7 +301,7 @@ fn field(expr: &str, value: u32, min: u32, max: u32) -> bool {
                 Err(_) => continue,
             }
         };
-        if value >= low && value <= high && (value - low) % step == 0 {
+        if value >= low && value <= high && (value - low).is_multiple_of(step) {
             return true;
         }
     }

@@ -62,9 +62,8 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
             // uTools puts a magnifier on the cursor and waits for a click; that overlay does not
             // exist here, so the answer is the pixel under the cursor right now.
             let point = w::cursor_pos();
-            let hex = w::pixel_hex(point.x, point.y).ok_or_else(|| {
-                BridgeError::new("could not read the pixel under the cursor")
-            })?;
+            let hex = w::pixel_hex(point.x, point.y)
+                .ok_or_else(|| BridgeError::new("could not read the pixel under the cursor"))?;
             let rgb = hex_to_rgb(&hex);
             Ok(Reply::Now(json!({
                 "hex": hex,
@@ -200,7 +199,10 @@ fn nearest_display(x: f64, y: f64) -> Value {
     let index = w::monitors()
         .into_iter()
         .position(|(r, _)| {
-            r.left == rect.left && r.top == rect.top && r.right == rect.right && r.bottom == rect.bottom
+            r.left == rect.left
+                && r.top == rect.top
+                && r.right == rect.right
+                && r.bottom == rect.bottom
         })
         .unwrap_or(0);
     json!({

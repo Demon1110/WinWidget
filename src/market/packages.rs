@@ -315,7 +315,6 @@ fn reject_reserved(id: &str) -> Result<(), String> {
     Ok(())
 }
 
-
 /// What an install would change: an upgrade note plus the permissions the user still has to grant.
 fn describe(
     app: &App,
@@ -708,7 +707,9 @@ mod tests {
             .unwrap();
         writer.start_file("index.html", options).unwrap();
         writer.write_all(b"<!doctype html>").unwrap();
-        writer.start_file("node_modules/x/plugin.json", options).unwrap();
+        writer
+            .start_file("node_modules/x/plugin.json", options)
+            .unwrap();
         writer.write_all(br#"{"pluginName":"nested"}"#).unwrap();
         writer.finish().unwrap();
 

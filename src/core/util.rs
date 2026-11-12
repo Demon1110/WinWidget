@@ -170,7 +170,6 @@ pub fn json_ok() -> Value {
     json!(true)
 }
 
-
 /// A short random-looking hex tail, used for document revisions. Uniqueness within a run is all it
 /// needs, so the clock plus a counter is enough and no random crate is pulled in.
 pub fn random_hex(len: usize) -> String {

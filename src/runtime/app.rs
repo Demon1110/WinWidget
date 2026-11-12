@@ -89,8 +89,14 @@ pub struct PendingNote {
 }
 
 pub enum Ev {
-    Ipc { win: String, msg: String },
-    Reply { win: String, body: String },
+    Ipc {
+        win: String,
+        msg: String,
+    },
+    Reply {
+        win: String,
+        body: String,
+    },
     Sample(Value),
     Audio(Value),
     Media(Value),
@@ -561,11 +567,7 @@ impl App {
             }
         }
         let ev = if visible { "show" } else { "hide" };
-        self.event_to(
-            instance_id,
-            ev,
-            json!({ "from": from, "visible": visible }),
-        );
+        self.event_to(instance_id, ev, json!({ "from": from, "visible": visible }));
     }
 
     /// Shows or hides every card at once, with one reason for all of them.
@@ -711,10 +713,7 @@ impl App {
         if self.manifest_for(&spec.instance).is_none() {
             return Err(BridgeError::new("this widget is no longer installed"));
         }
-        let file = spec
-            .file
-            .trim_start_matches(['/', '\\'])
-            .replace('\\', "/");
+        let file = spec.file.trim_start_matches(['/', '\\']).replace('\\', "/");
         if file.is_empty() || file.contains("..") || file.contains(':') {
             return Err(BridgeError::new(
                 "the page must be a path inside the widget folder",
@@ -725,13 +724,8 @@ impl App {
         }
         let id = self.next_custom;
         self.next_custom += 1;
-        self.pending_customs.push((
-            id,
-            crate::core::window::CustomSpec {
-                file,
-                ..spec
-            },
-        ));
+        self.pending_customs
+            .push((id, crate::core::window::CustomSpec { file, ..spec }));
         let _ = self.proxy.send_event(Ev::Wake);
         Ok(id)
     }
@@ -752,7 +746,11 @@ impl App {
         // The markers sit in the URL itself: the page starts loading as soon as the window exists,
         // which can be before the serve state is refreshed, so the server cannot rely on its table
         // alone to know this is a custom window.
-        let visible = spec.options.get("show").and_then(|v| v.as_bool()).unwrap_or(true);
+        let visible = spec
+            .options
+            .get("show")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
         format!(
             "http://{}:{}/{}?w={}&win={}&wt=custom&vis={}{}",
             manifest.host_name(),
@@ -897,7 +895,8 @@ impl App {
     fn build_control(
         &mut self,
         target: &tao::event_loop::EventLoopWindowTarget<Ev>,
-    ) -> Result<ControlWin, String> {        use tao::dpi::LogicalSize;
+    ) -> Result<ControlWin, String> {
+        use tao::dpi::LogicalSize;
         use tao::window::WindowBuilder;
         let window = WindowBuilder::new()
             .with_title(CONTROL_TITLE)

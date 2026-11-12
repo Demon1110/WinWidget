@@ -23,6 +23,7 @@
 //! `widget` holds WinWidget's own protocol (settings, storage, audio, media, files, power, net),
 //! and `api` is the dispatcher that walks the list.
 
+pub mod ai;
 pub mod api;
 pub mod assets;
 pub mod clipboard;
@@ -30,11 +31,13 @@ pub mod config;
 pub mod db;
 pub mod events;
 pub mod features;
+pub mod ffmpeg;
 pub mod img;
 pub mod input;
 pub mod logging;
 pub mod net;
 pub mod paths;
+pub mod payment;
 pub mod redirect;
 pub mod schedule;
 pub mod screen;
@@ -47,6 +50,3 @@ pub mod ubrowser;
 pub mod util;
 pub mod widget;
 pub mod window;
-pub mod ai;
-pub mod ffmpeg;
-pub mod payment;

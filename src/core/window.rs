@@ -181,9 +181,9 @@ impl CustomWin {
 
     /// The same delivery the cards get: the SDK listens for a whole `{ev, d}` body.
     pub fn deliver(&self, body: &str) {
-        let _ = self
-            .webview
-            .evaluate_script(&format!("window.__WV_DELIVER && window.__WV_DELIVER({body})"));
+        let _ = self.webview.evaluate_script(&format!(
+            "window.__WV_DELIVER && window.__WV_DELIVER({body})"
+        ));
     }
 }
 
@@ -348,12 +348,7 @@ fn parse_color(text: &str, transparent: bool) -> (u8, u8, u8, u8) {
             .map(|c| c.to_digit(16).unwrap_or(0) as u8)
             .collect();
         return match digits.len() {
-            3 => (
-                digits[0] * 17,
-                digits[1] * 17,
-                digits[2] * 17,
-                255,
-            ),
+            3 => (digits[0] * 17, digits[1] * 17, digits[2] * 17, 255),
             6 => (
                 digits[0] * 16 + digits[1],
                 digits[2] * 16 + digits[3],
@@ -403,7 +398,10 @@ fn set_opacity(hwnd: w::HWND, opacity: f64) {
 }
 
 fn center(window: &Window) {
-    let Some(monitor) = window.current_monitor().or_else(|| window.primary_monitor()) else {
+    let Some(monitor) = window
+        .current_monitor()
+        .or_else(|| window.primary_monitor())
+    else {
         return;
     };
     let size = window.outer_size();
@@ -894,11 +892,10 @@ fn invoke(app: &mut App, id: u32, m: &str, p: &Value) -> BridgeResult<Reply> {
             let nx = jnum(p, "x").unwrap_or(x);
             let ny = jnum(p, "y").unwrap_or(y);
             if let Some(win) = app.customs.get(&id) {
-                win.window
-                    .set_outer_position(PhysicalPosition::new(
-                        from_dip(nx, scale),
-                        from_dip(ny, scale),
-                    ));
+                win.window.set_outer_position(PhysicalPosition::new(
+                    from_dip(nx, scale),
+                    from_dip(ny, scale),
+                ));
             }
             Value::Null
         }
@@ -911,11 +908,10 @@ fn invoke(app: &mut App, id: u32, m: &str, p: &Value) -> BridgeResult<Reply> {
             let nw = jnum(p, "width").unwrap_or(width).max(1.0);
             let nh = jnum(p, "height").unwrap_or(height).max(1.0);
             if let Some(win) = app.customs.get(&id) {
-                win.window
-                    .set_outer_position(PhysicalPosition::new(
-                        from_dip(nx, scale),
-                        from_dip(ny, scale),
-                    ));
+                win.window.set_outer_position(PhysicalPosition::new(
+                    from_dip(nx, scale),
+                    from_dip(ny, scale),
+                ));
                 win.window.set_inner_size(LogicalSize::new(nw, nh));
             }
             Value::Null
@@ -938,8 +934,14 @@ fn invoke(app: &mut App, id: u32, m: &str, p: &Value) -> BridgeResult<Reply> {
             }
             Value::Null
         }
-        "getMinimumSize" => json!([min.map(|v| v.0).unwrap_or(0.0), min.map(|v| v.1).unwrap_or(0.0)]),
-        "getMaximumSize" => json!([max.map(|v| v.0).unwrap_or(0.0), max.map(|v| v.1).unwrap_or(0.0)]),
+        "getMinimumSize" => json!([
+            min.map(|v| v.0).unwrap_or(0.0),
+            min.map(|v| v.1).unwrap_or(0.0)
+        ]),
+        "getMaximumSize" => json!([
+            max.map(|v| v.0).unwrap_or(0.0),
+            max.map(|v| v.1).unwrap_or(0.0)
+        ]),
         "center" => {
             if let Some(win) = app.customs.get(&id) {
                 center(&win.window);
@@ -1006,7 +1008,8 @@ fn invoke(app: &mut App, id: u32, m: &str, p: &Value) -> BridgeResult<Reply> {
             let on = jbool(p, "flag").unwrap_or(false);
             if let Some(win) = app.customs.get(&id) {
                 if on {
-                    win.window.set_fullscreen(Some(Fullscreen::Borderless(None)));
+                    win.window
+                        .set_fullscreen(Some(Fullscreen::Borderless(None)));
                 } else {
                     win.window.set_fullscreen(None);
                 }
@@ -1181,11 +1184,16 @@ pub fn unsupported_reason(method: &str) -> Option<&'static str> {
         ("isEnabled", "禁用窗口没有接入"),
         ("enableDeviceEmulation", "设备模拟没有接入"),
         ("disableDeviceEmulation", "设备模拟没有接入"),
-        ("findInPage", "页面内查找请用 utools.findInPage（主窗口）或页面自己的搜索"),
-        ("stopFindInPage", "页面内查找请用 utools.stopFindInPage（主窗口）"),
+        (
+            "findInPage",
+            "页面内查找请用 utools.findInPage（主窗口）或页面自己的搜索",
+        ),
+        (
+            "stopFindInPage",
+            "页面内查找请用 utools.stopFindInPage（主窗口）",
+        ),
     ];
-    list
-        .iter()
+    list.iter()
         .find(|(name, _)| *name == method)
         .map(|(_, why)| *why)
 }

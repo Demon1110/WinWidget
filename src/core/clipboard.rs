@@ -52,7 +52,7 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
         "clipboard.writeText" => {
             ctx.require("clipboard")?;
             let text = jstr(p, "text").unwrap_or_default();
-            Ok(Reply::Now(Value::Bool(w::set_clipboard_text(&text)) ))
+            Ok(Reply::Now(Value::Bool(w::set_clipboard_text(&text))))
         }
         "clipboard.readImage" => {
             ctx.require("clipboard")?;
@@ -140,7 +140,8 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
             ctx.require("clipboard")?;
             watch();
             let records = history();
-            let mut counts = json!({ "all": records.len(), "text": 0, "image": 0, "files": 0, "pinned": 0 });
+            let mut counts =
+                json!({ "all": records.len(), "text": 0, "image": 0, "files": 0, "pinned": 0 });
             for record in &records {
                 if let Some(object) = counts.as_object_mut() {
                     let key = type_of(record);
@@ -162,7 +163,10 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
             let kept = {
                 let mut guard = store().lock().unwrap_or_else(|e| e.into_inner());
                 for record in guard.iter_mut() {
-                    let id = record.get("_id").and_then(|v| v.as_str()).unwrap_or_default();
+                    let id = record
+                        .get("_id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default();
                     if ids.iter().any(|x| x == id) {
                         if let Some(object) = record.as_object_mut() {
                             object.insert("pinned".into(), Value::Bool(pinned));
@@ -173,7 +177,9 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
                 guard.clone()
             };
             save(&kept);
-            Ok(Reply::Now(json!({ "ok": true, "pinned": pinned, "changed": touched })))
+            Ok(Reply::Now(
+                json!({ "ok": true, "pinned": pinned, "changed": touched }),
+            ))
         }
         "clipboard.history.remove" => {
             ctx.require("clipboard")?;
@@ -191,11 +197,14 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
         }
         "clipboard.history.clear" => {
             ctx.require("clipboard")?;
-            let keep_pinned = p.get("keepPinned").and_then(|v| v.as_bool()).unwrap_or(false);
+            let keep_pinned = p
+                .get("keepPinned")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             let kept = {
                 let mut guard = store().lock().unwrap_or_else(|e| e.into_inner());
                 if keep_pinned {
-                    guard.retain(|r| is_pinned(r));
+                    guard.retain(is_pinned);
                 } else {
                     guard.clear();
                 }
@@ -228,7 +237,10 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
                     .map(|bytes| w::set_clipboard_png(&bytes))
                     .unwrap_or(false),
                 _ => w::set_clipboard_text(
-                    record.get("value").and_then(|v| v.as_str()).unwrap_or_default(),
+                    record
+                        .get("value")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default(),
                 ),
             };
             Ok(Reply::Now(json!({ "ok": done })))
@@ -310,7 +322,10 @@ fn ids_of(p: &Value) -> Vec<String> {
             .filter_map(|v| v.as_str().map(|s| s.to_string()))
             .collect();
     }
-    jstr(p, "id").or_else(|| jstr(p, "hash")).into_iter().collect()
+    jstr(p, "id")
+        .or_else(|| jstr(p, "hash"))
+        .into_iter()
+        .collect()
 }
 
 fn find_record(p: &Value) -> Option<Value> {
@@ -336,7 +351,10 @@ fn publish_images(ctx: &Ctx, list: &[Value]) {
         if type_of(record) != "image" {
             continue;
         }
-        let hash = record.get("hash").and_then(|v| v.as_str()).unwrap_or_default();
+        let hash = record
+            .get("hash")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
         if hash.is_empty() {
             continue;
         }
@@ -351,8 +369,14 @@ fn image_bytes(record: &Value) -> Option<Vec<u8>> {
     if type_of(record) != "image" {
         return None;
     }
-    let value = record.get("value").and_then(|v| v.as_str()).unwrap_or_default();
-    let hash = record.get("hash").and_then(|v| v.as_str()).unwrap_or_default();
+    let value = record
+        .get("value")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+    let hash = record
+        .get("hash")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
     let candidate = if value.is_empty() {
         image_dir().join(format!("{hash}.png"))
     } else {
@@ -425,9 +449,7 @@ static LAST_SEQ: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::ne
 
 fn record_now() {
     let seq = w::clipboard_sequence();
-    if seq != 0
-        && LAST_SEQ.swap(seq, std::sync::atomic::Ordering::Relaxed) == seq
-    {
+    if seq != 0 && LAST_SEQ.swap(seq, std::sync::atomic::Ordering::Relaxed) == seq {
         return;
     }
     let text = w::clipboard_text().unwrap_or_default();
@@ -493,7 +515,11 @@ fn push_image(png: &[u8]) {
 
 /// Newest first, deduplicated against the top entry, persisted.
 fn push_record(record: Value) {
-    let hash = record.get("hash").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+    let hash = record
+        .get("hash")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
     let mut guard = store().lock().unwrap_or_else(|e| e.into_inner());
     let newest_same = guard
         .first()
