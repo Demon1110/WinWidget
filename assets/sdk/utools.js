@@ -18,6 +18,12 @@
 
   const HOST = "WinWidget";
   const VERSION = widget.hostVersion || "1.0.0";
+  /**
+   * `utools.getAppVersion()` 报的是「uTools API 兼容级别」，不是 WinWidget 自己的版本号：
+   * 插件普遍用 `parseFloat(utools.getAppVersion()) < 7` 判断底座够不够新，报 1.0.0 会让它们
+   * 直接画出「uTools 版本太低」的页面。这里跟本宿主实现对得上的那一档对齐（7.x 的接口面）。
+   */
+  const UTOOLS_COMPAT_VERSION = "7.6.0";
   /** "main" on a card, "custom" inside a window a widget opened with createBrowserWindow. */
   const WINDOW_TYPE = widget.windowType || "main";
   const SUPPORTED = [
@@ -701,7 +707,7 @@
           filter: "all",
         })
         .then((path) => path || undefined),
-    getAppVersion: () => VERSION + " (WinWidget)",
+    getAppVersion: () => UTOOLS_COMPAT_VERSION,
     getNativeId: () => {
       let id = readJson(ID_KEY);
       if (typeof id !== "string" || !id) {

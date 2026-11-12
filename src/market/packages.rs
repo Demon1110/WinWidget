@@ -26,11 +26,13 @@ pub struct Staged {
     pub existing: bool,
 }
 
-/// Reads the archive without touching disk layout: which widget it is, and what changes.
-/// Reads a dropped or picked package. `.upx` (uTools) is unpacked into a folder first, then both
-/// kinds end up in the same staging folder for `install`.
+/// Reads a dropped or picked package. uTools packages (`.upx`, and an installed plugin's `.asar`)
+/// are unpacked into a folder first, then all kinds end up in the same staging folder for `install`.
 pub fn stage(app: &App, path: &Path) -> Result<Staged, String> {
-    if crate::market::upx::is_upx(path) {
+    if crate::market::upx::is_upxs(path) {
+        return Err(crate::market::upx::UPXS_HINT.into());
+    }
+    if crate::market::upx::is_upx(path) || crate::market::upx::is_asar(path) {
         return stage_upx(app, path);
     }
     stage_zip(app, path)
@@ -39,7 +41,11 @@ pub fn stage(app: &App, path: &Path) -> Result<Staged, String> {
 fn stage_upx(app: &App, path: &Path) -> Result<Staged, String> {
     let token = crate::core::config::new_id();
     let dir = crate::core::paths::get().staging_dir().join(&token);
-    let summary = crate::market::upx::unpack(path, &dir)?;
+    let summary = if crate::market::upx::is_asar(path) {
+        crate::market::upx::unpack_asar(path, &dir)?
+    } else {
+        crate::market::upx::unpack(path, &dir)?
+    };
     if summary
         .id
         .to_lowercase()

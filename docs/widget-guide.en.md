@@ -878,6 +878,29 @@ Permissions are inferred by scanning the page code (`utools.copyText` implies `c
 
 One known ceiling: uTools' `preload.js` runs under Node.js, while WinWidget pages run in WebView2 without Node. So **pure web plugins** (HTML + JS + jQuery and the like) run as they are; **plugins that depend on preload** install and open, but the preload capabilities are not available. The log records `upx: "…" declares preload.js — Node.js is not available in this host`.
 
+### `.upxs`: the new market package cannot be read — import the installed copy instead
+
+Since uTools 5.0.0 the market package is `.upxs`: the whole file is encrypted and carries a developer signature, so uTools can promise the plugin came from a trusted developer and was not tampered with. WinWidget has no key for it, so dropping a `.upxs` gets an explicit answer instead of a fake success:
+
+```
+没办法安装这个文件
+this is a uTools UPXS package (encrypted and signed since uTools 5.0).
+WinWidget has no key for it, so the files cannot be read here.
+```
+
+The changelog says it plainly: "安装包格式升级为 UPXS 格式。这一格式不仅具有加密功能，还包含开发者信息签名". Measured on that 1.6 MB file: apart from the first four bytes (`c8 01 00 00`) every block scores 8.0 entropy, with no zip, gzip or JSON signature anywhere — and no repeating-key structure either, so it is not a simple XOR.
+
+The workable route is to **install it in uTools first, then move the installed copy over**. uTools keeps unpacked plugins in `%APPDATA%\uTools\plugins\`, one `.asar` per plugin — an Electron archive, **not encrypted**. WinWidget reads those directly:
+
+1. Install the plugin in uTools as usual.
+2. Find the matching `<hash>.asar` in `%APPDATA%\uTools\plugins\` (if unsure which one, try them through the import button; the confirm dialog shows the plugin name).
+3. Control Center → **Add widgets** → **Install .fwz / .upx…** and pick it, or simply drop the `.asar` on the Control Center.
+
+The `.asar` header is `[u32 4][u32 pickle][…][u32 jsonLen]`, its payload starts at `8 + pickle`, and directory entries are `{size, offset:"…", unpacked?, link?}` — the same layout as `.upx` with a different header, so both share one "unpack → build `widget.json` from `plugin.json`" flow. Entries marked `unpacked` (native modules and the like) are read from the sibling `<name>.asar.unpacked\` folder.
+
+Also worth knowing: `utools.getAppVersion()` reports a **compatibility level** (currently `7.6.0`), not WinWidget's own version. Plugins routinely write `parseFloat(utools.getAppVersion()) < 7` to decide whether the host is new enough; answering `1.0.0` makes them paint an "uTools is too old" page over everything.
+
+
 
 ---
 

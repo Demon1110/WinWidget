@@ -73,7 +73,7 @@ pub fn unpack(path: &Path, dir: &Path) -> Result<Summary, String> {
     let mut total: u64 = 0;
     for (rel, offset, size) in &entries {
         let name = rel.rsplit('/').next().unwrap_or(rel);
-        if name == ".DS_Store" || name == "Thumbs.db" {
+        if skip_file(name) {
             continue;
         }
         let end = base
@@ -87,14 +87,108 @@ pub fn unpack(path: &Path, dir: &Path) -> Result<Summary, String> {
         if total > MAX_TOTAL {
             return Err("the package is larger than 64 MB".into());
         }
-        let target = dir.join(rel.replace('/', std::path::MAIN_SEPARATOR_STR));
-        if let Some(parent) = target.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        std::fs::write(&target, &raw[base + *offset..end])
-            .map_err(|e| format!("{}: {e}", target.display()))?;
+        write_entry(dir, rel, &raw[base + *offset..end])?;
     }
 
+    synthesize(dir)
+}
+
+/// `.upxs` 是 uTools 自 v5.0.0 起的新市场安装包：加密 + 开发者签名。宿主没有密钥，读不出内容。
+pub const UPXS_HINT: &str = "this is a uTools UPXS package (encrypted and signed since uTools 5.0). \
+WinWidget has no key for it, so the files cannot be read here. Install it in uTools first, then \
+import the plugin from %APPDATA%\\uTools\\plugins\\<hash>.asar";
+
+/// 后缀是 `.upxs`（内容是整块密文，没有可识别的明文头）。
+pub fn is_upxs(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.eq_ignore_ascii_case("upxs"))
+        .unwrap_or(false)
+}
+
+/// 是不是 Electron 的 `.asar`：uTools 把装好的插件以这种未加密的归档放在 `plugins\` 下。
+pub fn is_asar(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.eq_ignore_ascii_case("asar"))
+        .unwrap_or(false)
+}
+
+/// 把 uTools 已安装插件目录里的 `.asar` 摊进 `dir`，顺带生成 `widget.json`。
+///
+/// 布局跟 `.upx` 很像，但头不一样：`[u32 4][u32 pickle][u32 ...][u32 jsonLen]` 之后是 JSON 目录，
+/// 目录项是 `{size, offset:"…", unpacked?, link?}`，数据区起点 = `8 + pickle`。
+pub fn unpack_asar(path: &Path, dir: &Path) -> Result<Summary, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("the file could not be read: {e}"))?;
+    if bytes.len() < HEADER_BYTES + 2 {
+        return Err("this is not an Electron .asar archive".into());
+    }
+    let header = u32_at(&bytes, 4).ok_or_else(|| "the .asar header is truncated".to_string())?;
+    let data_start = 8usize
+        .checked_add(header as usize)
+        .filter(|s| *s <= bytes.len())
+        .ok_or_else(|| "the .asar header is larger than the file".to_string())?;
+    let json_end = json_end(&bytes).ok_or_else(|| "the .asar directory is not valid JSON".to_string())?;
+    if json_end > data_start {
+        return Err("the .asar directory overlaps its payload".into());
+    }
+    let text = std::str::from_utf8(&bytes[HEADER_BYTES..json_end])
+        .map_err(|e| format!("the .asar directory is not text: {e}"))?;
+    let tree: Value =
+        serde_json::from_str(text).map_err(|e| format!("the .asar directory is not valid JSON: {e}"))?;
+
+    let mut entries: Vec<AsarEntry> = Vec::new();
+    walk_asar(&tree, "", &mut entries);
+    if entries.is_empty() {
+        return Err("the .asar archive has no files".into());
+    }
+    if entries.len() > MAX_ENTRIES {
+        return Err("the package has too many files".into());
+    }
+    std::fs::create_dir_all(dir).map_err(|e| format!("staging folder: {e}"))?;
+
+    // 被 `unpacked` 标记的文件放在旁边的 `<name>.asar.unpacked\` 目录里。
+    let unpacked_root = path
+        .parent()
+        .map(|p| {
+            p.join(format!(
+                "{}.unpacked",
+                path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+            ))
+        })
+        .unwrap_or_default();
+
+    let mut total: u64 = 0;
+    for entry in &entries {
+        if skip_file(entry.rel.rsplit('/').next().unwrap_or(&entry.rel)) {
+            continue;
+        }
+        total += entry.size as u64;
+        if total > MAX_TOTAL {
+            return Err("the package is larger than 64 MB".into());
+        }
+        if entry.unpacked {
+            let src = unpacked_root.join(entry.rel.replace('/', std::path::MAIN_SEPARATOR_STR));
+            let body = std::fs::read(&src)
+                .map_err(|e| format!("the unpacked file \"{}\" is missing: {e}", entry.rel))?;
+            write_entry(dir, &entry.rel, &body)?;
+            continue;
+        }
+        let end = data_start
+            .checked_add(entry.offset)
+            .and_then(|s| s.checked_add(entry.size))
+            .ok_or_else(|| format!("the .asar offset of \"{}\" is out of range", entry.rel))?;
+        if end > bytes.len() {
+            return Err(format!("the .asar offset of \"{}\" is out of range", entry.rel));
+        }
+        write_entry(dir, &entry.rel, &bytes[data_start + entry.offset..end])?;
+    }
+
+    synthesize(dir)
+}
+
+/// 读 `plugin.json`，写一份 `widget.json`，返回给 `packages` 看的摘要。
+fn synthesize(dir: &Path) -> Result<Summary, String> {
     let plugin = crate::core::util::read_text(&dir.join("plugin.json"))
         .map_err(|e| format!("the package has no plugin.json: {e}"))?;
     let plugin: Value =
@@ -237,6 +331,70 @@ fn number(v: &Value) -> Option<usize> {
         Value::Number(n) => n.as_u64().map(|n| n as usize),
         Value::String(s) => s.parse().ok(),
         _ => None,
+    }
+}
+
+fn u32_at(bytes: &[u8], at: usize) -> Option<u32> {
+    let slice = bytes.get(at..at + 4)?;
+    Some(u32::from_le_bytes([slice[0], slice[1], slice[2], slice[3]]))
+}
+
+/// 系统垃圾文件，uTools 打包时也会带上，没必要装。
+fn skip_file(name: &str) -> bool {
+    name == ".DS_Store" || name == "Thumbs.db"
+}
+
+fn write_entry(dir: &Path, rel: &str, body: &[u8]) -> Result<(), String> {
+    let target = dir.join(rel.replace('/', std::path::MAIN_SEPARATOR_STR));
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+    }
+    std::fs::write(&target, body).map_err(|e| format!("{}: {e}", target.display()))
+}
+
+/// `.asar` 的目录项：偏移可能没有（`unpacked` 的文件放在旁边的目录里）。
+struct AsarEntry {
+    rel: String,
+    offset: usize,
+    size: usize,
+    unpacked: bool,
+}
+
+fn walk_asar(node: &Value, prefix: &str, out: &mut Vec<AsarEntry>) {
+    let Some(files) = node.get("files").and_then(|f| f.as_object()) else {
+        return;
+    };
+    for (name, child) in files {
+        if name.contains("..") || name.starts_with('/') {
+            continue;
+        }
+        let path = if prefix.is_empty() {
+            name.clone()
+        } else {
+            format!("{prefix}/{name}")
+        };
+        if child.get("files").is_some() {
+            walk_asar(child, &path, out);
+            continue;
+        }
+        // `link` 是 Electron 的硬链接（同一个文件换个名字），没必要单独再写一份。
+        if child.get("link").is_some() {
+            continue;
+        }
+        let Some(size) = child.get("size").and_then(number) else {
+            continue;
+        };
+        let unpacked = child
+            .get("unpacked")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let offset = child.get("offset").and_then(number).unwrap_or(0);
+        out.push(AsarEntry {
+            rel: path,
+            offset,
+            size,
+            unpacked,
+        });
     }
 }
 
@@ -473,6 +631,103 @@ mod tests {
                     .unwrap_or_default(),
                 summary.name,
                 summary.id,
+                summary.permissions,
+                summary.node
+            );
+            std::fs::remove_dir_all(&dir).unwrap();
+        }
+    }
+
+    /// 造一个最小的 `.asar`：`[4][len+8][len+4][len]` + JSON 目录 + 数据区。
+    fn pack_asar(files: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut json = String::from("{\"files\":{");
+        let mut payload = Vec::new();
+        for (i, (name, body)) in files.iter().enumerate() {
+            if i > 0 {
+                json.push(',');
+            }
+            json.push_str(&format!(
+                "\"{name}\":{{\"size\":{},\"offset\":\"{}\"}}",
+                body.len(),
+                payload.len()
+            ));
+            payload.extend_from_slice(body);
+        }
+        json.push_str("}}");
+        let mut text = json.into_bytes();
+        while text.len() % 4 != 0 {
+            text.push(b' ');
+        }
+        let mut raw = Vec::new();
+        let len = text.len() as u32;
+        for n in [4u32, len + 8, len + 4, len] {
+            raw.extend_from_slice(&n.to_le_bytes());
+        }
+        raw.extend_from_slice(&text);
+        raw.extend_from_slice(&payload);
+        raw
+    }
+
+    #[test]
+    fn opens_an_installed_utools_plugin_asar() {
+        let dir = scratch("asar");
+        let file = dir.with_extension("asar");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            &file,
+            pack_asar(&[
+                (
+                    "plugin.json",
+                    r#"{"pluginName":"剪贴板","name":"clipboard","main":"index.html","version":"4.3.2","author":"uTools 团队"}"#.as_bytes(),
+                ),
+                ("index.html", b"<html><body></body></html>"),
+                ("logo.png", b"\x89PNG"),
+            ]),
+        )
+        .unwrap();
+        let summary = unpack_asar(&file, &dir).unwrap();
+        assert_eq!(summary.id, "clipboard");
+        assert_eq!(summary.name, "剪贴板");
+        assert_eq!(summary.version, "4.3.2");
+        assert!(!summary.node, "this sample has no preload");
+        let mut m = crate::model::manifest::Manifest::load(&dir, false).unwrap();
+        m.validate().unwrap();
+        assert!(dir.join("index.html").is_file());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn upxs_packages_are_refused_with_a_reason() {
+        let dir = scratch("upxs");
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("plugin.upxs");
+        std::fs::write(&file, [0xc8, 0x01, 0x00, 0x00, 0x99]).unwrap();
+        assert!(is_upxs(&file));
+        assert!(!is_upx(&file), "an .upxs is not a gzip .upx");
+        assert!(UPXS_HINT.contains("encrypted"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// 拿本机 uTools 已安装的插件当回归样本：`WW_ASAR_SAMPLES` 是 `;` 分隔的路径列表。
+    #[test]
+    fn real_asar_samples_still_open() {
+        let Ok(list) = std::env::var("WW_ASAR_SAMPLES") else {
+            return;
+        };
+        for (i, path) in list.split(';').filter(|p| !p.trim().is_empty()).enumerate() {
+            let dir = scratch(&format!("asar-real-{i}"));
+            let summary = unpack_asar(Path::new(path), &dir).unwrap();
+            let mut m = crate::model::manifest::Manifest::load(&dir, false).unwrap();
+            m.validate().unwrap();
+            println!(
+                "{} -> {} {} v{} permissions={:?} node={}",
+                Path::new(path)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_default(),
+                summary.name,
+                summary.id,
+                summary.version,
                 summary.permissions,
                 summary.node
             );
