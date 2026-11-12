@@ -862,6 +862,23 @@ A `.fwz` file is a widget folder zipped up with another extension.
 - **Frameworks**: React, Vue, Svelte and others all work, as long as the output is static files. Put the build output (e.g. `dist/`) next to `widget.json`, point `entry` at its `index.html`, and use relative asset paths (with Vite, `base: "./"`).
 - **Limits**: a `.fwz` can be up to 64 MB, and at most 256 MB and 5000 files unpacked.
 
+### Installing uTools plugins (`.upx`)
+
+The same **Install .fwz / .upx…** button (and dropping a file on the Control Center) also accepts uTools' `.upx`. The format is a gzip stream holding a 16-byte header, a JSON directory, padding to a 4-byte boundary, then the file bytes. WinWidget unpacks it in place and builds a `widget.json` from `plugin.json`:
+
+| `plugin.json` | Becomes |
+| --- | --- |
+| `name` (lowercase alphanumeric) | `id`; missing or invalid, it is hashed from `pluginName` into `uplugin-xxxxxxx` |
+| `pluginName` | `name` (Chinese names are kept as-is) |
+| `main` / `logo` | `entry` / `icon` |
+| `version` / `author` / `description` | same fields |
+| `features` / `preload` | recorded under the `utools` block of `widget.json` for reference |
+
+Permissions are inferred by scanning the page code (`utools.copyText` implies `clipboard`, `utools.screen.*` implies `screen`, and so on); the confirm dialog still lists them for you to accept.
+
+One known ceiling: uTools' `preload.js` runs under Node.js, while WinWidget pages run in WebView2 without Node. So **pure web plugins** (HTML + JS + jQuery and the like) run as they are; **plugins that depend on preload** install and open, but the preload capabilities are not available. The log records `upx: "…" declares preload.js — Node.js is not available in this host`.
+
+
 ---
 
 ## The sixteen categories

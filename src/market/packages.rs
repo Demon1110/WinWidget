@@ -27,7 +27,57 @@ pub struct Staged {
 }
 
 /// Reads the archive without touching disk layout: which widget it is, and what changes.
+/// Reads a dropped or picked package. `.upx` (uTools) is unpacked into a folder first, then both
+/// kinds end up in the same staging folder for `install`.
 pub fn stage(app: &App, path: &Path) -> Result<Staged, String> {
+    if crate::market::upx::is_upx(path) {
+        return stage_upx(app, path);
+    }
+    stage_zip(app, path)
+}
+
+fn stage_upx(app: &App, path: &Path) -> Result<Staged, String> {
+    let token = crate::core::config::new_id();
+    let dir = crate::core::paths::get().staging_dir().join(&token);
+    let summary = crate::market::upx::unpack(path, &dir)?;
+    if summary
+        .id
+        .to_lowercase()
+        .starts_with(crate::model::catalog::RESERVED_PREFIX)
+    {
+        return Err(format!(
+            "\"{}\" starts with \"{}\", which is kept for the built-in widgets",
+            summary.id,
+            crate::model::catalog::RESERVED_PREFIX
+        ));
+    }
+    let unknown: Vec<String> = summary
+        .permissions
+        .iter()
+        .filter(|p| !crate::model::permissions::is_known(p))
+        .cloned()
+        .collect();
+    let (update, new_permissions) =
+        describe(app, &summary.id, &summary.version, &summary.permissions);
+    Ok(Staged {
+        token,
+        archive: path.to_path_buf(),
+        source: path.to_path_buf(),
+        dir,
+        id: summary.id.clone(),
+        name: summary.name,
+        version: summary.version,
+        author: summary.author,
+        description: summary.description,
+        permissions: summary.permissions,
+        new_permissions,
+        unknown,
+        update,
+        existing: app.catalog.find(&summary.id).is_some(),
+    })
+}
+
+fn stage_zip(app: &App, path: &Path) -> Result<Staged, String> {
     let token = crate::core::config::new_id();
     let dir = crate::core::paths::get().staging_dir().join(&token);
     let file =
@@ -162,38 +212,8 @@ pub fn stage(app: &App, path: &Path) -> Result<Staged, String> {
         std::io::copy(&mut entry, &mut out).map_err(|e| format!("write failed: {e}"))?;
     }
 
-    let existing = app.catalog.find(&id);
-    let update = existing.map(|m| {
-        let kind = compare(&version, &m.version);
-        json!({
-            "kind": kind,
-            "from": m.version,
-            "count": app.cfg().instances.iter().filter(|i| i.widget.eq_ignore_ascii_case(&id)).count(),
-        })
-    });
-    let mut granted: Vec<String> = Vec::new();
-    if let Some(list) = app.cfg().grants.get(&id) {
-        granted = list.clone();
-    }
-    if let Some(m) = existing {
-        for p in &m.permissions {
-            if !granted.iter().any(|g| g.eq_ignore_ascii_case(p)) {
-                granted.push(p.clone());
-            }
-        }
-    }
-    let mut new_permissions = Vec::new();
-    for p in &permissions {
-        if !granted.iter().any(|g| g.eq_ignore_ascii_case(p))
-            && !app
-                .cfg()
-                .own_widgets
-                .iter()
-                .any(|w| w.eq_ignore_ascii_case(&id))
-        {
-            new_permissions.push(p.clone());
-        }
-    }
+    let (update, new_permissions) = describe(app, &id, &version, &permissions);
+    let existed = app.catalog.find(&id).is_some();
 
     Ok(Staged {
         token,
@@ -209,8 +229,49 @@ pub fn stage(app: &App, path: &Path) -> Result<Staged, String> {
         new_permissions,
         unknown,
         update,
-        existing: existing.is_some(),
+        existing: existed,
     })
+}
+
+/// What an install would change: an upgrade note plus the permissions the user still has to grant.
+fn describe(
+    app: &App,
+    id: &str,
+    version: &str,
+    permissions: &[String],
+) -> (Option<Value>, Vec<String>) {
+    let existing = app.catalog.find(id);
+    let update = existing.map(|m| {
+        json!({
+            "kind": compare(version, &m.version),
+            "from": m.version,
+            "count": app.cfg().instances.iter().filter(|i| i.widget.eq_ignore_ascii_case(id)).count(),
+        })
+    });
+    let mut granted: Vec<String> = Vec::new();
+    if let Some(list) = app.cfg().grants.get(id) {
+        granted = list.clone();
+    }
+    if let Some(m) = existing {
+        for p in &m.permissions {
+            if !granted.iter().any(|g| g.eq_ignore_ascii_case(p)) {
+                granted.push(p.clone());
+            }
+        }
+    }
+    let mut new_permissions = Vec::new();
+    for p in permissions {
+        if !granted.iter().any(|g| g.eq_ignore_ascii_case(p))
+            && !app
+                .cfg()
+                .own_widgets
+                .iter()
+                .any(|w| w.eq_ignore_ascii_case(id))
+        {
+            new_permissions.push(p.clone());
+        }
+    }
+    (update, new_permissions)
 }
 
 fn compare(a: &str, b: &str) -> &'static str {

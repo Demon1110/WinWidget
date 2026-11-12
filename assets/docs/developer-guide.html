@@ -175,6 +175,7 @@ footer { max-width: 820px; margin: 40px 0 0; padding-top: 18px; border-top: 1px 
   <a href="#权限" data-anchor="权限">权限</a>
   <a href="#调试" data-anchor="调试">调试</a>
   <a href="#打包和分享" data-anchor="打包和分享">打包和分享</a>
+<a class="sub" href="#装-utools-外挂upx" data-anchor="装-utools-外挂upx">装 uTools 外挂（.upx）</a>
   <a href="#十六个分类每一类怎么用" data-anchor="十六个分类每一类怎么用">十六个分类：每一类怎么用</a>
 <a class="sub" href="#屏幕" data-anchor="屏幕">屏幕</a>
 <a class="sub" href="#输入" data-anchor="输入">输入</a>
@@ -257,6 +258,7 @@ footer { max-width: 820px; margin: 40px 0 0; padding-top: 18px; border-top: 1px 
   <a href="#權限" data-anchor="權限">權限</a>
   <a href="#除錯" data-anchor="除錯">除錯</a>
   <a href="#打包和分享" data-anchor="打包和分享">打包和分享</a>
+<a class="sub" href="#裝-utools-外掛upx" data-anchor="裝-utools-外掛upx">裝 uTools 外掛（.upx）</a>
   <a href="#十六個分類每一類怎麼用" data-anchor="十六個分類每一類怎麼用">十六個分類：每一類怎麼用</a>
 <a class="sub" href="#屏幕" data-anchor="屏幕">屏幕</a>
 <a class="sub" href="#輸入" data-anchor="輸入">輸入</a>
@@ -339,6 +341,7 @@ footer { max-width: 820px; margin: 40px 0 0; padding-top: 18px; border-top: 1px 
   <a href="#permissions" data-anchor="permissions">Permissions</a>
   <a href="#debugging" data-anchor="debugging">Debugging</a>
   <a href="#packaging-and-sharing" data-anchor="packaging-and-sharing">Packaging and sharing</a>
+<a class="sub" href="#installing-utools-plugins-upx" data-anchor="installing-utools-plugins-upx">Installing uTools plugins (.upx)</a>
   <a href="#the-sixteen-categories" data-anchor="the-sixteen-categories">The sixteen categories</a>
 <a class="sub" href="#screen" data-anchor="screen">Screen</a>
 <a class="sub" href="#input" data-anchor="input">Input</a>
@@ -862,6 +865,11 @@ WinWidget.exe D:\downloads\daily-quote.fwz</code></pre></div>
 <li><strong>用框架写</strong>：React、Vue、Svelte 都可以，只要输出静态文件。把建置结果（例如 <code>dist/</code>）和 <code>widget.json</code> 放在一起，<code>entry</code> 指向它的 <code>index.html</code>；资源路径要用相对路径（例如 Vite 设 <code>base: &quot;./&quot;</code>）。</li>
 <li><strong>大小限制</strong>：<code>.fwz</code> 最大 64 MB，解压后最多 256 MB、5000 个文件。</li>
 </ul>
+<h3 id="装-utools-外挂upx">装 uTools 外挂（<code>.upx</code>）</h3>
+<p>同一个“安装 .fwz / .upx…”按钮（以及拖放到控制中心）也认 uTools 的 <code>.upx</code>。它其实是 gzip 包着“16 字节头 + JSON 目录 + 4 字节对齐 + 文件数据”，WinWidget 会就地拆开，用 <code>plugin.json</code> 生成一份 <code>widget.json</code>：</p>
+<div class="table-wrap"><table><thead><tr><th><code>plugin.json</code></th><th>变成</th></tr></thead><tbody><tr><td><code>name</code>（一串小写字母数字）</td><td><code>id</code>；缺失或不合规时按 <code>pluginName</code> 散列成 <code>uplugin-xxxxxxx</code></td></tr><tr><td><code>pluginName</code></td><td><code>name</code>（中文名照原样显示）</td></tr><tr><td><code>main</code> / <code>logo</code></td><td><code>entry</code> / <code>icon</code></td></tr><tr><td><code>version</code> / <code>author</code> / <code>description</code></td><td>同名字段</td></tr><tr><td><code>features</code> / <code>preload</code></td><td>记在 <code>widget.json</code> 的 <code>utools</code> 区块里，仅作留痕</td></tr></tbody></table></div>
+<p>权限是从页面程序码里扫出来的（看到 <code>utools.copyText</code> 就给 <code>clipboard</code>，看到 <code>utools.screen.*</code> 就给 <code>screen</code>，依此类推），安装前的确认框会照常列出来让你决定。</p>
+<p>一个已知的天花板：uTools 的 <code>preload.js</code> 跑在 Node.js 里，而 WinWidget 的页面跑在 WebView2 里，没有 Node。所以<strong>纯网页外挂</strong>（HTML + JS + jQuery 之类）能直接跑；<strong>依赖 preload 的外挂</strong>装得进来、页面也能开，但 <code>preload</code> 提供的能力不可用。日志里会写一条 <code>upx: &quot;…&quot; declares preload.js — Node.js is not available in this host</code>。</p>
 <hr class="sep">
 <h2 id="十六个分类每一类怎么用">十六个分类：每一类怎么用</h2>
 <p>WinWidget 的能力划分跟 uTools 官方文件一致，页面上用 <code>utools.*</code> 的名字。这一节按分类给最小例子；型别都在 <code>widget.d.ts</code> 的 <code>WinWidget.Utools</code> 里。</p>
@@ -1649,6 +1657,11 @@ WinWidget.exe D:\downloads\daily-quote.fwz</code></pre></div>
 <li><strong>用框架寫</strong>：React、Vue、Svelte 都可以，只要輸出靜態檔案。把建置結果（例如 <code>dist/</code>）和 <code>widget.json</code> 放在一起，<code>entry</code> 指向它的 <code>index.html</code>；資源路徑要用相對路徑（例如 Vite 設 <code>base: &quot;./&quot;</code>）。</li>
 <li><strong>大小限制</strong>：<code>.fwz</code> 最大 64 MB，解壓後最多 256 MB、5000 個檔案。</li>
 </ul>
+<h3 id="裝-utools-外掛upx">裝 uTools 外掛（<code>.upx</code>）</h3>
+<p>同一個「安裝 .fwz / .upx…」按鈕（以及拖放到控制中心）也認 uTools 的 <code>.upx</code>。它其實是 gzip 包著「16 位元組頭 + JSON 目錄 + 4 位元組對齊 + 檔案資料」，WinWidget 會就地拆開，用 <code>plugin.json</code> 生成一份 <code>widget.json</code>：</p>
+<div class="table-wrap"><table><thead><tr><th><code>plugin.json</code></th><th>變成</th></tr></thead><tbody><tr><td><code>name</code>（一串小寫字母數字）</td><td><code>id</code>；缺失或不合規時按 <code>pluginName</code> 散列成 <code>uplugin-xxxxxxx</code></td></tr><tr><td><code>pluginName</code></td><td><code>name</code>（中文名照原樣顯示）</td></tr><tr><td><code>main</code> / <code>logo</code></td><td><code>entry</code> / <code>icon</code></td></tr><tr><td><code>version</code> / <code>author</code> / <code>description</code></td><td>同名欄位</td></tr><tr><td><code>features</code> / <code>preload</code></td><td>記在 <code>widget.json</code> 的 <code>utools</code> 區塊裡，僅作留痕</td></tr></tbody></table></div>
+<p>權限是從頁面程式碼裡掃出來的（看到 <code>utools.copyText</code> 就給 <code>clipboard</code>，看到 <code>utools.screen.*</code> 就給 <code>screen</code>，依此類推），安裝前的確認框會照常列出來讓你決定。</p>
+<p>一個已知的天花板：uTools 的 <code>preload.js</code> 跑在 Node.js 裡，而 WinWidget 的頁面跑在 WebView2 裡，沒有 Node。所以<strong>純網頁外掛</strong>（HTML + JS + jQuery 之類）能直接跑；<strong>依賴 preload 的外掛</strong>裝得進來、頁面也能開，但 <code>preload</code> 提供的能力不可用。日誌裡會寫一條 <code>upx: &quot;…&quot; declares preload.js — Node.js is not available in this host</code>。</p>
 <hr class="sep">
 <h2 id="十六個分類每一類怎麼用">十六個分類：每一類怎麼用</h2>
 <p>WinWidget 的能力劃分跟 uTools 官方文件一致，頁面上用 <code>utools.*</code> 的名字。這一節按分類給最小例子；型別都在 <code>widget.d.ts</code> 的 <code>WinWidget.Utools</code> 裡。</p>
@@ -2436,6 +2449,11 @@ WinWidget.exe D:\downloads\daily-quote.fwz</code></pre></div>
 <li><strong>Frameworks</strong>: React, Vue, Svelte and others all work, as long as the output is static files. Put the build output (e.g. <code>dist/</code>) next to <code>widget.json</code>, point <code>entry</code> at its <code>index.html</code>, and use relative asset paths (with Vite, <code>base: &quot;./&quot;</code>).</li>
 <li><strong>Limits</strong>: a <code>.fwz</code> can be up to 64 MB, and at most 256 MB and 5000 files unpacked.</li>
 </ul>
+<h3 id="installing-utools-plugins-upx">Installing uTools plugins (<code>.upx</code>)</h3>
+<p>The same <strong>Install .fwz / .upx…</strong> button (and dropping a file on the Control Center) also accepts uTools&#x27; <code>.upx</code>. The format is a gzip stream holding a 16-byte header, a JSON directory, padding to a 4-byte boundary, then the file bytes. WinWidget unpacks it in place and builds a <code>widget.json</code> from <code>plugin.json</code>:</p>
+<div class="table-wrap"><table><thead><tr><th><code>plugin.json</code></th><th>Becomes</th></tr></thead><tbody><tr><td><code>name</code> (lowercase alphanumeric)</td><td><code>id</code>; missing or invalid, it is hashed from <code>pluginName</code> into <code>uplugin-xxxxxxx</code></td></tr><tr><td><code>pluginName</code></td><td><code>name</code> (Chinese names are kept as-is)</td></tr><tr><td><code>main</code> / <code>logo</code></td><td><code>entry</code> / <code>icon</code></td></tr><tr><td><code>version</code> / <code>author</code> / <code>description</code></td><td>same fields</td></tr><tr><td><code>features</code> / <code>preload</code></td><td>recorded under the <code>utools</code> block of <code>widget.json</code> for reference</td></tr></tbody></table></div>
+<p>Permissions are inferred by scanning the page code (<code>utools.copyText</code> implies <code>clipboard</code>, <code>utools.screen.*</code> implies <code>screen</code>, and so on); the confirm dialog still lists them for you to accept.</p>
+<p>One known ceiling: uTools&#x27; <code>preload.js</code> runs under Node.js, while WinWidget pages run in WebView2 without Node. So <strong>pure web plugins</strong> (HTML + JS + jQuery and the like) run as they are; <strong>plugins that depend on preload</strong> install and open, but the preload capabilities are not available. The log records <code>upx: &quot;…&quot; declares preload.js — Node.js is not available in this host</code>.</p>
 <hr class="sep">
 <h2 id="the-sixteen-categories">The sixteen categories</h2>
 <p>WinWidget&#x27;s capabilities are split the way the uTools reference is, and the page sees the <code>utools.*</code> names. One minimal example per category; the types live in <code>widget.d.ts</code> under <code>WinWidget.Utools</code>.</p>

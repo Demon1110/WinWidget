@@ -491,8 +491,8 @@ function pageAdd() {
       <div class="head-tools">
         <label class="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>
           <input class="field" id="add-search" type="search" value="${esc(query)}" placeholder="${esc(t("搜尋組件"))}" aria-label="${esc(t("搜尋組件"))}" spellcheck="false" autocomplete="off"></label>
-        <button class="btn tool" data-action="import" title="${esc(t("也可以把 .fwz 檔案拖到這個視窗"))}" aria-label="${esc(t("安裝 .fwz 檔案…"))}">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-4.5-4.5L12 15l4.5-4.5M5 19h14"/></svg><span>${t("安裝 .fwz 檔案…")}</span></button>
+        <button class="btn tool" data-action="import" title="${esc(t("也可以把 .fwz / .upx 檔案拖到這個視窗"))}" aria-label="${esc(t("安裝 .fwz / .upx 檔案…"))}">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-4.5-4.5L12 15l4.5-4.5M5 19h14"/></svg><span>${t("安裝 .fwz / .upx…")}</span></button>
         <button class="btn tool" data-action="create" title="${esc(t("用 HTML / CSS / JS 自己寫一個"))}" aria-label="${esc(t("新建組件…"))}">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>${t("新建組件…")}</span></button>
       </div></div>
