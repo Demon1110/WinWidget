@@ -23,6 +23,9 @@ struct Measured {
 static MEASURED: Mutex<Option<Measured>> = Mutex::new(None);
 static SCANNING: AtomicBool = AtomicBool::new(false);
 static EMPTYING: AtomicBool = AtomicBool::new(false);
+/// Whether the snapshot on disk has been looked at already, so a restart doesn't walk the bin
+/// again just to learn what the last run already knew.
+static LOADED: AtomicBool = AtomicBool::new(false);
 /// Bytes removed by the run in progress, and the size the bin had when it started (`-1` unknown).
 static PROGRESS: Mutex<(u64, i64)> = Mutex::new((0, -1));
 
@@ -33,6 +36,11 @@ fn lock<T>(cell: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 /// What the card draws: the last measured number, how old it is, and whether a walk or an empty
 /// run is going on. Always answers immediately — the walking happens on a thread of its own.
 pub fn recycle_state() -> Value {
+    if !LOADED.swap(true, Ordering::SeqCst) {
+        if let Some(saved) = load_snapshot() {
+            *lock(&MEASURED) = Some(saved);
+        }
+    }
     let measured = *lock(&MEASURED);
     let age = measured.map(|m| m.at.elapsed().as_secs()).unwrap_or(u64::MAX);
     let scanning = SCANNING.load(Ordering::SeqCst);
@@ -59,13 +67,51 @@ fn start_scan() {
     }
     std::thread::spawn(|| {
         let (items, size) = measure();
-        *lock(&MEASURED) = Some(Measured {
+        let measured = Measured {
             items,
             size,
             at: Instant::now(),
-        });
+        };
+        *lock(&MEASURED) = Some(measured);
+        save_snapshot(measured);
         SCANNING.store(false, Ordering::SeqCst);
     });
+}
+
+fn snapshot_file() -> PathBuf {
+    crate::core::paths::data_dir().join("recycle-bin.json")
+}
+
+/// The last answer survives a restart: a walk costs over a minute on a full bin, and starting the
+/// app should not pay that again just to redraw a card.
+fn save_snapshot(measured: Measured) {
+    let Ok(now) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) else {
+        return;
+    };
+    let ago = Instant::now().saturating_duration_since(measured.at).as_secs();
+    let stamp = now.as_secs().saturating_sub(ago);
+    let text = json!({ "items": measured.items, "size": measured.size, "at": stamp }).to_string();
+    let _ = std::fs::write(snapshot_file(), text);
+}
+
+fn load_snapshot() -> Option<Measured> {
+    let text = std::fs::read_to_string(snapshot_file()).ok()?;
+    let value: Value = serde_json::from_str(&text).ok()?;
+    let items = value.get("items")?.as_i64()?;
+    let size = value.get("size")?.as_i64()?;
+    let stamp = value.get("at")?.as_u64()?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_secs();
+    let ago = now.saturating_sub(stamp);
+    Some(Measured {
+        items,
+        size,
+        at: Instant::now()
+            .checked_sub(std::time::Duration::from_secs(ago))
+            .unwrap_or_else(Instant::now),
+    })
 }
 
 /// Fixed drives with a `$Recycle.Bin`. Network drives are skipped on purpose: a walk over a share
