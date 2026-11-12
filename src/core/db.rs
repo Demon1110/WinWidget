@@ -191,14 +191,14 @@ impl Store {
     }
 
     fn file(&self) -> PathBuf {
-        crate::core::paths::data_dir()
-            .join("db")
+        crate::core::paths::get()
+            .plugins_dir()
             .join(format!("{}.json", self.widget))
     }
 
     fn attachment_dir(&self) -> PathBuf {
-        crate::core::paths::data_dir()
-            .join("db")
+        crate::core::paths::get()
+            .plugins_dir()
             .join(format!("{}.attachments", self.widget))
     }
 

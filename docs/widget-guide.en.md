@@ -834,7 +834,7 @@ Turn on **developer mode** under Control Center → **Settings** (**New widget**
 - **Reload on save**: saving any file in a widget's folder reloads the widgets that use it; changes to `widget.json` (size, settings) apply at once too.
 - **Error bar**: script errors show at the bottom of the card with where they happened; click to open the developer tools.
 - **Developer tools**: press F12 on the widget, or use My widgets → Behavior → Developer tools. F5 reloads.
-- **Log**: `widget.log()` output and widget errors go to `%LocalAppData%\WinWidget\logs\app.log`.
+- **Log**: `widget.log()` output and widget errors go to `%AppData%\WinWidget\logs\app.log`.
 - **Folders that don't load**: if `widget.json` has a problem (a missing comma, a bad id, no entry file), the top of **Add widgets** names the folder, the line and the reason.
 
 **Command line** (run in a terminal; acts on the running WinWidget):
@@ -908,7 +908,7 @@ Every widget page now gets `services.js` injected after `utools.js`, which answe
 
 | method in the preload | now answered by |
 | --- | --- |
-| `readAllRecords` / `removeRecords` / `clearAllRecords` | the host's clipboard history, `clipboard.history`, stored in `data\clipboard-history.json` (last 300 entries, text and files) |
+| `readAllRecords` / `removeRecords` / `clearAllRecords` | the host's clipboard history, `clipboard.history`, stored in `db\clipboard\history.json` (last 300 entries, text and files) |
 | `listenAppendRecord(cb)` | the host polls the clipboard every 700 ms and pushes new entries to the page |
 | `filesExists(paths)` | `clipboard.filesExist` |
 | `executeCopy` / `executePaste` | routed to `utools.copyText` / `copyFile` / `hideMainWindowPasteText` / `hideMainWindowPasteFile` |
@@ -927,7 +927,7 @@ Not bridged yet: `setSubInput` (the search box above a plugin is drawn by uTools
 
 ### Clipboard history: one full API for JavaScript
 
-The host keeps its own history (`data\clipboard-history.json`, last 300 entries, `type` being `text` / `image` / `files`, newest first) and exposes all of it as methods. Inside a widget it is `widget.clipboard.*`; inside a uTools plugin it is `window.services.*`:
+The host keeps its own history (`db\clipboard\history.json`, last 300 entries, `type` being `text` / `image` / `files`, newest first) and exposes all of it as methods. Inside a widget it is `widget.clipboard.*`; inside a uTools plugin it is `window.services.*`:
 
 | method (`widget.clipboard.*`) | arguments | what it does |
 | --- | --- | --- |
@@ -1003,7 +1003,7 @@ await utools.db.postAttachment("note-1", base64, "image/png");
 const image = await utools.db.getAttachment("note-1");   // NativeImage
 ```
 
-Documents live in `data/db/<widget id>.json`, attachments in `<widget id>.attachments/`; 1 MB per document, 10 MB per attachment. `dbStorage` is still this widget's local storage (synchronous, good for small settings).
+Documents live in `db/plugins/<widget id>.json`, attachments in `<widget id>.attachments/`; 1 MB per document, 10 MB per attachment. `dbStorage` is still this widget's local storage (synchronous, good for small settings).
 
 ### Scheduled tasks
 
@@ -1139,7 +1139,7 @@ WinWidget now splits its capabilities the way the uTools reference does, with on
 | Screen | `utools.screen`: `getAllDisplays` / `getPrimaryDisplay` / `getDisplayNearestPoint` / `getDisplayMatching` (uTools `Display`, in DIP), `screenToDipPoint` / `dipToScreenPoint` / `screenToDipRect` / `dipToScreenRect`, `capture()` / `captureDisplay(n)` returning a `NativeImage`, and `utools.screenColorPick()` for the pixel under the cursor. Interactive snipping is not reproduced |
 | Input | `hideMainWindowPasteText` / `…PasteFile` / `…PasteImage` / `…TypeString`: hide the card, give the keyboard back to the previous window, then paste or type. Coordinate injection lives under Simulation. `input.startDrag` is still unimplemented and reports that it needs an OLE drag source |
 | Copy | `copyText`, `copyImage` (data URL / path / `NativeImage`), `copyFile` (one or more paths, written as `CF_HDROP`), `getCopyedFiles()` returning `{ path, isDirectory, isFile, name }` (a Promise here) |
-| Database | The whole `utools.db` family: `put` / `get` / `remove` / `bulkDocs` / `allDocs` / `postAttachment` / `getAttachment` / `getAttachmentType` / `replicateStateFromCloud`, stored in `data/db/<widget>.json` plus an attachments folder; `dbStorage` stays this widget's local storage. **No cloud sync** — `replicateStateFromCloud()` answers `null`; `put` / `remove` / `bulkDocs` broadcast `dbPull` to the widget's other cards (that is `onDbPull`) |
+| Database | The whole `utools.db` family: `put` / `get` / `remove` / `bulkDocs` / `allDocs` / `postAttachment` / `getAttachment` / `getAttachmentType` / `replicateStateFromCloud`, stored in `db/plugins/<widget>.json` plus an attachments folder; `dbStorage` stays this widget's local storage. **No cloud sync** — `replicateStateFromCloud()` answers `null`; `put` / `remove` / `bulkDocs` broadcast `dbPull` to the widget's other cards (that is `onDbPull`) |
 | AI | A reserved category file, **not implemented**: calls report `reserved in the ai category` |
 | Scheduled tasks | `requestSchedule(schedule)` / `getSchedules()` / `removeSchedule(code)` / `onScheduleTrigger(fn)`: standard 5-field cron (`minute hour day month weekday`) or a one-shot timestamp, with `startTime` / `endTime` windows; tasks past `endTime` remove themselves. A throwing or rejecting callback counts as a failure, visible as `successCount` / `failureCount` / `lastStatus` |
 | Simulation | `simulateKeyboardTap(key, ...modifiers)`, `simulateMouseMove` / `Click` / `DoubleClick` / `RightClick(x, y)`. Coordinates are **physical pixels**, exactly as uTools defines them |
@@ -1235,7 +1235,7 @@ The SDK wraps all of these. The table shows the underlying names so you can matc
 | `clipboard.readText` / `writeText` / `readImage` / `writeImage` / `readFiles` / `writeFiles` | `widget.clipboard.*` (needs the `clipboard` permission) |
 | `screen.capture` / `captureDisplay` / `captureInteractive` / `displays` / `primary` / `nearest` / `matching` / `cursor` / `toDip` / `toScreen` / `colorPick` | `widget.screen.*`, `utools.screen.*` (needs the `screen` permission; `captureInteractive` starts Windows' own snipping overlay) |
 | `input.pasteText` / `pasteFile` / `pasteImage` / `typeString` | `utools.hideMainWindowPaste*` / `hideMainWindowTypeString` (`typeString` needs `input`) |
-| `db.put` / `get` / `remove` / `bulkDocs` / `allDocs` / `postAttachment` / `getAttachment` / `getAttachmentType` / `replicateStateFromCloud` | `utools.db.*`, stored in `data/db/<widget>.json` |
+| `db.put` / `get` / `remove` / `bulkDocs` / `allDocs` / `postAttachment` / `getAttachment` / `getAttachmentType` / `replicateStateFromCloud` | `utools.db.*`, stored in `db/plugins/<widget>.json` |
 | `schedule.request` / `list` / `remove` / `result` | `utools.requestSchedule` / `getSchedules` / `removeSchedule` (needs `schedule`), event `schedule` |
 | `simulate.keyboardTap` / `mouseMove` / `mouseClick` / `mouseDoubleClick` / `mouseRightClick` | `utools.simulate*` (needs `input`, coordinates in physical pixels) |
 | `features.get` / `set` / `remove` | `utools.getFeatures` / `setFeature` / `removeFeature` |
@@ -1266,10 +1266,19 @@ The SDK wraps all of these. The table shows the underlying names so you can matc
 
 | What | Where |
 |---|---|
-| Saved data (`widget.storage`) | `%AppData%\WinWidget\data\<instance id>.json`, 2 MB per instance |
-| Your widget folder | `%AppData%\WinWidget\widgets\` (Settings → "widgets folder") |
-| Settings and card positions | `%AppData%\Roaming\WinWidget\config.json` |
-| Log | `%LocalAppData%\WinWidget\logs\app.log` |
+| Settings and card positions | `config.json` |
+| Your widget folder | `widgets\` (one folder per widget; installs in flight sit in `widgets\.install`) |
+| Widget documents (`utools.db`) | `db\plugins\<widget id>.json` plus `<widget id>.attachments\` |
+| Saved data per instance (`widget.storage`) | `db\instances\<instance id>.json`, 2 MB per instance |
+| Clipboard history | `db\clipboard\history.json`, images in `db\clipboard\images\` |
+| Market, switches, schedule, recycle bin | `db\market.json`, `db\app\{features,schedule,recycle-bin}.json` |
+| Log | `logs\app.log` |
+| Exported `.fwz` | `exports\` |
+| Frame, screen recording and other media | `media\` |
+| Update downloads | `update\` |
+| Browser profile (`localStorage`, `IndexedDB`) | `cache\webview2\` |
+
+All of it lives in the data folder: `%AppData%\WinWidget` by default, or `data\` next to the program when a `portable` file sits there. Settings -> "data folder" shows it, opens it, moves it, or resets it. Moving copies `config.json`, `widgets`, `db`, `exports` and `media` to the new folder and records the place in `%AppData%\WinWidget\location.json`; the change takes effect after a restart. A flat `data\` folder from an older build is migrated into this layout on the first start.
 
 Removing an instance deletes its saved data too; removing the widget folder leaves the cards on the desktop marked "widget is gone".
 
@@ -1552,7 +1561,7 @@ Use the `--w-*` variables for text and lines instead of hard-coded white or blac
 The language is read from `config.json` at startup, so restart WinWidget; the control center itself follows immediately, cards already open reload on the next launch. Always use `widget.locale` / `widget.t()` in a widget instead of detecting the system language.
 
 **"Widgets folder" and "data" in the settings do not open.**
-Those buttons hand a local folder to Windows (the same as double-clicking it in Explorer). Older builds passed it to the URL opener, which only accepts http/https/mailto, so it always failed; the current build opens it properly. If a click still does nothing, check that line in `%LocalAppData%\WinWidget\logs\app.log`.
+Those buttons hand a local folder to Windows (the same as double-clicking it in Explorer). Older builds passed it to the URL opener, which only accepts http/https/mailto, so it always failed; the current build opens it properly. If a click still does nothing, check that line in `%AppData%\WinWidget\logs\app.log`.
 
 **Check for updates says there is no channel.**
 With an empty `update_url`, updates are read from this project's GitHub Releases (`api.github.com`). To use your own feed, point `update_url` at a JSON document `{"version": "1.2.0", "url": "download", "size": bytes, "notes": "notes", "page": "page"}`. Checks and downloads run in the background, and developer mode never updates itself.

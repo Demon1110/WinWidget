@@ -2,16 +2,15 @@
 //!
 //! A widget normally declares its commands in `widget.json`; `getFeatures` / `setFeature` /
 //! `removeFeature` let it add, change or drop them at runtime (a web-launcher builds one entry per
-//! site the user saved). WinWidget keeps those in `data/features.json`, one list per widget, so they
-//! survive a restart the way uTools' do. The control center reads the same file when it lists what a
-//! widget can be asked to do.
+//! site the user saved). WinWidget keeps those in `<data>\db\app\features.json`, one list per widget,
+//! so they survive a restart the way uTools' do. The control center reads the same file when it lists
+//! what a widget can be asked to do.
 
 use crate::core::api::{Ctx, Reply};
 use crate::core::util::{jstr, BridgeError, BridgeResult};
 use serde_json::{Map, Value};
 
 const OWNS: &[&str] = &["features.get", "features.set", "features.remove"];
-const FILE_NAME: &str = "features.json";
 
 pub fn call(ctx: &mut Ctx, method: &str, p: &Value) -> Option<BridgeResult<Reply>> {
     if !OWNS.contains(&method) {
@@ -214,7 +213,7 @@ fn regex_hit(pattern: &str, text: &str) -> bool {
 
 
 fn file() -> std::path::PathBuf {
-    crate::core::paths::data_dir().join(FILE_NAME)
+    crate::core::paths::get().features_file()
 }
 
 fn load() -> Map<String, Value> {

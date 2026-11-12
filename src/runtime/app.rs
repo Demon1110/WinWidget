@@ -897,13 +897,13 @@ impl App {
     fn build_control(
         &mut self,
         target: &tao::event_loop::EventLoopWindowTarget<Ev>,
-    ) -> Result<ControlWin, String> {
-        use tao::dpi::LogicalSize;
+    ) -> Result<ControlWin, String> {        use tao::dpi::LogicalSize;
         use tao::window::WindowBuilder;
         let window = WindowBuilder::new()
             .with_title(CONTROL_TITLE)
             .with_inner_size(LogicalSize::new(1180.0, 800.0))
             .with_min_inner_size(LogicalSize::new(880.0, 560.0))
+            .with_window_icon(control_icon())
             .build(target)
             .map_err(|e| e.to_string())?;
         let proxy = self.proxy.clone();
@@ -1572,4 +1572,15 @@ impl App {
             }
         }
     }
+}
+
+/// The logo for the title bar and the taskbar. Without it Windows draws its generic placeholder,
+/// which is what the window showed even though the exe itself carries `assets\logo.ico`.
+fn control_icon() -> Option<tao::window::Icon> {
+    let paths = crate::core::paths::get();
+    // `file_bytes` reads the folder on disk in a dev build and the packed copy in a shipped exe.
+    let bytes = crate::core::assets::file_bytes(&paths.ui_dir(), "control-center/img/logo.png")?;
+    let image = image::load_from_memory(&bytes).ok()?.to_rgba8();
+    let (width, height) = image.dimensions();
+    tao::window::Icon::from_rgba(image.into_raw(), width, height).ok()
 }

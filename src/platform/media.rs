@@ -372,7 +372,7 @@ fn cover_url(thumb: &IRandomAccessStreamReference, title: &str, artist: &str) ->
     reader.LoadAsync(size as u32).ok()?.get().ok()?;
     let mut bytes = vec![0u8; size];
     reader.ReadBytes(&mut bytes).ok()?;
-    let dir = crate::core::paths::get().local_dir.join("media");
+    let dir = crate::core::paths::get().media_dir();
     let _ = std::fs::create_dir_all(&dir);
     let file = dir.join(format!("{key}.png"));
     // Already a PNG in most cases; re-encode only when the session hands us something else.
@@ -397,8 +397,7 @@ pub fn cover_path(key: &str) -> Option<std::path::PathBuf> {
         return None;
     }
     let file = crate::core::paths::get()
-        .local_dir
-        .join("media")
+        .media_dir()
         .join(format!("{key}.png"));
     file.is_file().then_some(file)
 }

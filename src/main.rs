@@ -39,7 +39,7 @@ fn main() {
     if crate::platform::update::apply_from_args(&args) {
         return;
     }
-    crate::platform::update::clean_downloads(&paths::get().local_dir);
+    crate::platform::update::clean_downloads(&paths::get().update_dir());
     if !args.is_empty() {
         // The release build is a GUI-subsystem exe and owns no console: borrow the caller's one so
         // `winwidget list` prints where the user can see it, instead of into a void.

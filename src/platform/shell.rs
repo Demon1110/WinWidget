@@ -4,15 +4,20 @@ use serde_json::{json, Value};
 use std::path::Path;
 
 pub fn open(url: &str) -> Result<(), String> {
-    let lower = url.trim().to_lowercase();
-    let scheme_ok = lower.starts_with("http://")
-        || lower.starts_with("https://")
-        || lower.starts_with("mailto:")
-        || lower.starts_with("www.");
-    if !scheme_ok {
+    if !is_link(url) {
         return Err("only http, https and mailto links can be opened".into());
     }
     shell_execute(url)
+}
+
+/// True for a web or mail link. A folder path is not one, which is why every "open this folder"
+/// button has to go through `open_path`/`open_any` instead of `open`.
+fn is_link(text: &str) -> bool {
+    let lower = text.trim().to_lowercase();
+    lower.starts_with("http://")
+        || lower.starts_with("https://")
+        || lower.starts_with("mailto:")
+        || lower.starts_with("www.")
 }
 
 pub fn launch(path: &str) -> Result<(), String> {
@@ -38,6 +43,16 @@ pub fn open_path(path: &str) -> Result<(), String> {
         return Err(format!("{path} does not exist"));
     }
     shell_execute(&path)
+}
+
+/// `utools.shellOpenPath` and "open this widget's folder": a link goes to the browser, anything else
+/// is a path on this machine. Widgets call this with `D:\...\widgets\clipboard`, which `open()`
+/// refused as "not a link".
+pub fn open_any(target: &str) -> Result<(), String> {
+    if is_link(target) {
+        return shell_execute(target.trim());
+    }
+    open_path(target)
 }
 
 fn shell_execute(target: &str) -> Result<(), String> {
@@ -297,6 +312,27 @@ mod tests {
             assert!(Path::new(&path).is_absolute(), "{name} → {path}");
         }
         assert!(crate::platform::win32::known_folder_path("nope").is_none());
+    }
+
+    #[test]
+    fn a_widget_folder_is_not_a_link_but_is_openable() {
+        // The "folder" button used to run a folder path through `open`, which only accepts links.
+        let folder = "C:\\Users\\admin\\AppData\\Roaming\\WinWidget\\widgets\\clipboard";
+        assert!(!is_link(folder), "a folder must not look like a link");
+        // `open_path` is the door a folder takes; for something that is not there it fails on the
+        // missing folder rather than on the scheme, without launching Explorer.
+        let missing = "C:\\definitely\\not\\here\\folder";
+        assert!(!is_link(missing));
+        match open_path(missing) {
+            Err(e) => assert!(e.contains("does not exist"), "{e}"),
+            Ok(()) => panic!("a missing folder should not open"),
+        }
+        for link in ["https://example.com", "HTTPS://example.com", " mailto:a@b.c", "www.example.com"] {
+            assert!(is_link(link), "{link} should be a link");
+        }
+        for text in [r"D:\java\git", "/home/user", "C:a.txt", ""] {
+            assert!(!is_link(text), "{text} should not be a link");
+        }
     }
 }
 

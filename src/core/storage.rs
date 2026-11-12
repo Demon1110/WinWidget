@@ -14,7 +14,7 @@ pub struct StorageStore {
 impl StorageStore {
     fn file_for(instance: &str) -> std::path::PathBuf {
         crate::core::paths::get()
-            .storage_dir()
+            .instances_dir()
             .join(format!("{instance}.json"))
     }
 

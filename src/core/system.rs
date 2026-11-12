@@ -144,10 +144,11 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
         }
 
         // ── shells, dialogs, file icons (utools.shellOpenPath and friends) ────────────────────
+        // utools.shellOpenPath hands a path, shellOpenExternal a link: one entry takes both.
         "shell.open" => {
             ctx.require("shell.open")?;
             let target = req_str(p, "target")?;
-            crate::platform::shell::open(&target).map_err(BridgeError::new)?;
+            crate::platform::shell::open_any(&target).map_err(BridgeError::new)?;
             Ok(Reply::Now(Value::Null))
         }
         "shell.launch" => {

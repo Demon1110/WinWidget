@@ -597,7 +597,7 @@ function pageSettings() {
         ${row("開發者模式", "存檔後組件自動重新載入；組件出錯時在卡片上顯示；按 F12 打開開發者工具。", control({ key: "developer", type: "toggle", label: "開發者模式" }, S.developer, "app"), { key: "dev" })}
         ${row("開發文檔", "怎樣寫組件，以及 widget.json 和 API 的完整說明。", `<button class="btn small" data-action="guide">${t("打開")}</button>`, { key: "guide" })}
         ${row("組件目錄", "放自己寫的或下載的組件。", `<span class="path" title="${esc(S.widgetsDir)}">${esc(S.widgetsDir)}</span><button class="btn small" data-action="openFolder" data-which="widgets">${t("打開")}</button>`, { key: "wdir" })}
-        ${row("資料位置", S.portable ? "便攜模式：資料存在程式資料夾裏。" : "設定與組件保存的內容。", `<span class="path" title="${esc(S.dataDir)}">${esc(S.dataDir)}</span><button class="btn small" data-action="openFolder" data-which="data">${t("打開")}</button>`, { key: "ddir" })}
+        ${row("資料位置", S.portable ? "便攜模式：資料存在程式資料夾裏。" : (S.dataDirCustom ? "已改到自訂資料夾：設定、組件資料庫、剪貼簿、日誌與匯出都在這裏。" : "設定、組件資料庫、剪貼簿、日誌與匯出都在這裏。可以改到別的資料夾。"), `<span class="path" title="${esc(S.dataDir)}">${esc(S.dataDir)}</span><button class="btn small" data-action="openFolder" data-which="data">${t("打開")}</button>${S.portable ? "" : `<button class="btn small" data-action="dataDirChoose">${t("更改")}</button>`}${S.dataDirCustom ? `<button class="btn quiet small" data-action="dataDirReset">${t("恢復默認位置")}</button>` : ""}`, { key: "ddir" })}
         <div class="group-title">${t("關於")}</div>
         ${row("版本", updateNote(), updateCtl(), { key: "ver" })}
         ${row("自動檢查更新", "每天看一兩次有沒有新版本，有的話在托盤提示。只連 GitHub，不會自己安裝。", control({ key: "updateAuto", type: "toggle", label: "自動檢查更新" }, S.update?.auto === true, "app"), { key: "upd-auto" })}
@@ -1126,6 +1126,18 @@ function onAction(a) {
     case "hotkeyClear": saveHotkey(a.dataset.hk, ""); break;
     case "lockAll": api("app.lockAll", { on: a.dataset.on === "true" }).then(() => toast(a.dataset.on === "true" ? t("已鎖定全部組件") : t("已解鎖全部組件"))); break;
     case "openFolder": api("app.openFolder", { which: a.dataset.which }); break;
+    case "dataDirChoose":
+      api("app.setDataDir", {}).then((r) => {
+        if (!r || !r.dir) return;
+        const name = r.dir.split("\\").filter(Boolean).pop() || r.dir;
+        toast(t("已複製資料到「{name}」，重啟後生效", { name }), t("立即重啟"), () => api("app.restart"));
+      });
+      break;
+    case "dataDirReset":
+      api("app.resetDataDir", {}).then(() => {
+        toast(t("下次啟動會回到默認資料夾"), t("立即重啟"), () => api("app.restart"));
+      });
+      break;
     case "rescan": api("app.rescan").then(() => toast(t("已重新掃描組件目錄"))); break;
     case "restart": api("app.restart"); break;
     case "updateCheck": api("app.updateCheck").catch(() => {}); break;

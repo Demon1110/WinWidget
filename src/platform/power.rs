@@ -79,7 +79,7 @@ fn start_scan() {
 }
 
 fn snapshot_file() -> PathBuf {
-    crate::core::paths::data_dir().join("recycle-bin.json")
+    crate::core::paths::get().recycle_file()
 }
 
 /// The last answer survives a restart: a walk costs over a minute on a full bin, and starting the

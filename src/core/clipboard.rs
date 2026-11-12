@@ -279,11 +279,11 @@ const MAX: usize = 300;
 const MAX_IMAGE_BYTES: usize = 12 * 1024 * 1024;
 
 fn history_file() -> std::path::PathBuf {
-    crate::core::paths::data_dir().join("clipboard-history.json")
+    crate::core::paths::get().clipboard_file()
 }
 
 fn image_dir() -> std::path::PathBuf {
-    crate::core::paths::data_dir().join("clipboard").join("images")
+    crate::core::paths::get().clipboard_images_dir()
 }
 
 /// `text` / `files` / `image`, in the words the plugin's tabs use.

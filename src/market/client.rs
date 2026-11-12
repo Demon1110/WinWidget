@@ -25,7 +25,7 @@ fn list_url(app: &App) -> String {
 }
 
 fn cache_file() -> std::path::PathBuf {
-    crate::core::paths::get().local_dir.join("market.json")
+    crate::core::paths::get().market_file()
 }
 
 pub fn site_of(app: &App) -> String {

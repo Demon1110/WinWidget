@@ -98,9 +98,8 @@ pub fn spawn_applier(new_exe: &Path, target: &Path) -> Result<u32, String> {
 
 /// Removes leftovers of an older update attempt. The copy that is mid-update is younger than the
 /// cutoff, so it is safe to sweep this folder at every start.
-pub fn clean_downloads(local_dir: &Path) {
-    let folder = local_dir.join("update");
-    let Ok(entries) = std::fs::read_dir(&folder) else {
+pub fn clean_downloads(folder: &Path) {
+    let Ok(entries) = std::fs::read_dir(folder) else {
         return;
     };
     let now = std::time::SystemTime::now();

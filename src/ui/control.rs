@@ -169,6 +169,10 @@ pub fn state_json(app: &App) -> Value {
         "update": crate::market::updater::current(app),
         "portable": crate::core::paths::get().portable,
         "dataDir": crate::core::paths::get().data_dir.to_string_lossy(),
+        // The default folder, so the page can offer "back to default" and show where a custom
+        // location came from.
+        "dataDirDefault": crate::core::paths::get().bootstrap.to_string_lossy(),
+        "dataDirCustom": crate::core::paths::get().custom,
         "widgetsDir": crate::core::paths::get().user_widgets_dir().to_string_lossy(),
         "themeId": cfg.theme_id,
         "themeOverrides": cfg.theme,
@@ -385,14 +389,14 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
                 // 用户目录再改，所以这个按钮落到用户组件目录。
                 "builtin" | "themes" if paths.embedded() => paths.user_widgets_dir(),
                 "builtin" => paths.builtin_widgets_dir(),
-                "local" => paths.local_dir.clone(),
+                "db" => paths.db_dir(),
                 "logs" => paths
                     .log_file()
                     .parent()
                     .map(|p| p.to_path_buf())
                     .unwrap_or_else(|| paths.data_dir.clone()),
                 "themes" => paths.themes_dir(),
-                "storage" => paths.storage_dir(),
+                "instances" => paths.instances_dir(),
                 "exports" => paths.exports_dir(),
                 _ => paths.data_dir.clone(),
             };
@@ -411,6 +415,23 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
             crate::platform::shell::launch(&exe.to_string_lossy()).map_err(BridgeError::new)?;
             app.quit();
             std::process::exit(0);
+        }
+        // Move every database to a folder of the user's choosing. The copy happens now; the switch
+        // itself needs a restart, because the folders are resolved once while the app starts.
+        "app.setDataDir" => {
+            let picked = crate::platform::shell::pick("folder", "", "Choose a data folder");
+            match picked {
+                Some(dir) => {
+                    let result =
+                        crate::core::paths::set_data_dir(&dir).map_err(BridgeError::new)?;
+                    Ok(json!({ "dir": result["dir"], "restart": true }))
+                }
+                None => Ok(Value::Null),
+            }
+        }
+        "app.resetDataDir" => {
+            let result = crate::core::paths::reset_data_dir().map_err(BridgeError::new)?;
+            Ok(json!({ "dir": result["dir"], "restart": true }))
         }
         "app.reveal" => {
             let path = req_str(p, "path")?;
@@ -729,7 +750,7 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
                     "built-in widgets live inside the exe — export it to a .fwz first, then install that copy",
                 ));
             }
-            crate::platform::shell::open(&dir.to_string_lossy()).map_err(BridgeError::new)?;
+            crate::platform::shell::open_path(&dir.to_string_lossy()).map_err(BridgeError::new)?;
             Ok(Value::Null)
         }
         "widget.export" => {

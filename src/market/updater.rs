@@ -284,7 +284,7 @@ pub fn install_async(app: &mut App) -> Value {
     set(app, state.clone());
     CANCEL.store(false, Ordering::SeqCst);
     let proxy = app.proxy.clone();
-    let folder = crate::core::paths::get().local_dir.join("update");
+    let folder = crate::core::paths::get().update_dir();
     std::thread::spawn(move || download(&proxy, &url, &latest, &file, total, &folder));
     state
 }
