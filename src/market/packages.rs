@@ -564,3 +564,47 @@ pub fn create(app: &mut App, name: &str) -> Result<Value, String> {
     app.push_state_to_control(None);
     Ok(json!({ "id": id, "instanceId": instance }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `.fwz` is a plain zip: standard headers, deflate, one folder inside. The probe file is left
+    /// behind on purpose so an outside reader (python's zipfile, `Expand-Archive`) can be pointed
+    /// at what the writer really produced.
+    #[test]
+    fn a_fwz_package_is_an_ordinary_zip() {
+        let base = std::env::temp_dir().join(format!("winwidget-fwz-{}", std::process::id()));
+        let src = base.join("demo");
+        std::fs::create_dir_all(src.join("sub")).unwrap();
+        std::fs::write(
+            src.join("widget.json"),
+            r#"{"id":"demo","name":"Demo","entry":"index.html"}"#,
+        )
+        .unwrap();
+        std::fs::write(src.join("index.html"), "<!doctype html>").unwrap();
+        std::fs::write(src.join("sub/note.txt"), b"hello").unwrap();
+        let probe = base.join("demo-1.0.0.fwz");
+
+        let file = std::fs::File::create(&probe).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        add_folder(&mut writer, &src, "demo", options).unwrap();
+        writer.finish().unwrap();
+
+        let mut archive = zip::ZipArchive::new(std::fs::File::open(&probe).unwrap()).unwrap();
+        let mut names = Vec::new();
+        for index in 0..archive.len() {
+            let entry = archive.by_index(index).unwrap();
+            names.push(entry.name().unwrap_or_default().to_string());
+        }
+        names.sort();
+        assert_eq!(
+            names,
+            vec!["demo/index.html", "demo/sub/note.txt", "demo/widget.json"]
+        );
+        assert!(names.iter().all(|name| name.starts_with("demo/")));
+        println!("probe: {}", probe.display());
+    }
+}
