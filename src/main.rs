@@ -340,12 +340,12 @@ fn run_cli(args: &[String]) -> bool {
             true
         }
         "install" => {
-            eprintln!("Start WinWidget and drop the .fwz on the control center, or use it there.");
+            eprintln!("Start WinWidget and drop the .fwz or a uTools .upx on the control center, or use it there.");
             true
         }
         "help" | "--help" | "-h" => {
             println!(
-                "WinWidget {APP_VERSION}\n\n  winwidget               start the app\n  winwidget list          widgets and cards\n  winwidget add <id>      put a widget on the desktop\n  winwidget remove <id>   take a card off the desktop\n  winwidget install       how to install a .fwz\n  winwidget --version"
+                "WinWidget {APP_VERSION}\n\n  winwidget               start the app\n  winwidget list          widgets and cards\n  winwidget add <id>      put a widget on the desktop\n  winwidget remove <id>   take a card off the desktop\n  winwidget install       how to install a .fwz or a .upx\n  winwidget --version"
             );
             true
         }
