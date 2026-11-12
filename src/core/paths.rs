@@ -323,9 +323,9 @@ pub fn resource_root() -> PathBuf {
 /// Moves `from` to `to` unless the target already exists. A rename is tried first; when the two
 /// folders sit on different volumes it copies and removes the original. Errors are reported but
 /// never fatal: the app can always start with a half-migrated folder.
-fn move_path(from: &Path, to: &Path) {
+fn move_path(from: &Path, to: &Path) -> bool {
     if !from.exists() {
-        return;
+        return false;
     }
     // A folder that is already there but still empty is a placeholder, not something to keep: this
     // is what a half-run migration or a pre-created folder looks like.
@@ -337,27 +337,30 @@ fn move_path(from: &Path, to: &Path) {
             if to.is_dir() && empty {
                 let _ = std::fs::remove_dir(to);
             } else {
-                return;
+                return false;
             }
         }
         Err(_) => {}
     }
     if to.exists() {
-        return;
+        return false;
     }
     if let Some(parent) = to.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
     if std::fs::rename(from, to).is_ok() {
-        return;
+        return true;
     }
     if from.is_dir() {
         if let Ok(()) = copy_tree(from, to) {
             let _ = std::fs::remove_dir_all(from);
+            return true;
         }
     } else if std::fs::copy(from, to).is_ok() {
         let _ = std::fs::remove_file(from);
+        return true;
     }
+    false
 }
 
 /// Removes a folder left behind by the migration: only when nothing is inside it any more.
@@ -458,16 +461,20 @@ fn migrate_legacy(paths: &Paths) {
 
     let mut moved = 0usize;
     for (from, to) in moves {
-        if from.exists() && !to.exists() {
-            move_path(&from, &to);
+        // `move_path` itself decides: an empty folder standing at the destination is a placeholder
+        // and gets replaced, anything already holding files is left alone.
+        if move_path(&from, &to) {
             moved += 1;
         }
     }
-    if moved > 0 {
-        // Old names are gone; drop the now-empty shells they left behind.
-        prune_empty(&root.join("clipboard"));
-        prune_empty(&root.join("storage"));
+    // Old names are gone; drop the now-empty shells they left behind, even when nothing moved this
+    // run (a previous run may have emptied them but failed to clean up).
+    prune_empty(&root.join("clipboard"));
+    prune_empty(&root.join("storage"));
+    if legacy_local != *root {
         prune_empty(&legacy_local);
+    }
+    if moved > 0 {
         // Logging is not up yet (this runs while the paths are being resolved), so say it here.
         eprintln!("moved {moved} old data file(s) into {}", root.display());
     }
@@ -656,6 +663,22 @@ mod tests {
         move_path(&other, &kept);
         assert_eq!(std::fs::read(&kept).unwrap(), b"kept");
         assert!(other.is_file());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// A destination folder that exists but holds nothing is a placeholder left by an earlier
+    /// half-run; the migration has to fill it instead of skipping the move (this is what left real
+    /// data behind in `%LOCALAPPDATA%` while empty `exports`/`media` folders sat in the new place).
+    #[test]
+    fn an_empty_placeholder_folder_still_receives_the_old_data() {
+        let base = std::env::temp_dir().join(format!("winwidget-place-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("old")).unwrap();
+        std::fs::create_dir_all(base.join("new")).unwrap();
+        std::fs::write(base.join("old").join("a.fwz"), b"one").unwrap();
+        assert!(move_path(&base.join("old"), &base.join("new")));
+        assert!(base.join("new").join("a.fwz").is_file());
+        assert!(!base.join("old").exists());
         let _ = std::fs::remove_dir_all(&base);
     }
 }
