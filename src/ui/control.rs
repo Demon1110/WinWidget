@@ -805,7 +805,7 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
 
         // ── packages ──────────────────────────────────────────────────────
         "package.import" => {
-            if let Some(path) = crate::platform::shell::pick("file", "fwz", "") {
+            if let Some(path) = crate::platform::shell::pick("file", "packages", "") {
                 stage_and_show(app, std::path::Path::new(&path));
             }
             Ok(Value::Null)
@@ -910,6 +910,8 @@ pub fn stage_and_show(app: &mut App, path: &std::path::Path) {
                 "newPermissions": staged.new_permissions,
                 "unknown": staged.unknown,
                 "update": staged.update,
+                // A uTools plugin with `preload.js` wants Node.js, which this host does not have.
+                "needsNode": staged.node,
                 "file": staged.source
                     .file_name()
                     .map(|n| n.to_string_lossy().to_string())

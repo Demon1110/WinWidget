@@ -130,6 +130,12 @@ pub fn pick(kind: &str, filter: &str, title: &str) -> Option<String> {
                 ],
             );
         }
+        // Widget packages: WinWidget's own `.fwz`, a plain `.zip` of a uTools plugin, the uTools
+        // archives themselves, and the encrypted `.upxs` (which gets an explanation, not an install).
+        "packages" => {
+            dialog = dialog.add_filter("Widget packages", &["fwz", "zip", "upx", "upxs", "asar"]);
+            dialog = dialog.add_filter("All files", &["*"]);
+        }
         _ => {}
     }
     let picked = if kind == "folder" {

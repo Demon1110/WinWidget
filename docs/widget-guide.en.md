@@ -857,14 +857,14 @@ WinWidget.exe D:\downloads\daily-quote.fwz
 A `.fwz` file is a widget folder zipped up with another extension.
 
 - **Export**: Control Center → **Add widgets** → your widget's card → **Export .fwz**. Hidden files and folders (such as `.git`) and `node_modules` are left out.
-- **Install**: double-click a `.fwz` file, drop it on the Control Center window, or press **Install .fwz file…** under **Add widgets**. The name, author, version and permissions are shown before anything is installed.
+- **Install**: double-click a `.fwz` file, drop it on the Control Center window, or press **Install widget package…** under **Add widgets**. The name, author, version and permissions are shown before anything is installed.
 - **Update**: raise `version` and export again. A widget with the same `id` is replaced; copies on the desktop keep their settings and saved data, and the old version goes to the Recycle Bin.
 - **Frameworks**: React, Vue, Svelte and others all work, as long as the output is static files. Put the build output (e.g. `dist/`) next to `widget.json`, point `entry` at its `index.html`, and use relative asset paths (with Vite, `base: "./"`).
 - **Limits**: a `.fwz` can be up to 64 MB, and at most 256 MB and 5000 files unpacked.
 
-### Installing uTools plugins (`.upx`)
+### Installing uTools plugins (`.upx` / `.zip` / `.asar`)
 
-The same **Install .fwz / .upx…** button (and dropping a file on the Control Center) also accepts uTools' `.upx`. The format is a gzip stream holding a 16-byte header, a JSON directory, padding to a 4-byte boundary, then the file bytes. WinWidget unpacks it in place and builds a `widget.json` from `plugin.json`:
+The same **Install widget package…** button (and dropping a file on the Control Center) also accepts uTools packages. A `.zip` as a developer uploads it — `index.html`, `index.js`, `logo.svg`, `plugin.json` and `preload.js` at the root, no `widget.json`, no outer folder — is accepted as it is; a `.upx` is a gzip stream holding a 16-byte header, a JSON directory, padding to a 4-byte boundary, then the file bytes. WinWidget unpacks it in place and builds a `widget.json` from `plugin.json`:
 
 | `plugin.json` | Becomes |
 | --- | --- |
@@ -873,6 +873,8 @@ The same **Install .fwz / .upx…** button (and dropping a file on the Control C
 | `main` / `logo` | `entry` / `icon` |
 | `version` / `author` / `description` | same fields |
 | `features` / `preload` | recorded under the `utools` block of `widget.json` for reference |
+
+Permissions and the size limits are the same as for `.fwz` (64 MB, 256 MB unpacked, 5000 entries); when `plugin.json` has no `name`, the id is `uplugin-` plus a hash of `pluginName` — this screen-recorder installs as `uplugin-110b3eda`.
 
 Permissions are inferred by scanning the page code (`utools.copyText` implies `clipboard`, `utools.screen.*` implies `screen`, and so on); the confirm dialog still lists them for you to accept.
 
@@ -894,7 +896,7 @@ The workable route is to **install it in uTools first, then move the installed c
 
 1. Install the plugin in uTools as usual.
 2. Find the matching `<hash>.asar` in `%APPDATA%\uTools\plugins\` (if unsure which one, try them through the import button; the confirm dialog shows the plugin name).
-3. Control Center → **Add widgets** → **Install .fwz / .upx…** and pick it, or simply drop the `.asar` on the Control Center.
+3. Control Center → **Add widgets** → **Install widget package…** and pick it, or simply drop the `.asar` on the Control Center.
 
 The `.asar` header is `[u32 4][u32 pickle][…][u32 jsonLen]`, its payload starts at `8 + pickle`, and directory entries are `{size, offset:"…", unpacked?, link?}` — the same layout as `.upx` with a different header, so both share one "unpack → build `widget.json` from `plugin.json`" flow. Entries marked `unpacked` (native modules and the like) are read from the sibling `<name>.asar.unpacked\` folder.
 

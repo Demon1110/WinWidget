@@ -188,7 +188,10 @@ pub fn unpack_asar(path: &Path, dir: &Path) -> Result<Summary, String> {
 }
 
 /// 读 `plugin.json`，写一份 `widget.json`，返回给 `packages` 看的摘要。
-fn synthesize(dir: &Path) -> Result<Summary, String> {
+///
+/// `pub(crate)`：zip 里直接放着 uTools 插件文件（没有 `widget.json`）时，`packages::stage_zip`
+/// 也走这一份转换，三种包（`.upx`、`.asar`、`.zip`）就共用同一套 `plugin.json → widget.json`。
+pub(crate) fn synthesize(dir: &Path) -> Result<Summary, String> {
     let plugin = crate::core::util::read_text(&dir.join("plugin.json"))
         .map_err(|e| format!("the package has no plugin.json: {e}"))?;
     let plugin: Value =

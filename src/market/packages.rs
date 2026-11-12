@@ -3,7 +3,7 @@
 
 use crate::runtime::app::App;
 use serde_json::{json, Value};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 const MAX_ENTRIES: usize = 4000;
@@ -24,6 +24,8 @@ pub struct Staged {
     pub unknown: Vec<String>,
     pub update: Option<Value>,
     pub existing: bool,
+    /// The package carries a `preload.js`, so it wants Node.js — which this host cannot give it.
+    pub node: bool,
 }
 
 /// Reads a dropped or picked package. uTools packages (`.upx`, and an installed plugin's `.asar`)
@@ -80,18 +82,19 @@ fn stage_upx(app: &App, path: &Path) -> Result<Staged, String> {
         unknown,
         update,
         existing: app.catalog.find(&summary.id).is_some(),
+        node: summary.node,
     })
 }
 
-fn stage_zip(app: &App, path: &Path) -> Result<Staged, String> {
-    let token = crate::core::config::new_id();
-    let dir = crate::core::paths::get().staging_dir().join(&token);
-    let file =
-        std::fs::File::open(path).map_err(|e| format!("the file could not be opened: {e}"))?;
-    let mut archive =
-        zip::ZipArchive::new(file).map_err(|e| format!("this is not a widget package: {e}"))?;
-
-    let mut manifest_name: Option<(String, String)> = None;
+/// Which entry inside the zip is the package manifest, and whether it is the native `widget.json`.
+///
+/// A WinWidget package carries `widget.json`; a zipped uTools plugin carries `plugin.json` (that is
+/// what a uTools developer uploads, so a plain `.zip` of a plugin is the usual download). The
+/// shallowest manifest of either kind decides the package root; `widget.json` wins outright, so a
+/// package that already has one is never converted.
+fn package_root(archive: &mut zip::ZipArchive<std::fs::File>) -> Option<(bool, String)> {
+    let mut native: Option<(usize, String)> = None;
+    let mut plugin: Option<(usize, String)> = None;
     for index in 0..archive.len() {
         let entry = match archive.by_index(index) {
             Ok(e) => e,
@@ -100,89 +103,95 @@ fn stage_zip(app: &App, path: &Path) -> Result<Staged, String> {
         let raw = entry.name().map(|n| n.to_string()).unwrap_or_default();
         let normalised = raw.replace('\\', "/");
         let lower = normalised.to_lowercase();
-        if lower.ends_with("widget.json") {
-            let depth = normalised.matches('/').count();
-            if manifest_name
-                .as_ref()
-                .map(|(_, n)| depth < n.matches('/').count())
-                .unwrap_or(true)
-            {
-                manifest_name = Some((raw.clone(), normalised.clone()));
-            }
+        let slot = if lower.ends_with("widget.json") {
+            &mut native
+        } else if lower.ends_with("plugin.json") {
+            &mut plugin
+        } else {
+            continue;
+        };
+        let depth = normalised.matches('/').count();
+        if slot.as_ref().map(|(d, _)| depth < *d).unwrap_or(true) {
+            *slot = Some((depth, normalised));
         }
     }
-    let (raw_manifest, manifest_path) =
-        manifest_name.ok_or_else(|| "the package has no widget.json".to_string())?;
+    match (native, plugin) {
+        (Some((_, path)), _) => Some((true, path)),
+        (None, Some((_, path))) => Some((false, path)),
+        (None, None) => None,
+    }
+}
+
+/// What a package turns into once its files are on disk. Comparing it with what is already
+/// installed (`describe`) needs the app, so that part happens afterwards in `staged`.
+struct Unpacked {
+    dir: PathBuf,
+    id: String,
+    name: String,
+    version: String,
+    author: String,
+    description: String,
+    permissions: Vec<String>,
+    /// The package declares `preload.js`, so it wants Node.js — which this host cannot give it.
+    node: bool,
+}
+
+fn stage_zip(app: &App, path: &Path) -> Result<Staged, String> {
+    let token = crate::core::config::new_id();
+    let dir = crate::core::paths::get().staging_dir().join(&token);
+    let unpacked = unpack_zip(path, &dir)?;
+    Ok(staged(app, unpacked, path, token))
+}
+
+/// Fills in what this install would change: the upgrade note and the permissions still to grant.
+fn staged(app: &App, unpacked: Unpacked, source: &Path, token: String) -> Staged {
+    let unknown: Vec<String> = unpacked
+        .permissions
+        .iter()
+        .filter(|p| !crate::model::permissions::is_known(p))
+        .cloned()
+        .collect();
+    let (update, new_permissions) =
+        describe(app, &unpacked.id, &unpacked.version, &unpacked.permissions);
+    let existing = app.catalog.find(&unpacked.id).is_some();
+    Staged {
+        token,
+        archive: source.to_path_buf(),
+        source: source.to_path_buf(),
+        dir: unpacked.dir,
+        id: unpacked.id,
+        name: unpacked.name,
+        version: unpacked.version,
+        author: unpacked.author,
+        description: unpacked.description,
+        permissions: unpacked.permissions,
+        new_permissions,
+        unknown,
+        update,
+        existing,
+        node: unpacked.node,
+    }
+}
+
+/// Writes a `.fwz` or a plain `.zip` under `dir` and reads back what it declares. A folder with a
+/// `widget.json` is taken as it is; a folder with only `plugin.json` is a zipped uTools plugin, so
+/// its `widget.json` is synthesised first — the same conversion `.upx` / `.asar` go through.
+fn unpack_zip(path: &Path, dir: &Path) -> Result<Unpacked, String> {
+    let file =
+        std::fs::File::open(path).map_err(|e| format!("the file could not be opened: {e}"))?;
+    let mut archive =
+        zip::ZipArchive::new(file).map_err(|e| format!("this is not a widget package: {e}"))?;
+
+    let (native, manifest_path) = package_root(&mut archive).ok_or_else(|| {
+        "the package has no widget.json — and no uTools plugin.json either".to_string()
+    })?;
     let prefix = manifest_path
         .rfind('/')
         .map(|i| manifest_path[..=i].to_string())
         .unwrap_or_default();
 
-    let text = {
-        let mut entry = archive
-            .by_name(&raw_manifest)
-            .map_err(|e| format!("widget.json could not be read: {e}"))?;
-        let mut text = String::new();
-        entry
-            .read_to_string(&mut text)
-            .map_err(|e| format!("widget.json could not be read: {e}"))?;
-        text
-    };
-    let value: Value = serde_json::from_str(text.trim_start_matches('\u{feff}'))
-        .map_err(|e| format!("widget.json is not valid JSON: {e}"))?;
-
-    let id = value
-        .get("id")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    if id.is_empty() {
-        return Err("widget.json has no \"id\"".into());
-    }
-    if id
-        .to_lowercase()
-        .starts_with(crate::model::catalog::RESERVED_PREFIX)
-    {
-        return Err(format!(
-            "\"{id}\" starts with \"{}\", which is kept for the built-in widgets",
-            crate::model::catalog::RESERVED_PREFIX
-        ));
-    }
-    let name = crate::core::text::pick_value(value.get("name").unwrap_or(&Value::Null));
-    let name = name.as_str().unwrap_or(&id).to_string();
-    let version = value
-        .get("version")
-        .and_then(|v| v.as_str())
-        .unwrap_or("0.0.0")
-        .to_string();
-    let description =
-        crate::core::text::pick_value(value.get("description").unwrap_or(&Value::Null))
-            .as_str()
-            .unwrap_or("")
-            .to_string();
-    let author = value
-        .get("author")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let permissions: Vec<String> = value
-        .get("permissions")
-        .and_then(|v| v.as_array())
-        .map(|a| {
-            a.iter()
-                .filter_map(|v| v.as_str())
-                .map(|s| s.to_string())
-                .collect()
-        })
-        .unwrap_or_default();
-    let unknown: Vec<String> = permissions
-        .iter()
-        .filter(|p| !crate::model::permissions::is_known(p))
-        .cloned()
-        .collect();
-
     // Extract, refusing anything that would land outside the staging folder.
-    std::fs::create_dir_all(&dir).map_err(|e| format!("staging folder: {e}"))?;
+    std::fs::create_dir_all(dir).map_err(|e| format!("staging folder: {e}"))?;
     let mut total: u64 = 0;
     if archive.len() > MAX_ENTRIES {
         return Err("the package has too many files".into());
@@ -218,26 +227,94 @@ fn stage_zip(app: &App, path: &Path) -> Result<Staged, String> {
         std::io::copy(&mut entry, &mut out).map_err(|e| format!("write failed: {e}"))?;
     }
 
-    let (update, new_permissions) = describe(app, &id, &version, &permissions);
-    let existed = app.catalog.find(&id).is_some();
+    if native || dir.join("widget.json").is_file() {
+        return read_widget_manifest(dir);
+    }
+    if dir.join("plugin.json").is_file() {
+        let summary = crate::market::upx::synthesize(dir)?;
+        reject_reserved(&summary.id)?;
+        return Ok(Unpacked {
+            dir: dir.to_path_buf(),
+            id: summary.id,
+            name: summary.name,
+            version: summary.version,
+            author: summary.author,
+            description: summary.description,
+            permissions: summary.permissions,
+            node: summary.node,
+        });
+    }
+    Err("the package has neither widget.json nor plugin.json".into())
+}
 
-    Ok(Staged {
-        token,
-        archive: path.to_path_buf(),
-        source: path.to_path_buf(),
-        dir,
+fn read_widget_manifest(dir: &Path) -> Result<Unpacked, String> {
+    let manifest = dir.join("widget.json");
+    let text = crate::core::util::read_text(&manifest)
+        .map_err(|e| format!("widget.json could not be read: {e}"))?;
+    let value: Value = serde_json::from_str(text.trim_start_matches('\u{feff}'))
+        .map_err(|e| format!("widget.json is not valid JSON: {e}"))?;
+
+    let id = value
+        .get("id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    if id.is_empty() {
+        return Err("widget.json has no \"id\"".into());
+    }
+    reject_reserved(&id)?;
+    let name = crate::core::text::pick_value(value.get("name").unwrap_or(&Value::Null));
+    let name = name.as_str().unwrap_or(&id).to_string();
+    let version = value
+        .get("version")
+        .and_then(|v| v.as_str())
+        .unwrap_or("0.0.0")
+        .to_string();
+    let description =
+        crate::core::text::pick_value(value.get("description").unwrap_or(&Value::Null))
+            .as_str()
+            .unwrap_or("")
+            .to_string();
+    let author = value
+        .get("author")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let permissions: Vec<String> = value
+        .get("permissions")
+        .and_then(|v| v.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str())
+                .map(|s| s.to_string())
+                .collect()
+        })
+        .unwrap_or_default();
+    Ok(Unpacked {
+        dir: dir.to_path_buf(),
         id,
         name,
         version,
         author,
         description,
         permissions,
-        new_permissions,
-        unknown,
-        update,
-        existing: existed,
+        node: false,
     })
 }
+
+fn reject_reserved(id: &str) -> Result<(), String> {
+    if id
+        .to_lowercase()
+        .starts_with(crate::model::catalog::RESERVED_PREFIX)
+    {
+        return Err(format!(
+            "\"{id}\" starts with \"{}\", which is kept for the built-in widgets",
+            crate::model::catalog::RESERVED_PREFIX
+        ));
+    }
+    Ok(())
+}
+
 
 /// What an install would change: an upgrade note plus the permissions the user still has to grant.
 fn describe(
@@ -606,5 +683,97 @@ mod tests {
         );
         assert!(names.iter().all(|name| name.starts_with("demo/")));
         println!("probe: {}", probe.display());
+    }
+
+    /// A uTools developer uploads `plugin.json` + the built files, so downloads of a plugin are a
+    /// plain `.zip` with no `widget.json` at all. That has to be recognised as a package too, and
+    /// rooted at the shallowest `plugin.json` (the extra copies some bundlers leave behind must not
+    /// win).
+    #[test]
+    fn a_zipped_utools_plugin_is_rooted_at_its_shallowest_plugin_json() {
+        let base = std::env::temp_dir().join(format!("winwidget-zip-root-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let probe = base.join("plugin.zip");
+
+        let file = std::fs::File::create(&probe).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        writer.start_file("plugin.json", options).unwrap();
+        writer
+            .write_all(
+                br#"{"pluginName":"demo plugin","main":"index.html","preload":"preload.js"}"#,
+            )
+            .unwrap();
+        writer.start_file("index.html", options).unwrap();
+        writer.write_all(b"<!doctype html>").unwrap();
+        writer.start_file("node_modules/x/plugin.json", options).unwrap();
+        writer.write_all(br#"{"pluginName":"nested"}"#).unwrap();
+        writer.finish().unwrap();
+
+        let mut archive = zip::ZipArchive::new(std::fs::File::open(&probe).unwrap()).unwrap();
+        let (native, path) = package_root(&mut archive).unwrap();
+        assert!(!native, "there is no widget.json in this package");
+        assert_eq!(path, "plugin.json");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// The exact package the user handed over: a uTools developer upload (files at the zip root,
+    /// `plugin.json` naming the plugin, a `preload.js` that wants Node) with no `widget.json`
+    /// anywhere. It has to unpack into a widget folder with a synthesised manifest.
+    #[test]
+    fn a_zipped_utools_plugin_unpacks_into_a_widget_folder() {
+        let package = Path::new(env!("CARGO_MANIFEST_DIR")).join("dist/plugin.zip");
+        if !package.is_file() {
+            println!("skip: {} is not there", package.display());
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("winwidget-zip-real-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let unpacked = unpack_zip(&package, &dir).unwrap();
+        assert!(unpacked.node, "the package declares preload.js");
+        assert!(
+            unpacked.id.starts_with("uplugin-"),
+            "this plugin has no `name`, so the id is a hash of its name; got {}",
+            unpacked.id
+        );
+        assert_eq!(unpacked.name, "变焦录屏");
+        assert!(dir.join("index.html").is_file());
+        assert!(dir.join("index.js").is_file());
+        assert!(dir.join("plugin.json").is_file());
+        let manifest = crate::core::util::read_text(&dir.join("widget.json")).unwrap();
+        let value: Value = serde_json::from_str(&manifest).unwrap();
+        assert_eq!(value["entry"], "index.html");
+        assert_eq!(value["icon"], "logo.svg");
+        assert_eq!(value["utools"]["preload"], "preload.js");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The native manifest always wins, even when it sits deeper than some `plugin.json`: a package
+    /// that already declares itself for WinWidget must never be converted from uTools fields.
+    #[test]
+    fn a_widget_manifest_wins_over_a_plugin_manifest() {
+        let base =
+            std::env::temp_dir().join(format!("winwidget-zip-native-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let probe = base.join("both.zip");
+
+        let file = std::fs::File::create(&probe).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        writer.start_file("plugin.json", options).unwrap();
+        writer.write_all(br#"{"pluginName":"demo"}"#).unwrap();
+        writer.start_file("demo/widget.json", options).unwrap();
+        writer.write_all(br#"{"id":"demo"}"#).unwrap();
+        writer.finish().unwrap();
+
+        let mut archive = zip::ZipArchive::new(std::fs::File::open(&probe).unwrap()).unwrap();
+        let (native, path) = package_root(&mut archive).unwrap();
+        assert!(native);
+        assert_eq!(path, "demo/widget.json");
+        let _ = std::fs::remove_dir_all(&base);
     }
 }

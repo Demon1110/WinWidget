@@ -143,8 +143,10 @@ const PHRASES = [
   ["資訊", "资讯", "Info"],
   ["媒體與裝飾", "媒体与装饰", "Media & decor"],
   ["其他", "其他", "Other"],
-  ["也可以把 .fwz 檔案拖到這個視窗", "也可以把 .fwz 文件拖到这个窗口", "You can also drop a .fwz file on this window"],
-  ["安裝 .fwz 檔案…", "安装 .fwz 文件…", "Install .fwz file…"],
+  ["也可以把 .fwz / .zip / .upx 檔案拖到這個視窗", "也可以把 .fwz / .zip / .upx 文件拖到这个窗口", "You can also drop a .fwz / .zip / .upx file on this window"],
+  ["安裝組件包…", "安装组件包…", "Install a widget package…"],
+  ["組件包（.fwz / .zip / .upx）", "组件包（.fwz / .zip / .upx）", "Widget packages (.fwz / .zip / .upx)"],
+  ["這個組件帶了 preload.js，要用 Node.js；這個程式沒有 Node，所以可能只有一部分功能能用。", "这个组件带了 preload.js，要用 Node.js；这个程序没有 Node，所以可能只有一部分功能能用。", "This widget ships a preload.js and wants Node.js, which this program does not provide — only part of it may work."],
   ["自己寫一個組件", "自己写一个组件", "Make your own"],
   ["從模板開始，十分鐘做出第一個。改了檔案存檔，桌面上就會更新。", "从模板开始，十分钟做出第一个。改了文件保存，桌面上就会更新。", "Start from a template and have one running in ten minutes. Save a file and the desktop updates."],
   ["新建組件", "新建组件", "New widget"],
@@ -300,7 +302,7 @@ const PHRASES = [
   ["已鎖定全部組件", "已锁定全部组件", "All widgets locked"],
   ["已解鎖全部組件", "已解锁全部组件", "All widgets unlocked"],
   ["已重新掃描組件目錄", "已重新扫描组件目录", "Widgets folder rescanned"],
-  ["只能安裝 .fwz 組件檔案", "只能安装 .fwz 组件文件", "Only .fwz widget files can be installed"],
+  ["只能安裝 .fwz / .zip / .upx 組件檔案", "只能安装 .fwz / .zip / .upx 组件文件", "Only .fwz / .zip / .upx widget files can be installed"],
 
   // ── dialogs ──
   ["安裝「{name}」", "安装“{name}”", "Install \"{name}\""],
