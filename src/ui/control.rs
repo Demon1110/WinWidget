@@ -413,8 +413,10 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
         "app.restart" => {
             let exe = std::env::current_exe().map_err(|e| BridgeError::new(e.to_string()))?;
             crate::platform::shell::launch(&exe.to_string_lossy()).map_err(BridgeError::new)?;
+            // Let the event loop run the normal exit path: kill exit(0) here would skip the
+            // unload grace period, the final save, and removing the tray icon.
             app.quit();
-            std::process::exit(0);
+            Ok(Value::Null)
         }
         // Move every database to a folder of the user's choosing. The copy happens now; the switch
         // itself needs a restart, because the folders are resolved once while the app starts.

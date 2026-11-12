@@ -229,7 +229,6 @@ WebView2 的 `chrome.webview.postMessage` 在 wry 下**只能传字符串**（�
 - **卡片右键菜单**用原生 `TrackPopupMenu`（Win32 手写），没有接 `assets/ui/menu` 的自绘菜单，视觉上是系统菜单。
 - **组件市场 / 自动更新**默认未配置 `market_url`、`update_url`，入口会明确提示"还没有设定来源"。
 - **默认热键 `Ctrl+Alt+W`** 可能与系统里其它程序冲突，注册失败只记 `warn` 日志，不影响启动；可在控制中心"设置 → 热键"里改。
-- **「新建组件」没有用上 `assets/templates/hello-widget*`**：`packages::create` 找的是 `templates/widget`，这个目录不存在，所以一直走代码里内联的最小模板（模板目录目前只被 `/__templates/` 文档示例引用）。
 - 更新链路兼容两种资产：名字带 `setup` 的安装包（旧版本发布件）直接拉起安装，其他 `.exe` 走 `--apply-update` 自我替换。
 
 ## 说明

@@ -1045,21 +1045,6 @@ pub fn is_zoomed(hwnd: HWND) -> bool {
     unsafe { IsZoomed(hwnd) != 0 }
 }
 
-/// Windows' own verdict on whether a full-screen app (game, video, presentation) is in front.
-/// Only used as a fallback: it also fires for a live-wallpaper renderer that covers the desktop.
-pub fn fullscreen_app_running() -> bool {
-    #[link(name = "shell32")]
-    extern "system" {
-        fn SHQueryUserNotificationState(state: *mut i32) -> i32;
-    }
-    let mut state: i32 = -1;
-    let hr = unsafe { SHQueryUserNotificationState(&mut state) };
-    if hr != 0 {
-        return false;
-    }
-    matches!(state, 2..=4)
-}
-
 /// The monitor covered by another app's full-screen window, if there is one.
 ///
 /// Geometry decides, the way FullWidget did: a maximized window, one that still has a title bar,

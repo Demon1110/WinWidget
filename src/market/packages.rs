@@ -392,7 +392,14 @@ fn install_staged(app: &mut App, staged: &Staged) -> Result<Value, String> {
         .user_widgets_dir()
         .join(&manifest.id);
     if desktop.exists() {
-        crate::platform::win32::recycle_path(&desktop);
+        // Recycling is required before the copy: if it fails (files locked by an open window,
+        // no recycle bin) the old files would survive under the new ones.
+        if !crate::platform::win32::recycle_path(&desktop) {
+            return Err(format!(
+                "{} is in use or cannot be moved to the Recycle Bin; close any windows of this widget and try again",
+                desktop.display()
+            ));
+        }
     }
     let _ = std::fs::create_dir_all(crate::core::paths::get().user_widgets_dir());
     copy_dir(&staged.dir, &desktop)?;
@@ -599,12 +606,30 @@ pub fn create(app: &mut App, name: &str) -> Result<Value, String> {
     }
     let folder = crate::core::paths::get().user_widgets_dir().join(&id);
     std::fs::create_dir_all(&folder).map_err(|e| format!("{}: {e}", folder.display()))?;
-    let template = crate::core::paths::get().templates_dir().join("widget");
-    if crate::core::assets::is_virtual(&template) {
-        // The starter files ship inside the exe; write them out from there.
-        copy_embedded_dir(&template, &folder)?;
-    } else if template.is_dir() {
-        copy_dir(&template, &folder)?;
+    // Starter files: the language-matched hello-widget template when one exists, else the
+    // untagged folder, else the inline minimal files below.
+    let tags = crate::core::text::candidates(&crate::core::text::locale());
+    let mut names: Vec<String> = tags.iter().map(|t| format!("hello-widget.{t}")).collect();
+    names.push("hello-widget".to_string());
+    let templates = crate::core::paths::get().templates_dir();
+    let embedded = crate::core::assets::is_virtual(&templates);
+    let template = names.into_iter().find_map(|name| {
+        let dir = templates.join(&name);
+        if embedded {
+            crate::core::assets::has(&format!("templates/{name}/widget.json")).then_some(dir)
+        } else if dir.is_dir() {
+            Some(dir)
+        } else {
+            None
+        }
+    });
+    if let Some(template) = template {
+        if crate::core::assets::is_virtual(&template) {
+            // The starter files ship inside the exe; write them out from there.
+            copy_embedded_dir(&template, &folder)?;
+        } else {
+            copy_dir(&template, &folder)?;
+        }
     }
     let manifest_file = folder.join("widget.json");
     let mut value: Value = crate::core::util::read_text(&manifest_file)
@@ -631,7 +656,8 @@ pub fn create(app: &mut App, name: &str) -> Result<Value, String> {
     }
 
     app.cfg_mut().own_widgets.push(id.clone());
-    app.cfg_mut().developer_mode = true;
+    // Deliberately not flipping developer_mode globally: hot reload and devtools should stay an
+    // explicit choice, and creating a widget is not one.
     app.catalog = crate::model::catalog::Catalog::default();
     app.catalog.scan();
     app.save();

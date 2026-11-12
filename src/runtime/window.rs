@@ -82,7 +82,7 @@ impl WidgetWin {
     /// update and on every geometry change, and setting a window's size again — even to the same
     /// size — makes Windows, DWM and WebView2 re-layout: with a handful of transparent cards that
     /// is the flash the user sees while a card is dragged or enlarged.
-    pub fn place(&mut self, card: w::RECT, inner: Option<(i32, i32)>) {
+    pub fn place(&mut self, card: w::RECT) {
         self.card = card;
         let outer = w::inflate(card, self.margin);
         let width = outer.width().max(1);
@@ -103,9 +103,6 @@ impl WidgetWin {
             right: outer.left + width,
             bottom: outer.top + height,
         };
-        if let Some((_, _)) = inner {
-            // Kept for callers that need the window client size; nothing more to do.
-        }
     }
 
     /// Tells WebView2 the size to lay out at, unless it already has that size.
@@ -129,7 +126,7 @@ impl WidgetWin {
         }
         self.margin = margin;
         let card = self.card;
-        self.place(card, None);
+        self.place(card);
     }
 
     /// Re-reads the window after something else moved or resized it, and hands the new size to

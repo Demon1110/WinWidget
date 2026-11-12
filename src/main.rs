@@ -40,6 +40,9 @@ fn main() {
         return;
     }
     crate::platform::update::clean_downloads(&paths::get().update_dir());
+    // Staged installs are only meaningful while the install sheet is open in the running copy; a
+    // previous run that quit mid-install leaves them behind, so sweep the whole folder.
+    let _ = std::fs::remove_dir_all(paths::get().staging_dir());
     if !args.is_empty() {
         // The release build is a GUI-subsystem exe and owns no console: borrow the caller's one so
         // `winwidget list` prints where the user can see it, instead of into a void.

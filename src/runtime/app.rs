@@ -306,14 +306,6 @@ impl App {
         (work.left, work.right, work.bottom)
     }
 
-    pub fn scale(&self) -> f64 {
-        self.windows
-            .values()
-            .next()
-            .map(|w| w.scale)
-            .unwrap_or_else(|| 1.0)
-    }
-
     // ── page data ───────────────────────────────────────────────────────────
 
     pub fn boot(&self, inst: &InstanceConfig, manifest: &Manifest) -> Boot {
@@ -635,7 +627,7 @@ impl App {
             return;
         };
         let card = crate::runtime::window::card_rect(&inst, w.scale);
-        w.place(card, None);
+        w.place(card);
     }
 
     /// Hands the window's current size to the web view (and keeps `card` in step with the OS).
