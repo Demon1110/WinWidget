@@ -948,6 +948,8 @@ How pictures land: when a screenshot arrives, the host writes the PNG to `data\c
 
 Favourites work two ways: the plugin keeps its own `collect/<hash>` documents and lists them with `utools.db.promises.allDocs("collect/")`, while the host record carries a `pinned` flag (`clipboard.history.pin`). To make the former work, `utools.js` now accepts a prefix string in `db.allDocs` (it used to take only `{idStartsWith}`), `db.getAttachment` returns an object that also has `buffer` / `byteLength` / `length` (uTools hands back a Node `Buffer`, and plugins write `new Blob([n.buffer])`), and `db.postAttachment` takes an `ArrayBuffer` or a `TypedArray`.
 
+The watcher is **change-driven**: every 700 ms the host looks only at `GetClipboardSequenceNumber()` and reads nothing while that counter stands still. The old tick opened the clipboard three times and, when a screenshot was sitting on it, re-encoded the DIB to PNG each round, which alone kept a fifth of a core busy. Pictures are now written **straight into that widget's attachment store** (`attachment/<hash>`) by the host, so a page no longer drags a few hundred kilobytes of base64 across the bridge.
+
 
 
 ---

@@ -133,6 +133,7 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
                 })
                 .take(if limit == 0 { usize::MAX } else { limit })
                 .collect();
+            publish_images(ctx, &list);
             Ok(Reply::Now(Value::Array(list)))
         }
         "clipboard.history.stats" => {
@@ -325,6 +326,27 @@ fn find_record(p: &Value) -> Option<Value> {
 }
 
 /// The PNG behind a picture record, either from `value` (a path) or from the `hash` file name.
+/// Puts the pictures of the list into the *calling widget's* attachment store, so the plugin's own
+/// `utools.db.getAttachment("attachment/<hash>")` finds them. Doing it here keeps the bytes off
+/// the bridge: a page that had to upload them itself moved a few hundred kilobytes through JSON on
+/// every cold start, which is exactly the kind of pause that reads as "the window froze".
+fn publish_images(ctx: &Ctx, list: &[Value]) {
+    let store = crate::core::db::Store::for_widget(&ctx.manifest.id);
+    for record in list {
+        if type_of(record) != "image" {
+            continue;
+        }
+        let hash = record.get("hash").and_then(|v| v.as_str()).unwrap_or_default();
+        if hash.is_empty() {
+            continue;
+        }
+        if let Some(bytes) = image_bytes(record) {
+            store.ensure_attachment(&format!("attachment/{hash}"), "image/png", &bytes);
+        }
+    }
+}
+
+/// The PNG behind a picture record, either from `value` (a path) or from the `hash` file name.
 fn image_bytes(record: &Value) -> Option<Vec<u8>> {
     if type_of(record) != "image" {
         return None;
@@ -395,7 +417,19 @@ fn watch() {
     });
 }
 
+/// Windows bumps this counter on every clipboard change. Reading the clipboard means opening it
+/// (which fails whenever another app holds it), and a picture has to be decoded and re-encoded to
+/// PNG — doing that three times a second pegs a core for no reason. So nothing is read until the
+/// counter actually moves.
+static LAST_SEQ: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(u32::MAX);
+
 fn record_now() {
+    let seq = w::clipboard_sequence();
+    if seq != 0
+        && LAST_SEQ.swap(seq, std::sync::atomic::Ordering::Relaxed) == seq
+    {
+        return;
+    }
     let text = w::clipboard_text().unwrap_or_default();
     let files = w::clipboard_files();
     if text.trim().is_empty() && files.is_empty() {

@@ -111,6 +111,7 @@
   }
 
   const attached = new Set(); // image hashes already posted to this widget's attachment store
+  const failed = new Set(); // ... and the ones whose bytes could not be found at all
 
   /**
    * uTools' 剪贴板 renders a picture record through `utools.db.getAttachment("attachment/" + hash)`,
@@ -123,8 +124,20 @@
     for (const record of list) {
       if (!record || record.type !== "image" || !record.hash) continue;
       const hash = String(record.hash);
+      if (failed.has(hash)) {
+        record.value = "attachment/" + hash;
+        continue;
+      }
       if (!attached.has(hash)) {
         try {
+          // Already posted by an earlier page load? Then do not move megabytes again: asking for
+          // the attachment type is a few bytes, the picture itself is not.
+          const known = await window.utools.db.getAttachmentType("attachment/" + hash);
+          if (known) {
+            attached.add(hash);
+            record.value = "attachment/" + hash;
+            continue;
+          }
           const url = await call("clipboard.image", { id: record._id || hash });
           const buffer = bytesOfDataUrl(url);
           if (buffer) {
@@ -132,6 +145,7 @@
             attached.add(hash);
           }
         } catch (err) {
+          if (!failed.has(hash)) failed.add(hash);
           console.warn("[WinWidget] services: picture " + hash + " is not available —", err && err.message);
         }
       }

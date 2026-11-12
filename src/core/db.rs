@@ -165,16 +165,29 @@ fn announce(ctx: &mut Ctx, store: &Store, ids: &[String]) {
 }
 
 /// One widget's database: `{ "docs": { id: {…} }, "attachments": { id: type } }` plus a
-/// `<id>.attachments/` folder for the bytes.
-struct Store {
+/// `<id>.attachments/` folder for the bytes. Public inside the crate only so the clipboard can
+/// hand a picture straight to a widget's attachment store.
+pub(crate) struct Store {
     widget: String,
 }
 
 impl Store {
-    fn for_widget(id: &str) -> Store {
+    pub(crate) fn for_widget(id: &str) -> Store {
         Store {
             widget: sanitize(id),
         }
+    }
+
+    /// Puts bytes behind `id` unless something is already stored there.
+    ///
+    /// The clipboard uses this so a picture lands in the widget's attachment store directly: the
+    /// plugin reads `utools.db.getAttachment("attachment/<hash>")`, and copying a picture through
+    /// the page first would move its bytes over the bridge for no reason.
+    pub(crate) fn ensure_attachment(&self, id: &str, kind: &str, bytes: &[u8]) -> bool {
+        if self.attachment_type(id).is_some() {
+            return true;
+        }
+        self.attach(id, kind, bytes).is_ok()
     }
 
     fn file(&self) -> PathBuf {
