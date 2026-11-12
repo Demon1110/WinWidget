@@ -900,6 +900,31 @@ The `.asar` header is `[u32 4][u32 pickle][…][u32 jsonLen]`, its payload start
 
 Also worth knowing: `utools.getAppVersion()` reports a **compatibility level** (currently `7.6.0`), not WinWidget's own version. Plugins routinely write `parseFloat(utools.getAppVersion()) < 7` to decide whether the host is new enough; answering `1.0.0` makes them paint an "uTools is too old" page over everything.
 
+### Plugins that ship a `preload.js`: the `window.services` bridge
+
+uTools' `preload.js` runs in Electron's preload context, where `require("fs")` and `require("electron")` exist. WinWidget pages run in WebView2 with no Node, so a preload plugin used to open a blank page: the first `window.services.xxx()` threw `Cannot read properties of undefined` and the whole React tree never mounted.
+
+Every widget page now gets `services.js` injected after `utools.js`, which answers the **same method names** from the host bridge:
+
+| method in the preload | now answered by |
+| --- | --- |
+| `readAllRecords` / `removeRecords` / `clearAllRecords` | the host's clipboard history, `clipboard.history`, stored in `data\clipboard-history.json` (last 300 entries, text and files) |
+| `listenAppendRecord(cb)` | the host polls the clipboard every 700 ms and pushes new entries to the page |
+| `filesExists(paths)` | `clipboard.filesExist` |
+| `executeCopy` / `executePaste` | routed to `utools.copyText` / `copyFile` / `hideMainWindowPasteText` / `hideMainWindowPasteFile` |
+| `dragToFiles`, `pinScreen`, `mcpPinData`, … | no-ops for now, each leaving one "not bridged" line in the console |
+
+`window.services` is only installed when the page does not already define one.
+
+Measured on uTools' 剪贴板 plugin (`69699f4f…asar`): the card opens as a normal list, anything you copy appears at the top immediately, a file entry reads "1 个文件", and clicking an entry copies or pastes it. The gaps are listed below.
+
+Two things to remember:
+
+- **History is only recorded while the host runs**, and it starts on the first `clipboard.history` call. Pictures are not recorded yet, so the 图像 tab stays empty.
+- **The install sheet is the consent.** Previously an import wrote `permissions` and then every call failed with "permission denied" until the user found the switch; now installing writes the listed permissions into `grants` and reloads pages that were already open.
+
+Not bridged yet: `setSubInput` (the search box above a plugin is drawn by uTools' own window), picture entries, pin/edge windows, dragging an entry out as a file.
+
 
 
 ---

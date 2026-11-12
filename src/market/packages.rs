@@ -326,6 +326,23 @@ fn install_staged(app: &mut App, staged: &Staged) -> Result<Value, String> {
     let before = app.cfg().instances.len();
     let id = app.add_widget(&manifest.id, None)?;
     let had_instance = app.cfg().instances.len() > before;
+    // The install sheet listed these permissions and the user pressed install, which is the same
+    // consent `widget.grant` records elsewhere — without it the package installs and then every
+    // bridged call fails with "permission denied" until the user hunts for the switch.
+    crate::model::permissions::grant(app.cfg_mut(), &manifest);
+    app.save();
+    // Pages opened before the grant would keep getting "permission denied" until the next restart.
+    for (iid, w) in app
+        .cfg()
+        .instances
+        .iter()
+        .filter(|i| i.widget.eq_ignore_ascii_case(&manifest.id))
+        .map(|i| (i.id.clone(), i.widget.clone()))
+        .collect::<Vec<_>>()
+    {
+        let _ = w;
+        app.reload_instance(&iid);
+    }
     app.push_state_to_control(None);
     Ok(json!({
         "name": manifest.display_name(),
