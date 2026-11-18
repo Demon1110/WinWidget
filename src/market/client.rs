@@ -1,11 +1,16 @@
-//! The online widget list. There is no server baked in: a market address comes from
-//! `market_url` in config.json, and without one the page says so plainly instead of pretending.
+//! The online widget list. A market address can be given with `market_url` in config.json;
+//! without one this build reads the WinWidgetHub repository, so the page works out of the box.
 
 use crate::runtime::app::App;
 use serde_json::{json, Value};
 use std::time::Duration;
 
-pub const DEFAULT_SITE: &str = "https://winwidget.example/market";
+pub const DEFAULT_SITE: &str = "https://github.com/Demon1110/WinWidgetHub";
+
+/// 没有配置 `market_url` 时读的清单：WinWidgetHub 仓库根目录的 `widgets.json`。
+/// 清单里的下载地址、预览图都是绝对网址，所以这里直接给文件地址，不加 `/widgets.json`。
+pub const DEFAULT_LIST: &str =
+    "https://raw.githubusercontent.com/Demon1110/WinWidgetHub/main/widgets.json";
 
 fn site(app: &App) -> String {
     app.cfg()
@@ -16,11 +21,16 @@ fn site(app: &App) -> String {
 }
 
 fn list_url(app: &App) -> String {
-    let site = site(app);
-    if site.ends_with(".json") {
-        site
-    } else {
-        format!("{}/widgets.json", site.trim_end_matches('/'))
+    let configured = app
+        .cfg()
+        .market_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|u| !u.is_empty());
+    match configured {
+        Some(site) if site.ends_with(".json") => site.to_string(),
+        Some(site) => format!("{}/widgets.json", site.trim_end_matches('/')),
+        None => DEFAULT_LIST.to_string(),
     }
 }
 
