@@ -1,10 +1,10 @@
 body { display: flex; flex-direction: column; }
 
-.gen { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 9px; }
+.gen { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; justify-content: center; gap: 10px; }
 
 .pw {
-  flex: 1 1 0;
-  min-height: 2.4rem;
+  flex: none;
+  min-height: 3.2rem; max-height: 5.6rem;
   display: flex; align-items: center;
   padding: 6px 10px;
   border-radius: calc(var(--w-radius) * 0.6);
