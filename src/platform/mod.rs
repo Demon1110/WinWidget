@@ -1,6 +1,7 @@
 //! Everything that talks to Windows: locale, time zone, autostart, fonts, the tray and hotkeys,
 //! plus the providers behind the widget API (system, audio, media, shell).
 
+pub mod adapters;
 pub mod audio;
 pub mod chinese;
 pub mod files;

@@ -14,6 +14,7 @@
 //!
 //! `None` means "not mine, try the next module"; `Some` is the answer (or a spawned reply).
 
+use crate::core::ports::Ports;
 use crate::core::util::{BridgeError, BridgeResult};
 use crate::model::manifest::Manifest;
 use crate::runtime::app::{post, App, Ev};
@@ -36,9 +37,16 @@ pub struct Ctx<'a> {
     pub id: i64,
     pub target: &'a str,
     pub win: Option<u32>,
+    /// Host capabilities behind this call. The runtime injects the real Win32-backed
+    /// adapters; tests pass a fake set through [`Ctx::new`].
+    pub ports: &'a Ports,
 }
 
 impl<'a> Ctx<'a> {
+    /// Build a context. `ports` carries the host capabilities (clipboard, system facts, …);
+    /// the runtime passes the real Win32-backed set, tests pass a fake one. Making it
+    /// mandatory avoids a default that would silently answer "no clipboard / no folders".
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         app: &'a mut App,
         instance: &'a str,
@@ -47,6 +55,7 @@ impl<'a> Ctx<'a> {
         manifest: Manifest,
         allowed: Vec<String>,
         id: i64,
+        ports: &'a Ports,
     ) -> Self {
         Ctx {
             app,
@@ -56,6 +65,7 @@ impl<'a> Ctx<'a> {
             id,
             target,
             win,
+            ports,
         }
     }
 

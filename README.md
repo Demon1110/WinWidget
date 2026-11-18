@@ -228,7 +228,7 @@ Rust 允许模块互相引用，编译器不会阻止 `core::` 里的代码反�
 - `python3 scripts/check-arch.py` —— 只拦**新增**违规：现有的一批反向依赖冻结在 `scripts/arch-baseline.json`（棘轮），新增边或某条边引用次数变多都会失败。
 - `python3 scripts/check-arch.py --show` —— 打印完整的层间依赖与每一处反向引用的文件行号。
 - 减少违规后 `python3 scripts/check-arch.py --update` 收紧基线（只会更严，不会自动放宽）。
-- `core/ports.rs` 是新增能力的首选落点：宿主能力以 trait 定义在此，平台实现放 `platform/`，页面能力通过 `Ctx.ports` 注入 —— 新代码不必再往 `core` 里加反向依赖。
+- `core/ports.rs` 是新增能力的首选落点：宿主能力以 trait 定义在此，平台实现放 `platform/adapters.rs`，页面能力通过 `Ctx.ports` 注入 —— 新代码不必再往 `core` 里加反向依赖。已迁移的试点：剪贴板文本/文件读写（`ClipboardPort`）、系统路径与浅色模式（`SystemPort`）；`bridge.rs` 注入真实 Win32 适配器，单测注入内存 fake。迁移一处，`core→platform` 反向依赖就少一处（护栏基线随之收紧）。
 
 ## 已知限制
 

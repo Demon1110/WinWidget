@@ -69,7 +69,8 @@ fn call_at(
         Some(id) => format!("win:{id}"),
         None => instance.to_string(),
     };
-    let mut ctx = Ctx::new(app, instance, &target, win, manifest, allowed, id);
+    let ports = crate::platform::adapters::real_ports();
+    let mut ctx = Ctx::new(app, instance, &target, win, manifest, allowed, id, ports);
     crate::core::api::dispatch(&mut ctx, method, p)
 }
 

@@ -5,9 +5,19 @@
 //! belong to the same domain, so they live here too.
 
 use crate::core::api::{Ctx, Reply};
+use crate::core::ports::SystemPort;
 use crate::core::util::{jnum, jstr, req_str, BridgeError, BridgeResult};
 use crate::platform::win32 as w;
 use serde_json::{json, Value};
+
+/// Map a known-folder lookup to what the page sees. Separate from `Ctx` so it can be
+/// unit-tested with a fake system port.
+fn named_path_value(system: &dyn SystemPort, name: &str) -> Value {
+    match system.known_folder_path(name) {
+        Some(path) => Value::String(path),
+        None => Value::Null,
+    }
+}
 
 /// Every method this category answers. Listing them keeps the chain honest: a module claims only
 /// what it really implements, and anything else falls through to the next one.
@@ -113,16 +123,13 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
             "isLinux": false,
             "appVersion": env!("CARGO_PKG_VERSION"),
             "dev": ctx.app.cfg().developer_mode,
-            "light": crate::platform::system_light(),
+            "light": ctx.ports.system.light_mode(),
         }))),
 
         // ── system paths (utools.getPath) ─────────────────────────────────────────────────────
         "paths.named" => {
             let name = jstr(p, "name").unwrap_or_default();
-            Ok(Reply::Now(match w::known_folder_path(&name) {
-                Some(path) => Value::String(path),
-                None => Value::Null,
-            }))
+            Ok(Reply::Now(named_path_value(ctx.ports.system, &name)))
         }
 
         // ── notifications (utools.showNotification) ───────────────────────────────────────────
@@ -242,4 +249,59 @@ fn monitor_sizes() -> (Vec<(i32, i32, bool)>, i32) {
         .map(|(w, _, _)| *w)
         .unwrap_or(0);
     (list, primary_width)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct FakeSystem {
+        known: Vec<(String, String)>,
+        light: bool,
+    }
+
+    impl SystemPort for FakeSystem {
+        fn known_folder_path(&self, name: &str) -> Option<String> {
+            self.known
+                .iter()
+                .find(|(n, _)| n == name)
+                .map(|(_, path)| path.clone())
+        }
+        fn light_mode(&self) -> bool {
+            self.light
+        }
+    }
+
+    fn fake() -> FakeSystem {
+        FakeSystem {
+            known: vec![
+                ("desktop".into(), "C:\\Users\\me\\Desktop".into()),
+                ("home".into(), "C:\\Users\\me".into()),
+            ],
+            light: true,
+        }
+    }
+
+    #[test]
+    fn known_folder_resolves_to_json_string() {
+        assert_eq!(
+            named_path_value(&fake(), "desktop"),
+            json!("C:\\Users\\me\\Desktop")
+        );
+    }
+
+    #[test]
+    fn unknown_folder_resolves_to_json_null() {
+        assert_eq!(named_path_value(&fake(), "nonesuch"), Value::Null);
+    }
+
+    #[test]
+    fn fake_reports_light_mode() {
+        let dark = FakeSystem {
+            known: Vec::new(),
+            light: false,
+        };
+        assert!(fake().light_mode());
+        assert!(!dark.light_mode());
+    }
 }

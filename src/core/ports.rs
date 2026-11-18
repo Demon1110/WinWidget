@@ -1,0 +1,74 @@
+//! Ports — the contracts the host offers to the capability modules.
+//!
+//! This is the bottom of the dependency graph on purpose. A capability module
+//! (`core::clipboard`, `core::system`, …) calls a trait defined here; the Windows-backed
+//! implementation lives in `platform::adapters`; the runtime injects one into every API
+//! call through [`crate::core::api::Ctx`]. Neither side needs to know the other, so a
+//! capability can be tested by injecting a fake and no real clipboard, window or registry
+//! is ever touched.
+//!
+//! Adding a host capability used to mean reaching from `core` straight into
+//! `platform::win32` (one of the reverse dependencies the arch guard freezes). New code
+//! should add a trait here and an adapter under `platform/` instead.
+
+/// Text and files on the system clipboard — the parts of `core::clipboard` that talk to
+/// the OS. The history layer on top of these stays in the capability module.
+pub trait ClipboardPort: Send + Sync {
+    fn read_text(&self) -> Option<String>;
+    fn write_text(&self, text: &str) -> bool;
+    fn read_files(&self) -> Vec<String>;
+    fn write_files(&self, paths: &[String]) -> bool;
+}
+
+/// Machine facts the widget API exposes synchronously (no subscription needed).
+pub trait SystemPort: Send + Sync {
+    /// A uTools `getPath` name → absolute path, e.g. `desktop`, `home`, `temp`.
+    fn known_folder_path(&self, name: &str) -> Option<String>;
+    /// Windows' "apps use light theme" switch.
+    fn light_mode(&self) -> bool;
+}
+
+/// Sending a bridge answer back to a page. The runtime implements this for `App`, so a
+/// transport/capability only needs `&dyn Host` rather than a mutable handle to the whole
+/// application. Kept as the contract for the next refactoring step; [`Ports`] only carries
+/// the capabilities already migrated.
+#[allow(dead_code)]
+pub trait Host: Send + Sync {
+    fn send_to(&self, target: &str, body: &str);
+}
+
+/// The capabilities injected into a single API call. Static references keep this a
+/// zero-allocation hop: the concrete adapters are stateless singletons in `platform`.
+pub struct Ports {
+    pub clipboard: &'static dyn ClipboardPort,
+    pub system: &'static dyn SystemPort,
+}
+
+/// A do-nothing set for callers that have no host behind them (used by unit tests that
+/// exercise only parameter handling, and as the safe default before an injection point
+/// is wired up).
+pub struct NullPorts;
+
+impl ClipboardPort for NullPorts {
+    fn read_text(&self) -> Option<String> {
+        None
+    }
+    fn write_text(&self, _text: &str) -> bool {
+        false
+    }
+    fn read_files(&self) -> Vec<String> {
+        Vec::new()
+    }
+    fn write_files(&self, _paths: &[String]) -> bool {
+        false
+    }
+}
+
+impl SystemPort for NullPorts {
+    fn known_folder_path(&self, _name: &str) -> Option<String> {
+        None
+    }
+    fn light_mode(&self) -> bool {
+        true
+    }
+}
