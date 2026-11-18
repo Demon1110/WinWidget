@@ -221,6 +221,15 @@ WebView2 的 `chrome.webview.postMessage` 在 wry 下**只能传字符串**（�
 - 托盘链路：第二份副本启动 → `Another copy is already running; showing it` → 托盘线程收到 `ASK_CONTROL` → `Opening the control center` → 控制中心窗口出现并渲染。
 - 手改 `config.json`（带 BOM，记事本/PowerShell 写入的常见情况）不会被当成坏文件重置：读取时会先剥掉 BOM。
 
+### 架构护栏（依赖方向）
+
+Rust 允许模块互相引用，编译器不会阻止 `core::` 里的代码反向调用 `runtime::` / `ui::`。`src/lib.rs` 声明的分层（core < platform < model < market < runtime < ui）靠 `scripts/check-arch.py` 守住：它扫描所有 `crate::层::` 引用，发现反向依赖就报错，CI 的 **Architecture guard** 工作流在每次 push / PR 自动跑。
+
+- `python3 scripts/check-arch.py` —— 只拦**新增**违规：现有的一批反向依赖冻结在 `scripts/arch-baseline.json`（棘轮），新增边或某条边引用次数变多都会失败。
+- `python3 scripts/check-arch.py --show` —— 打印完整的层间依赖与每一处反向引用的文件行号。
+- 减少违规后 `python3 scripts/check-arch.py --update` 收紧基线（只会更严，不会自动放宽）。
+- `core/ports.rs` 是新增能力的首选落点：宿主能力以 trait 定义在此，平台实现放 `platform/`，页面能力通过 `Ctx.ports` 注入 —— 新代码不必再往 `core` 里加反向依赖。
+
 ## 已知限制
 
 - **内置组件没有磁盘目录**：发布版里它们在 exe 里，「打开组件目录」对内置组件会提示先导出 `.fwz`；开发指南的 Markdown 和 `docs\m*`（里程碑截图，约 13 MB）是仓库素材、不编进二进制，需要看图请从仓库取。

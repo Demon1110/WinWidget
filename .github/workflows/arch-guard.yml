@@ -1,0 +1,20 @@
+name: Architecture guard
+
+# Rust permits module cycles, so the compiler alone cannot enforce the layer order
+# declared in src/lib.rs. This job runs the ratchet: any NEW reverse dependency (or
+# an increase in an existing one) fails the build. Reducing them is always allowed;
+# re-freeze with `python3 scripts/check-arch.py --update` in that case.
+on:
+  push:
+  pull_request:
+
+jobs:
+  layers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Check layer dependencies
+        run: python3 scripts/check-arch.py
