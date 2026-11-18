@@ -230,6 +230,7 @@ Rust 允许模块互相引用，编译器不会阻止 `core::` 里的代码反�
 - 减少违规后 `python3 scripts/check-arch.py --update` 收紧基线（只会更严，不会自动放宽）。
 - `core/ports.rs` 是新增能力的首选落点：宿主能力以 trait 定义在此，平台实现放 `platform/adapters.rs`，页面能力通过 `Ctx.ports` 注入 —— 新代码不必再往 `core` 里加反向依赖。已迁移的试点：剪贴板文本/文件读写（`ClipboardPort`）、系统路径与浅色模式（`SystemPort`）；`bridge.rs` 注入真实 Win32 适配器，单测注入内存 fake。迁移一处，`core→platform` 反向依赖就少一处（护栏基线随之收紧）。
 - 阶段 2 把事件协议（`Ev` / `post` / 建窗期的事件暂存）从 `runtime::app` 下沉到 `core/bus.rs`（`runtime::app` 原样重导出，外部调用不变），并把 `events` / `schedule` 两个 category 对 `&mut App` 的依赖换成 `core/ports.rs` 的窄 trait `EventsHost` / `ScheduleHost`（`App` 在 runtime 侧实现）。结果：`core→runtime` 反向引用 10 → 8、`core→model` 6 → 5，总计 76 → 73；新增内存 fake 单测证明这些逻辑脱离 `App` 可测。`core/window.rs` 的窗口构建仍直接持有 `&mut App`（60+ 处字段直访），留待后续阶段配合窗口抽象整体处理。
+- 阶段 3 收敛 `sync_serve()`：删掉 11 处"紧接着已有内部同步"的冗余调用（widget 设置、卸载组件、`rescan`、`refresh` 等），并把"重建快照 → 读 `state_json` → 推控制中心"的三段式抽成 `ui::control::push_control_state` 单一出口（控制中心 `ready`、`refresh`、`refresh_themes` 复用）；`push_appearance` 不再隐式同步，职责交回调用方。手动 `sync_serve` 从 17 处降到 6 处，且每处都在"确实改了派生源之后"；`state_json` 只读 `App`、不读 serve 快照，所以删减不影响控制中心数据。`App` 上帝对象的字段拆分与 `core/window.rs` 的 `&mut App` 重写评估后暂缓——前者 17 处字段直访改动大却无反向依赖收益，后者需配合窗口抽象整体重写，留待后续。
 
 ## 已知限制
 

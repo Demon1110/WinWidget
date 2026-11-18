@@ -244,9 +244,7 @@ pub fn handle(app: &mut App, msg: &str) {
         if let Some(control) = &mut app.control {
             control.ready = true;
         }
-        app.sync_serve();
-        let state = state_json(app);
-        app.send_to(CONTROL_WIN, &format!("{{\"ev\":\"state\",\"d\":{state}}}"));
+        push_control_state(app);
         return;
     }
     let Some(id) = value.get("id").and_then(|i| i.as_i64()) else {
@@ -266,15 +264,21 @@ pub fn handle(app: &mut App, msg: &str) {
     }
 }
 
-fn refresh(app: &mut App, instance: Option<&str>) {
-    if let Some(id) = instance {
-        app.sync_serve();
-        app.push_appearance(id);
-        app.push_state(id);
-    }
+/// Rebuild the served snapshot and push the full state to the control center. Keeping this
+/// one place means "sync then publish" cannot drift out of order, and callers never have to
+/// remember to sync before reading [`state_json`].
+fn push_control_state(app: &mut App) {
     app.sync_serve();
     let state = state_json(app);
     app.send_to(CONTROL_WIN, &format!("{{\"ev\":\"state\",\"d\":{state}}}"));
+}
+
+fn refresh(app: &mut App, instance: Option<&str>) {
+    if let Some(id) = instance {
+        app.push_appearance(id);
+        app.push_state(id);
+    }
+    push_control_state(app);
 }
 
 fn instance_of(app: &App, p: &Value) -> BridgeResult<crate::core::config::InstanceConfig> {
@@ -603,7 +607,6 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
                 }
             }
             app.save();
-            app.sync_serve();
             app.push_settings(&inst.id);
             refresh(app, None);
             Ok(Value::Null)
@@ -685,7 +688,6 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
                     target.settings.insert(key, Value::String(folder));
                 }
                 app.save();
-                app.sync_serve();
                 app.push_settings(&inst.id);
                 refresh(app, None);
             }
@@ -890,12 +892,10 @@ fn reapply_hotkeys(app: &mut App) {
 
 fn refresh_themes(app: &mut App) {
     let ids: Vec<String> = app.cfg().instances.iter().map(|i| i.id.clone()).collect();
-    app.sync_serve();
     for id in ids {
         app.push_appearance(&id);
     }
-    let state = state_json(app);
-    app.send_to(CONTROL_WIN, &format!("{{\"ev\":\"state\",\"d\":{state}}}"));
+    push_control_state(app);
 }
 
 /// Reads a dropped or picked `.fwz` and asks the page to confirm it.

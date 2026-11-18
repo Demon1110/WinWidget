@@ -575,7 +575,7 @@ pub fn uninstall(app: &mut App, widget_id: &str) -> Result<Value, String> {
     app.save();
     app.catalog = crate::model::catalog::Catalog::default();
     app.catalog.scan();
-    app.sync_serve();
+    // push_state_to_control syncs the served snapshot as its first step.
     app.push_state_to_control(None);
     Ok(json!({ "name": manifest.display_name() }))
 }

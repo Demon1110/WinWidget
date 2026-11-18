@@ -55,7 +55,8 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
             }
             ctx.app.save();
             ctx.app.push_settings(&instance);
-            ctx.app.sync_serve();
+            // push_state_to_control rebuilds the served snapshot itself (App::sync_serve is
+            // its first step), so a separate sync here would just rebuild it twice.
             ctx.app.push_state_to_control(None);
             Ok(Reply::Now(Value::Null))
         }
@@ -166,7 +167,6 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
                     }
                     ctx.app.save();
                     ctx.app.push_settings(&instance);
-                    ctx.app.sync_serve();
                     ctx.app.push_state_to_control(None);
                     Ok(Reply::Now(json!(folder)))
                 }

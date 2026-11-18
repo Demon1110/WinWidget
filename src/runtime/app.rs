@@ -437,6 +437,9 @@ impl App {
         );
     }
 
+    /// Pushes the current look to one card's window and page. Does not touch the served
+    /// snapshot — callers that also need the control center / new pages up to date follow this
+    /// with [`App::sync_serve`] (see `ui::control::push_control_state`).
     pub fn push_appearance(&mut self, instance_id: &str) {
         let Some(inst) = self.instance(instance_id).cloned() else {
             return;
@@ -454,7 +457,6 @@ impl App {
             instance_id,
             &format!("{{\"ev\":\"appearance\",\"d\":{}}}", payload),
         );
-        self.sync_serve();
     }
 
     pub fn push_state(&mut self, instance_id: &str) {
@@ -1213,9 +1215,9 @@ impl App {
         self.catalog = crate::model::catalog::Catalog::default();
         self.catalog.scan();
         self.themes = crate::model::themes::Themes::load();
-        self.sync_serve();
         self.pending_windows
             .extend(self.store.data.instances.iter().map(|i| i.id.clone()));
+        // push_state_to_control syncs the served snapshot as its first step.
         self.push_state_to_control(None);
     }
 
