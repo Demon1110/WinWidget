@@ -5,7 +5,7 @@
 use crate::core::config::AppConfig;
 use crate::model::manifest::Manifest;
 
-pub const KNOWN: [&str; 12] = [
+pub const KNOWN: [&str; 13] = [
     "system",
     "notify",
     "audio",
@@ -18,6 +18,8 @@ pub const KNOWN: [&str; 12] = [
     "ubrowser",
     "shell.open",
     "shell.launch",
+    // Handing the paths of files dropped on a card to its page (the "drop" event).
+    "shell.drop",
 ];
 
 pub fn is_known(p: &str) -> bool {

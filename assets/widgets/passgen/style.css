@@ -54,6 +54,31 @@ input[type="range"]::-webkit-slider-thumb {
 footer { display: flex; gap: 5px; flex: none; }
 footer .w-btn { flex: 1 1 0; padding: 4px 8px; font-size: 0.78rem; text-align: center; }
 
+/* ── the last ten ── */
+.hist { display: flex; flex-direction: column; gap: 2px; flex: 1 1 0; min-height: 0; }
+.hist-head { display: flex; align-items: center; gap: 6px; flex: none; }
+.hist-head .w-label { flex: 1 1 auto; min-width: 0; font-size: 0.68rem; color: var(--w-fg-muted); }
+.link {
+  flex: none; padding: 0; border: 0; background: none; cursor: pointer;
+  font-size: 0.66rem; color: var(--w-fg-muted);
+}
+.link:hover { color: var(--w-accent); }
+.hist-list {
+  flex: 1 1 0; min-height: 0; overflow: auto; scrollbar-width: thin;
+  margin: 0; padding: 0; list-style: none;
+  display: flex; flex-direction: column; gap: 1px;
+}
+.hist-list li {
+  display: flex; align-items: baseline; gap: 6px;
+  padding: 2px 6px; border-radius: calc(var(--w-radius) * 0.35);
+  cursor: copy;
+  font-family: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+  font-size: 0.7rem; line-height: 1.4;
+}
+.hist-list li:hover { background: var(--w-hover); }
+.hist-list li .when { flex: none; color: var(--w-fg-muted); font-family: inherit; font-size: 0.64rem; }
+.hist-list li .code { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 .toast {
   position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%);
   padding: 5px 11px; border-radius: 99px;

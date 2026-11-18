@@ -9,6 +9,9 @@
     <header>
       <span class="w-title name" id="title"></span>
       <span class="w-num count" id="count"></span>
+      <button class="w-btn add icon" id="addFolder" data-no-drag>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5h6l2 2.5h9v9.5a1 1 0 0 1-1 1H4.5a1 1 0 0 1-1-1z"/></svg>
+      </button>
       <button class="w-btn add" id="add" data-no-drag>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
         <span id="addLabel"></span>
@@ -22,6 +25,8 @@
       <span class="w-label" id="emptyTitle"></span>
       <span class="hint" id="emptyHint"></span>
     </div>
+
+    <div class="foot" id="foot" hidden><span id="footHint"></span></div>
 
     <div class="toast" id="toast" hidden></div>
   </main>

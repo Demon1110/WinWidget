@@ -95,6 +95,12 @@ pub enum Ev {
     Audio(Value),
     Media(Value),
     Command(String),
+    /// Files or folders were dropped on a card: its page gets a `drop` event with their paths.
+    Drop {
+        win: String,
+        paths: Vec<String>,
+        at: (i32, i32),
+    },
     Tick,
     /// A page queued something that has to be built on the loop (a custom window, today).
     Wake,
@@ -589,6 +595,19 @@ impl App {
             data
         );
         self.send_to(instance_id, &body);
+    }
+
+    /// Hands a card the real paths of what was dropped on it.
+    pub fn drop_paths(&self, instance_id: &str, paths: Vec<String>, at: (i32, i32)) {
+        crate::core::logging::info(&format!(
+            "{instance_id}: drop of {} path(s)",
+            paths.len()
+        ));
+        self.event_to(
+            instance_id,
+            "drop",
+            json!({ "paths": paths, "x": at.0, "y": at.1 }),
+        );
     }
 
     // ── geometry ───────────────────────────────────────────────────────────

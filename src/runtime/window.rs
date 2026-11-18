@@ -393,11 +393,19 @@ pub fn build(
 
     let id = inst.id.clone();
     let ipc_id = id.clone();
+    let ipc_proxy = proxy.clone();
+    // A widget that declares `shell.drop` gets the real paths of what is dropped on its card. The
+    // handler replaces WebView2's own OLE target, so it is installed only when asked for: dropping
+    // a link into the launcher, say, still has to reach the page as an ordinary HTML5 drop.
+    let wants_drop = manifest
+        .permissions
+        .iter()
+        .any(|p| p.eq_ignore_ascii_case("shell.drop"));
     let webview = {
         let mut context = browser()
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        WebViewBuilder::new_with_web_context(&mut context)
+        let mut builder = WebViewBuilder::new_with_web_context(&mut context)
             .with_url(&url)
             .with_transparent(true)
             .with_devtools(developer)
@@ -405,13 +413,37 @@ pub fn build(
             .with_ipc_handler(move |request| {
                 let body = request.body().clone();
                 crate::runtime::app::post(
-                    &proxy,
+                    &ipc_proxy,
                     Ev::Ipc {
                         win: ipc_id.clone(),
                         msg: body,
                     },
                 );
-            })
+            });
+        if wants_drop {
+            let drop_id = id.clone();
+            let drop_proxy = proxy.clone();
+            builder = builder.with_drag_drop_handler(move |event| {
+                if let wry::DragDropEvent::Drop { paths, position } = event {
+                    let list: Vec<String> = paths
+                        .iter()
+                        .map(|p| p.to_string_lossy().into_owned())
+                        .collect();
+                    if !list.is_empty() {
+                        crate::runtime::app::post(
+                            &drop_proxy,
+                            Ev::Drop {
+                                win: drop_id.clone(),
+                                paths: list,
+                                at: position,
+                            },
+                        );
+                    }
+                }
+                true
+            });
+        }
+        builder
             .with_bounds(Rect {
                 position: wry::dpi::PhysicalPosition::new(0, 0).into(),
                 size: wry::dpi::PhysicalSize::new(outer.width().max(1), outer.height().max(1))

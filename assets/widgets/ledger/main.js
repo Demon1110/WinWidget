@@ -116,10 +116,24 @@ function render() {
   renderList();
 }
 
+/**
+ * The amount is typed in yuan: "100" → 100, "123" → 123, "1,234.5" → 1234.5, "12..3" → 12.3.
+ * Full-width digits and dots (a Chinese IME's default) are folded back first, since `\d` only
+ * matches ASCII digits and "１００" would otherwise parse as nothing at all.
+ */
+function parseAmount(text) {
+  const folded = String(text || "")
+    .replace(/[\uFF10-\uFF19]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+    .replace(/[\uFF0E\uFF0F\u3002]/g, ".");
+  const cleaned = folded.replace(/[^\d.]/g, "");
+  const at = cleaned.indexOf(".");
+  const normalized = at < 0 ? cleaned : cleaned.slice(0, at + 1) + cleaned.slice(at + 1).replace(/\./g, "");
+  const n = Number(normalized);
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
+}
+
 function add() {
-  const raw = String($("amt").value || "").replace(/[^\d.]/g, "").replace(/\./g, "");
-  const cents = Number(raw);
-  const amount = Number.isFinite(cents) && cents > 0 ? cents / 100 : Number(String($("amt").value).replace(/[^\d.]/g, ""));
+  const amount = parseAmount($("amt").value);
   if (!Number.isFinite(amount) || amount <= 0) {
     toast(L("先打個金額", "先打个金额", "Enter an amount first"));
     $("amt").focus();
