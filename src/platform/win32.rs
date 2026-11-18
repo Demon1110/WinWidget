@@ -49,6 +49,8 @@ pub const SWP_HIDEWINDOW: u32 = 0x0080;
 pub const GW_HWNDNEXT: u32 = 2;
 pub const GW_HWNDPREV: u32 = 3;
 pub const LWA_ALPHA: u32 = 0x0000_0002;
+/// A pixel of this exact colour becomes a hole in a layered window.
+pub const LWA_COLORKEY: u32 = 0x0000_0001;
 pub const GWL_EXSTYLE_LAYERED: isize = 0x0008_0000;
 
 pub const VK_LBUTTON: i32 = 0x01;
@@ -57,6 +59,8 @@ pub const VK_CONTROL: i32 = 0x11;
 pub const GWLP_WNDPROC: i32 = -4;
 /// `GWLP_HWNDPARENT`: the owner of a top-level window, or the parent of a child window.
 pub const GWLP_HWNDPARENT: i32 = -8;
+/// `GCLP_HBRBACKGROUND`: the brush a window class paints its background with.
+pub const GCLP_HBRBACKGROUND: i32 = -10;
 
 pub const WM_SIZE: u32 = 0x0005;
 pub const WM_ACTIVATE: u32 = 0x0006;
@@ -229,6 +233,8 @@ struct WINDOWCOMPOSITIONATTRIBDATA {
 
 const WCA_ACCENT_POLICY: i32 = 19;
 const ACCENT_DISABLED: i32 = 0;
+/// A tinted see-through backdrop with no blur: what is behind the window stays sharp.
+const ACCENT_ENABLE_TRANSPARENTGRADIENT: i32 = 2;
 const ACCENT_ENABLE_ACRYLICBLURBEHIND: i32 = 4;
 const ACCENT_ENABLE_BLURBEHIND: i32 = 3;
 
@@ -255,6 +261,14 @@ extern "system" {
     pub fn GetWindowTextW(hwnd: HWND, buffer: *mut u16, len: i32) -> i32;
     pub fn GetWindow(hwnd: HWND, cmd: u32) -> HWND;
     pub fn GetParent(hwnd: HWND) -> HWND;
+    pub fn EnumChildWindows(
+        parent: HWND,
+        callback: Option<unsafe extern "system" fn(HWND, isize) -> i32>,
+        data: isize,
+    ) -> i32;
+    pub fn GetClassLongPtrW(hwnd: HWND, index: i32) -> isize;
+    pub fn SetClassLongPtrW(hwnd: HWND, index: i32, value: isize) -> isize;
+    pub fn InvalidateRect(hwnd: HWND, rect: *const RECT, erase: i32) -> i32;
     pub fn SetParent(hwnd: HWND, parent: HWND) -> HWND;
     pub fn ScreenToClient(hwnd: HWND, point: *mut POINT) -> i32;
     pub fn ClientToScreen(hwnd: HWND, point: *mut POINT) -> i32;
@@ -355,6 +369,7 @@ extern "system" {
     pub fn DeleteDC(dc: isize) -> i32;
     pub fn SelectObject(dc: isize, object: isize) -> isize;
     pub fn DeleteObject(object: isize) -> i32;
+    pub fn CreateRectRgn(x1: i32, y1: i32, x2: i32, y2: i32) -> isize;
     pub fn CreateDIBSection(
         dc: isize,
         info: *const BITMAPINFO,
@@ -531,9 +546,23 @@ pub struct NOTIFYICONDATAW {
     pub hBalloonIcon: HICON,
 }
 
+/// `DWM_BLURBEHIND` as the shell passes it. The region has to be a real (if empty) one: a null
+/// region would ask DWM for a blur of the whole window instead of for per-pixel alpha.
+#[repr(C)]
+pub struct DWM_BLURBEHIND {
+    pub dwFlags: u32,
+    pub fEnable: i32,
+    pub hRgnBlur: isize,
+    pub fTransitionOnMaximized: i32,
+}
+
+pub const DWM_BB_ENABLE: u32 = 0x1;
+pub const DWM_BB_BLURREGION: u32 = 0x2;
+
 #[link(name = "dwmapi")]
 extern "system" {
     pub fn DwmExtendFrameIntoClientArea(hwnd: HWND, margins: *const MARGINS) -> i32;
+    pub fn DwmEnableBlurBehindWindow(hwnd: HWND, bb: *const DWM_BLURBEHIND) -> i32;
     pub fn DwmSetWindowAttribute(
         hwnd: HWND,
         attribute: u32,
@@ -660,6 +689,23 @@ pub fn extend_frame(hwnd: HWND) {
     }
 }
 
+/// Hands the window's per-pixel alpha to DWM: an empty blur region means "no blur, but the client
+/// area is translucent". tao does this once while the window is created, and a later frame change
+/// throws it away, so it is stated again by whoever changes the frame.
+pub fn per_pixel_alpha(hwnd: HWND) {
+    unsafe {
+        let region = CreateRectRgn(0, 0, -1, -1);
+        let bb = DWM_BLURBEHIND {
+            dwFlags: DWM_BB_ENABLE | DWM_BB_BLURREGION,
+            fEnable: 1,
+            hRgnBlur: region,
+            fTransitionOnMaximized: 0,
+        };
+        let _ = DwmEnableBlurBehindWindow(hwnd, &bb);
+        let _ = DeleteObject(region);
+    }
+}
+
 /// Turns the glass frame off again. Kept for a window that must lose per-pixel transparency, for
 /// example before handing it back to the shell as a plain popup.
 #[allow(dead_code)]
@@ -672,6 +718,63 @@ pub fn clear_frame(hwnd: HWND) {
     };
     unsafe {
         let _ = DwmExtendFrameIntoClientArea(hwnd, &margins);
+    }
+}
+
+/// Strips the caption and sizing edge from a window that asked to be frameless. Windows keeps an
+/// 8px edge on a top-level window even after the frame is polished away, which leaves a sliver of
+/// the screen uncovered when a window is meant to cover a whole monitor; with no frame styles the
+/// client area is the window rectangle itself.
+pub fn drop_frame(hwnd: HWND) {
+    const WS_FRAME: isize = 0x00C0_0000 /* CAPTION */ | 0x0004_0000 /* THICKFRAME */
+        | 0x0008_0000 /* SYSMENU */ | 0x0001_0000 /* MINIMIZEBOX */
+        | 0x0002_0000 /* MAXIMIZEBOX */ | 0x0080_0000 /* BORDER */;
+    unsafe {
+        let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+        if style & WS_FRAME == 0 {
+            return;
+        }
+        SetWindowLongPtrW(hwnd, GWL_STYLE, (style & !WS_FRAME) | WS_POPUP);
+        SetWindowPos(
+            hwnd,
+            0,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+        );
+    }
+}
+
+/// Puts a frameless window on screen so that its *page* — the client area — covers exactly the
+/// rectangle asked for, in pixels. Windows still keeps an invisible border around a top-level
+/// window, and tao reserved room for it when the window was built; measuring it once here is the
+/// only way for a full-screen surface to really reach all four screen edges.
+pub fn fit_client(hwnd: HWND, x: i32, y: i32, w: i32, h: i32) {
+    if w <= 0 || h <= 0 {
+        return;
+    }
+    unsafe {
+        let mut wr = RECT::default();
+        let _ = GetWindowRect(hwnd, &mut wr);
+        let mut cr = RECT::default();
+        let _ = GetClientRect(hwnd, &mut cr);
+        let pad_w = (wr.right - wr.left) - (cr.right - cr.left);
+        let pad_h = (wr.bottom - wr.top) - (cr.bottom - cr.top);
+        let mut origin = POINT { x: 0, y: 0 };
+        let _ = ClientToScreen(hwnd, &mut origin);
+        let off_x = origin.x - wr.left;
+        let off_y = origin.y - wr.top;
+        SetWindowPos(
+            hwnd,
+            0,
+            x - off_x,
+            y - off_y,
+            w + pad_w,
+            h + pad_h,
+            SWP_NOZORDER | SWP_NOACTIVATE,
+        );
     }
 }
 
@@ -777,17 +880,96 @@ pub fn set_topmost(hwnd: HWND, on: bool) {
     }
 }
 
-/// Click-through: layered + transparent hit-testing. Layered windows need an alpha, and the
-/// content still composites through the DWM frame.
-pub fn set_click_through(hwnd: HWND, on: bool) {
+/// A window that never takes the foreground. Overlays need this: they appear on top of whatever
+/// the user is doing, so becoming active would steal the caret out of their editor.
+pub fn set_no_activate(hwnd: HWND, on: bool) {
     unsafe {
         let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-        if on {
-            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex | WS_EX_LAYERED | WS_EX_TRANSPARENT);
-            SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
+        SetWindowLongPtrW(
+            hwnd,
+            GWL_EXSTYLE,
+            if on {
+                ex | WS_EX_NOACTIVATE
+            } else {
+                ex & !WS_EX_NOACTIVATE
+            },
+        );
+    }
+}
+
+/// Click-through: the window keeps its per-pixel alpha and the mouse hit-test skips it.
+///
+/// `WS_EX_TRANSPARENT` is what makes the mouse skip a window. A layered window would be the
+/// obvious carrier, but layering flattens the page onto an opaque sheet (the full-screen effect
+/// would hide the desktop), so the alpha is left alone and the same bit is pushed down onto every
+/// child window instead: the web view's own host window is a child, and without it the click stops
+/// at the page and never reaches the desktop.
+pub fn set_click_through(hwnd: HWND, on: bool) {
+    unsafe {
+        set_transparent_ex(hwnd, on);
+        EnumChildWindows(hwnd, Some(subtree_transparent), on as isize);
+    }
+}
+
+unsafe extern "system" fn subtree_transparent(hwnd: HWND, on: isize) -> i32 {
+    set_transparent_ex(hwnd, on != 0);
+    1
+}
+
+fn set_transparent_ex(hwnd: HWND, on: bool) {
+    unsafe {
+        let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+        let style = if on {
+            ex | WS_EX_TRANSPARENT
         } else {
-            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex & !(WS_EX_LAYERED | WS_EX_TRANSPARENT));
+            ex & !WS_EX_TRANSPARENT
+        };
+        if style != ex {
+            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style);
         }
+    }
+}
+
+/// Clear the window class background brush and repaint.
+///
+/// Every window of the class is erased to a solid colour before the page paints, and a transparent
+/// page lets that colour through — which is why a "transparent" full-screen window came out white
+/// over the desktop. With no brush nothing is erased, so the surface stays as the desktop shows it
+/// through the transparent window, and only the page's own pixels are drawn.
+pub fn clear_background_brush(hwnd: HWND) {
+    unsafe {
+        let brush = GetClassLongPtrW(hwnd, GCLP_HBRBACKGROUND);
+        if brush != 0 {
+            SetClassLongPtrW(hwnd, GCLP_HBRBACKGROUND, 0);
+            InvalidateRect(hwnd, std::ptr::null(), 1);
+        }
+    }
+}
+
+/// A see-through window with no blur behind it.
+///
+/// DWM's accent replaces whatever the window would otherwise paint behind its page. The transient
+/// gradient state paints no tint of its own, so the page's alpha lands on the desktop as it is —
+/// sharp wallpaper, sharp windows, only the page's own pixels on top.
+pub fn set_see_through(hwnd: HWND, on: bool) {
+    let Some(f) = composition_fn() else { return };
+    let mut policy = ACCENT_POLICY {
+        accent_state: if on {
+            ACCENT_ENABLE_TRANSPARENTGRADIENT
+        } else {
+            ACCENT_DISABLED
+        },
+        accent_flags: 2,
+        gradient_color: 0,
+        animation_id: 0,
+    };
+    let mut data = WINDOWCOMPOSITIONATTRIBDATA {
+        attribute: WCA_ACCENT_POLICY,
+        data: &mut policy as *mut _ as *mut c_void,
+        size_of_data: std::mem::size_of::<ACCENT_POLICY>() as u32,
+    };
+    unsafe {
+        let _ = f(hwnd, &mut data);
     }
 }
 

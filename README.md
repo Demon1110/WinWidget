@@ -14,11 +14,11 @@
 
 ## 功能
 
-- **38 个内置组件**：clock、analogclock、flipclock、worldclock、calendar、countdown、pomodoro、timer、progress、weather、forecast、airquality、sunmoon、sysinfo、usage、netspeed、disks、battery、network、pcinfo、recyclebin、volume、power、notes、todo、launcher、habits、calculator、search、infocard、rss、currency、dailyimage、onthisday、media、photoframe、whitenoise、label。
+- **57 个内置组件**：clock、analogclock、flipclock、worldclock、calendar、countdown、pomodoro、timer、progress、weather、forecast、airquality、sunmoon、sysinfo、usage、netspeed、disks、battery、network、pcinfo、recyclebin、volume、power、notes、todo、launcher、habits、calculator、search、infocard、rss、currency、dailyimage、onthisday、media、photoframe、whitenoise、label；工具类 droptray、qrshare、units、passgen；生活记录 ledger、water、chargeguard、dataplan；系统网络 sitemonitor、github、ical；专注 agenda、focus、quicknotes；内容 poem、moonphase、meetplan；屏幕特效 bloom（39 款全屏特效，穿透底层运行）。
 - **三种层级**：桌面层（贴在壁纸上、Win+D 不会被带走）、置顶（总在最前）、普通；可锁定位置、可鼠标穿透、可按比例缩放、可吸附对齐。
 - **外观逐卡可调**：透明 / 磨砂（DWM 亚克力）、阴影、背景色与不透明度、文字色、强调色（可取 Windows 系统色）、字体、字号比例、圆角、内边距、整卡透明度、自定义 CSS。
 - **三套主题**：`instrument`（深色仪器）、`paper`（浅色纸张）、`type`（排印风），主题切换即时生效，单张卡片也可单独指定主题。
-- **控制中心**：我的组件、添加组件（38 个内置 + 用户组件，带预览图与分类筛选）、主题、设置（通用 / 界面外观 / 热键 / 更新 / 数据目录 / 文件关联 / 低资源模式 / 开发者模式 / 自动更新 / 开机自启 / 全屏自动隐藏）。
+- **控制中心**：我的组件、添加组件（56 个内置 + 用户组件，带预览图与分类筛选）、主题、设置（通用 / 界面外观 / 热键 / 更新 / 数据目录 / 文件关联 / 低资源模式 / 开发者模式 / 自动更新 / 开机自启 / 全屏自动隐藏）。
 - **控制中心的浅色／深色**：设置里的「界面外观」有三档 —— 跟随系统、浅色、深色。跟随系统读的是 Windows 自己的 `AppsUseLightTheme`（设置 > 个性化 > 颜色里的那个开关），Windows 一翻，窗口两秒内跟着翻，不用重启；浅色用的是同一套石墨＋薄荷语言，只是把表面翻成纸白、薄荷加深保住对比度。这是控制中心的外壳，卡片仍各用各的主题。
 - **托盘与热键**：手写 Win32 托盘图标（无第三方依赖），左键唤出控制中心，右键菜单可切换"隐藏全部卡片"、逐卡操作与主题；默认热键 `Ctrl+Alt+W`（控制中心）、`Ctrl+Alt+N`（便签）。
 - **单实例**：第二次启动不会起两个进程，而是把已在运行的实例的控制中心唤到前台。
@@ -49,7 +49,7 @@ WinWidget/
 ├─ Cargo.toml
 ├─ build.rs                   # 把 assets/ 压进二进制（+ 图标与版本资源）
 ├─ assets/                    # 与宿主解耦的前端资产（源码在这里改；发布时编进 exe）
-│  ├─ widgets/                # 38 个内置组件，每个一个文件夹
+│  ├─ widgets/                # 57 个内置组件，每个一个文件夹
 │  ├─ sdk/                    # base.css、widget-sdk.js、widget.d.ts、three themes/
 │  ├─ ui/control-center/      # 控制中心页面（index.html / style.css / app.js / i18n.js）
 │  ├─ ui/docs/                # 内置文档页
@@ -114,7 +114,7 @@ pwsh -File scripts/package-windows.ps1 -SkipBuild -Version 1.2.0   # 不重编�
 python scripts/build-docs.py                  # 三语开发指南：docs/*.md → assets/docs/developer-guide.html（+ index.html）
 ```
 
-**发布件只有一个文件**：`dist\WinWidget-<版本>-windows-x64.exe`（约 5 MB），旁边一份 `.sha256`。没有 zip，也没有安装包——`assets\` 整棵（38 个组件、SDK、主题、控制中心、开发文档）在编译时就被 `build.rs` 压进二进制，运行时从内存读，不落盘、不解压。`assets\` 里只有运行时真要的东西：Markdown 源文件（`docs\組件開發指南.md`、各里程碑说明）和里程碑截图都放在仓库根目录的 `docs\`，不进二进制。
+**发布件只有一个文件**：`dist\WinWidget-<版本>-windows-x64.exe`（约 5 MB），旁边一份 `.sha256`。没有 zip，也没有安装包——`assets\` 整棵（57 个组件、SDK、主题、控制中心、开发文档）在编译时就被 `build.rs` 压进二进制，运行时从内存读，不落盘、不解压。`assets\` 里只有运行时真要的东西：Markdown 源文件（`docs\組件開發指南.md`、各里程碑说明）和里程碑截图都放在仓库根目录的 `docs\`，不进二进制。
 
 脚本末尾有一道自检：把产物拷到一个**没有 `assets\`** 的临时目录里跑 `winwidget list`，能列出 30+ 个内置组件才算出包成功——否则说明资源没编进去，只是从仓库的 `assets\` 里捡到的。
 
@@ -210,6 +210,7 @@ WebView2 的 `chrome.webview.postMessage` 在 wry 下**只能传字符串**（�
 ## 已验证
 
 - `cargo build` / `cargo build --release` 通过，release 单文件 **约 7.5 MB**（`opt-level="s"` + LTO + strip + 嵌入式 assets，含 devtools 支持；上一版不带资源是 3.8 MB）。
+- 内置组件扩到 **56 个**（新增 17 个：droptray、qrshare、units、passgen、ledger、water、chargeguard、dataplan、sitemonitor、github、ical、agenda、focus、quicknotes、poem、moonphase、meetplan），每个都带三主题 × 三语言共 9 张预览图；`winwidget.exe list` 打印 `Catalog: 58 widget(s)`（56 内置 + `%APPDATA%\WinWidget\widgets` 里已装的 2 个用户组件）。
 - 单文件脱离 `assets\`：把 `dist\WinWidget-1.0.0-windows-x64.exe` 单独拷到空目录，`list` 仍列出 **38 个内置组件**；再往 `%APPDATA%\WinWidget\widgets` 放一个测试组件，同一目录下 `list` 变成 **39 个**（内置 + 用户目录的合集）。
 - 空目录里直接跑：日志 `Catalog: 38 widget(s)`、`Themes: instrument, paper, type; system accent #…`、`Serving pages on 127.0.0.1:9818`、两张卡 `ready`；本地服务对嵌入资源全部 200 —— `/__fw/base.css`(8.9 KB)、`/__fw/widget-sdk.js`(23.7 KB)、`/__fw/themes/instrument/theme.css`、`/__ui/control-center/index.html`、`/__ui/control-center/img/theme-paper.png`(222 KB)、`/__docs/developer-guide.html`(225 KB)、`/__templates/hello-widget/widget.json`、`/__preview/builtin/clock/preview/instrument.zh-CN.webp`。
 - 自更新：旧实例在跑时，替换器等到 `copy` 成功（约 3 s）才覆盖并拉起新副本；日志 `apply-update: … -> …` / `copied, starting the new build` / `started … (pid …)`，替换后目标 exe 字节数与「新版本」一致，新实例日志照常 38 个组件。

@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="cg">
+    <header>
+      <span class="name" id="title"></span>
+      <span class="tag" id="state"></span>
+    </header>
+
+    <div class="pct"><b id="pct" class="w-num">--</b><span class="cap" id="cap"></span></div>
+
+    <div class="meter">
+      <div class="fill" id="fill"></div>
+      <div class="tick" id="tick"></div>
+    </div>
+
+    <div class="legend">
+      <span id="left"></span>
+      <span id="right"></span>
+    </div>
+
+    <div class="foot" data-no-drag>
+      <button class="w-check" id="sw" role="switch" aria-pressed="false"></button>
+      <span class="lbl" id="swLbl"></span>
+    </div>
+  </main>
+  <script src="main.js"></script>
+</body>
+</html>

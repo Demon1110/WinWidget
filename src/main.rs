@@ -148,6 +148,10 @@ fn main() {
                 }
                 *control = ControlFlow::Wait;
             }
+            Event::UserEvent(Ev::Drop { win, paths, at }) => {
+                app.drop_paths(&win, paths, at);
+                *control = ControlFlow::Wait;
+            }
             Event::UserEvent(Ev::Command(action)) => {
                 menus::run(&mut app, &action);
                 app.after_command();

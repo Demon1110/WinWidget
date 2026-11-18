@@ -613,6 +613,8 @@ win.on("closed", () => widget.log("window closed"));
 | `opacity` | 1 | 0–1, whole window |
 | `backgroundColor` | white | `"#0f1a24"` or `"rgba(15,26,36,0.9)"`, for example |
 | `transparent` | `false` | Only for a real transparent background, with `frame:false` |
+| `seeThrough` | `false` | With `transparent`: tells DWM to stop drawing its own backdrop behind the window, so the page's alpha lands on what is behind it |
+| `layer` | none | `"desktop"` → the window sits above the wallpaper and below every ordinary window (desktop-level effects, wallpaper-sized canvases) |
 | `fullscreen` | `false` | Open full screen |
 | `webPreferences.preload` | — | **Does not run** (no Node); use `ipcRenderer` below instead |
 
@@ -690,7 +692,8 @@ These methods keep their uTools names and **neither throw nor go silent**: the h
 - Opening is **asynchronous**: `createBrowserWindow` returns the object at once, but `win.id` only gets a value when the window really exists (it is `0` if read synchronously); every method waits for creation, so the snippet above works as written.
 - Windows and the card share an origin and CSP: do not treat "only the card may see this" as a security boundary.
 - `show: false` plus `show()` in the callback is uTools' own advice; without it the page may flash white before it paints.
-- Full-screen transparent on top: `{ frame: false, transparent: true, skipTaskbar: true, alwaysOnTop: true }`, then cover the target monitor with `setBounds()`.
+- Full-screen effect / wallpaper-sized canvas: `{ frame: false, transparent: true, seeThrough: true, layer: "desktop", skipTaskbar: true, focusable: false }`, then cover the target monitor with `setBounds()`.
+- For a full-screen layer above every window, swap `layer: "desktop"` for `alwaysOnTop: true`. WebView2 only shows what is behind the window in those two placements: an ordinary top-most window supplies its own opaque white sheet and hides the desktop entirely. "Show the effect without getting in the way" means `layer: "desktop"`.
 
 ---
 

@@ -114,6 +114,16 @@ button { font: inherit; color: inherit; }
 .w-input::placeholder { color: var(--w-fg-muted); }
 .w-input:focus { border-color: color-mix(in srgb, var(--w-accent) 70%, transparent); }
 
+/* A <select> popup is drawn by the engine, not by CSS: without explicit colours the
+   options inherit the card's light text and land on the popup's own white sheet —
+   white on white. Pin both to the theme instead. */
+select { color: var(--w-fg); }
+option { color: var(--w-fg); background-color: var(--w-bg-solid); }
+option:checked { background-color: color-mix(in srgb, var(--w-accent) 30%, var(--w-bg-solid)); color: var(--w-fg); }
+/* and keep the engine-drawn sheet itself in the same light/dark mode as the card */
+html[data-theme="paper"] select { color-scheme: light; }
+html:not([data-theme="paper"]) select { color-scheme: dark; }
+
 .w-btn {
   appearance: none;
   border: 0;

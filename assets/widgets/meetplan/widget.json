@@ -1,0 +1,40 @@
+{
+  "id": "winwidget.meetplan",
+  "name": { "zh-TW": "世界時間會議", "zh-CN": "世界时间会议", "en": "Meeting planner" },
+  "description": {
+    "zh-TW": "挑一個時間，一排城市同時換算；誰在上班、誰在半夜，一眼就看得出來。",
+    "zh-CN": "挑一个时间，一排城市同时换算；谁在上班、谁在半夜，一眼就看得出来。",
+    "en": "Pick one instant and every city lines up; who's at work and who's asleep shows at a glance."
+  },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "time",
+  "preview": "preview/instrument.zh-TW.webp",
+  "size": { "width": 320, "height": 280, "minWidth": 260, "minHeight": 200, "resizable": true, "grow": 0.36 },
+  "permissions": [],
+  "settings": [
+    {
+      "key": "cities",
+      "type": "textarea",
+      "label": { "zh-TW": "城市清單", "zh-CN": "城市列表", "en": "Cities" },
+      "description": {
+        "zh-TW": "一行一個，寫成 時區=名稱，例如 Asia/Taipei=台北",
+        "zh-CN": "一行一个，写成 时区=名称，例如 Asia/Taipei=台北",
+        "en": "One per line as Zone/Name, e.g. Asia/Taipei=Taipei"
+      },
+      "default": "Asia/Taipei=台北\nAsia/Tokyo=東京\nEurope/London=倫敦\nAmerica/New_York=紐約\nAmerica/Los_Angeles=洛杉磯"
+    },
+    {
+      "key": "minutes",
+      "type": "slider",
+      "label": { "zh-TW": "會議長度（分鐘）", "zh-CN": "会议长度（分钟）", "en": "Meeting length (minutes)" },
+      "description": { "zh-TW": "用來算結束時間", "zh-CN": "用来算结束时间", "en": "Used for the end time" },
+      "default": 60,
+      "min": 15,
+      "max": 180,
+      "step": 15
+    }
+  ]
+}

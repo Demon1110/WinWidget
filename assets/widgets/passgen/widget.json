@@ -1,0 +1,58 @@
+{
+  "id": "winwidget.passgen",
+  "name": { "zh-TW": "隨機密碼", "zh-CN": "随机密码", "en": "Password maker" },
+  "description": {
+    "zh-TW": "現做一組夠亂的 5–128 位密碼，可限數字與符號至少幾個，最近十條都留著",
+    "zh-CN": "现做一组够乱的 5–128 位密码，可限数字与符号至少几个，最近十条都留着",
+    "en": "A properly random 5–128 character password, with minimum digits and symbols, and the last ten kept"
+  },
+  "version": "1.2.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "productivity",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 300, "height": 340, "minWidth": 250, "minHeight": 240, "maxWidth": 720, "maxHeight": 720, "grow": 0.45 },
+  "permissions": ["clipboard"],
+  "settings": [
+    {
+      "key": "minDigits",
+      "type": "slider",
+      "label": { "zh-TW": "數字至少幾個", "zh-CN": "数字至少几个", "en": "Minimum digits" },
+      "description": {
+        "zh-TW": "選了「數字」才會生效；0 表示不另外保證",
+        "zh-CN": "选了「数字」才会生效；0 表示不额外保证",
+        "en": "Only applies when digits are enabled; 0 means no extra floor"
+      },
+      "default": 0,
+      "min": 0,
+      "max": 12,
+      "step": 1
+    },
+    {
+      "key": "minSymbols",
+      "type": "slider",
+      "label": { "zh-TW": "符號至少幾個", "zh-CN": "符号至少几个", "en": "Minimum symbols" },
+      "description": {
+        "zh-TW": "選了「符號」才會生效；0 表示不另外保證",
+        "zh-CN": "选了「符号」才会生效；0 表示不额外保证",
+        "en": "Only applies when symbols are enabled; 0 means no extra floor"
+      },
+      "default": 0,
+      "min": 0,
+      "max": 12,
+      "step": 1
+    },
+    {
+      "key": "keep",
+      "type": "toggle",
+      "label": { "zh-TW": "保留最近十條", "zh-CN": "保留最近十条", "en": "Keep the last ten" },
+      "description": {
+        "zh-TW": "只存在本機這張卡片的存儲裡",
+        "zh-CN": "只存在本机这张卡片的存储里",
+        "en": "Stored locally, in this card's own storage"
+      },
+      "default": true
+    }
+  ]
+}

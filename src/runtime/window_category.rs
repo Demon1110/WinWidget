@@ -223,7 +223,6 @@ pub fn build_custom(
     let skip_taskbar = jbool(&o, "skipTaskbar").unwrap_or(false);
     let rounded = jbool(&o, "roundedCorners").unwrap_or(true);
     let background = jstr(&o, "backgroundColor").unwrap_or_else(|| "rgba(0,0,0,0)".into());
-
     let mut builder = WindowBuilder::new()
         .with_title(title.clone())
         .with_decorations(frame)
@@ -244,11 +243,75 @@ pub fn build_custom(
     let window = builder.build(event_loop).map_err(|e| e.to_string())?;
     let hwnd = window.hwnd();
 
+    // A transparent window has to stay transparent: the class brush would erase the whole client
+    // area to a solid colour first, and a page with no background of its own then shows that
+    // colour instead of the desktop behind it.
+    if transparent {
+        w::clear_background_brush(hwnd);
+    }
+    if transparent && jbool(&o, "seeThrough").unwrap_or(false) {
+        w::set_see_through(hwnd, true);
+    }
+
     if always_on_top {
         w::set_topmost(hwnd, true);
     }
     if !frame {
+        // Windows keeps a thin caption edge on a top-level window; a frameless window has to mean
+        // its client area really is the window rectangle, otherwise a full-screen surface leaves
+        // a sliver of the screen uncovered. tao also reserved room for an invisible shadow frame,
+        // so the geometry is set again once that frame is gone.
+        w::drop_frame(hwnd);
+        let scale = {
+            let s = window.scale_factor();
+            if s > 0.0 {
+                s
+            } else {
+                1.0
+            }
+        };
+        let to_px = |v: f64| (v * scale).round() as i32;
+        let (px, py) = match (jnum(&o, "x"), jnum(&o, "y")) {
+            (Some(x), Some(y)) => (to_px(x), to_px(y)),
+            _ => {
+                let p = window
+                    .outer_position()
+                    .unwrap_or(PhysicalPosition::new(0, 0));
+                (p.x, p.y)
+            }
+        };
+        w::fit_client(hwnd, px, py, to_px(width), to_px(height));
         w::polish_frame(hwnd, rounded);
+    }
+    // `layer: "desktop"` puts the window directly above the wallpaper and below every ordinary
+    // window — the place a desktop-level canvas belongs, so an effect can play on the wallpaper
+    // without ever standing in front of the user's work.
+    if jstr(&o, "layer").as_deref() == Some("desktop") {
+        w::place_above_desktop(hwnd);
+    }
+    if transparent {
+        // Real per-pixel alpha is a pair: the glass frame over the whole client area, and DWM's
+        // blur-behind with an empty region. A card gets both; without them a transparent window
+        // still paints its web view's white sheet over whatever is behind it. They have to be
+        // stated *after* the frame is dropped, because a frame change clears them.
+        w::extend_frame(hwnd);
+        w::per_pixel_alpha(hwnd);
+    }
+    // `focusable: false` is the uTools option for overlay windows: they show up on top of the
+    // user's work without ever becoming the active window. The style stops a click from doing it,
+    // but WebView2 grabs the focus for itself while its page loads, so the foreground is handed
+    // back afterwards.
+    if !jbool(&o, "focusable").unwrap_or(true) {
+        w::set_no_activate(hwnd, true);
+        let before = w::foreground_window();
+        std::thread::spawn(move || {
+            for _ in 0..8 {
+                std::thread::sleep(std::time::Duration::from_millis(250));
+                if before != 0 && before != hwnd && w::foreground_window() == hwnd {
+                    w::force_foreground(before);
+                }
+            }
+        });
     }
     if let Some(opacity) = jnum(&o, "opacity") {
         set_opacity(hwnd, opacity);

@@ -64,6 +64,12 @@ pub enum Ev {
     Audio(Value),
     Media(Value),
     Command(String),
+    /// Files or folders were dropped on a card: its page gets a `drop` event with their paths.
+    Drop {
+        win: String,
+        paths: Vec<String>,
+        at: (i32, i32),
+    },
     Tick,
     /// A page queued something that has to be built on the loop (a custom window, today).
     Wake,

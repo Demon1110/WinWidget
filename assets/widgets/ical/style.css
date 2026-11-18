@@ -1,0 +1,42 @@
+body { display: flex; flex-direction: column; }
+
+.ic { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
+
+header { display: flex; align-items: center; gap: 7px; flex: none; min-width: 0; }
+.name { font-size: 0.9rem; letter-spacing: 0.02em; flex: none; }
+.src { flex: 1 1 0; min-width: 0; font-size: 0.65rem; color: var(--w-fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.refresh { width: 24px; height: 24px; padding: 0; display: grid; place-items: center; border-radius: 50%; flex: none; background: var(--w-control-bg); }
+.refresh svg { width: 14px; height: 14px; stroke: var(--w-fg-muted); fill: none; stroke-width: 1.7; }
+.refresh:hover { background: var(--w-hover); }
+.refresh:hover svg { stroke: var(--w-fg); }
+.refresh.is-busy svg { animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.list { flex: 1 1 0; min-height: 0; overflow-y: auto; list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; scrollbar-width: thin; scrollbar-color: var(--w-fg-faint) transparent; }
+
+.day {
+  position: sticky; top: 0;
+  padding: 6px 2px 2px;
+  font-size: 0.66rem; letter-spacing: 0.06em;
+  color: var(--w-fg-faint);
+  background: transparent;
+  backdrop-filter: blur(2px);
+}
+.days:first-child, .day:first-child { padding-top: 1px; }
+
+.ev { display: flex; align-items: baseline; gap: 8px; padding: 3px 4px; border-radius: 6px; min-width: 0; }
+.ev:hover { background: var(--w-hover); }
+.tm { flex: none; width: 3.1em; font-size: 0.72rem; font-variant-numeric: tabular-nums; color: var(--w-accent); }
+.ev.is-allday .tm { color: var(--w-fg-muted); font-size: 0.65rem; }
+.txt { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 0; }
+.tt { font-size: 0.78rem; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.w { font-size: 0.64rem; color: var(--w-fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rep { flex: none; font-size: 0.7rem; color: var(--w-fg-faint); }
+
+.empty { padding: 16px 8px; font-size: 0.73rem; color: var(--w-fg-muted); text-align: center; line-height: 1.5; }
+
+.hint { flex: none; margin: 0; font-size: 0.64rem; color: var(--w-fg-faint); line-height: 1.45; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+html[data-theme="paper"] .ev { border-radius: 0; }
+html[data-theme="paper"] .day { color: var(--w-accent); letter-spacing: 0.1em; }
+html[data-theme="paper"] .tm { color: var(--w-fg); }

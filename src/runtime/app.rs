@@ -536,6 +536,16 @@ impl App {
         self.send_to(instance_id, &body);
     }
 
+    /// Hands a card the real paths of what was dropped on it.
+    pub fn drop_paths(&self, instance_id: &str, paths: Vec<String>, at: (i32, i32)) {
+        crate::core::logging::info(&format!("{instance_id}: drop of {} path(s)", paths.len()));
+        self.event_to(
+            instance_id,
+            "drop",
+            json!({ "paths": paths, "x": at.0, "y": at.1 }),
+        );
+    }
+
     // ── geometry ───────────────────────────────────────────────────────────
 
     /// Reads the window the OS actually has and writes the card rectangle back to the config.

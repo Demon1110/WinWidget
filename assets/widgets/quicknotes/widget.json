@@ -1,0 +1,36 @@
+{
+  "id": "winwidget.quicknotes",
+  "name": { "zh-TW": "快捷筆記板", "zh-CN": "快捷笔记板", "en": "Scratch pad" },
+  "description": {
+    "zh-TW": "一張隨時能寫的草稿紙，邊打邊存；要貼到別處就一鍵複製。",
+    "zh-CN": "一张随时能写的草稿纸，边打边存；要贴到别处就一键复制。",
+    "en": "A card you can type into any time; it saves as you go and copies in one click."
+  },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "productivity",
+  "preview": "preview/instrument.zh-TW.webp",
+  "size": { "width": 300, "height": 300, "minWidth": 240, "minHeight": 200, "resizable": true, "grow": 0.4 },
+  "permissions": ["clipboard"],
+  "settings": [
+    {
+      "key": "size",
+      "type": "slider",
+      "label": { "zh-TW": "字級", "zh-CN": "字号", "en": "Text size" },
+      "description": { "zh-TW": "放大後一屏能寫的字變少", "zh-CN": "放大后一屏能写的字变少", "en": "Bigger text means fewer characters on screen" },
+      "default": 14,
+      "min": 12,
+      "max": 20,
+      "step": 1
+    },
+    {
+      "key": "wrap",
+      "type": "toggle",
+      "label": { "zh-TW": "自動換行", "zh-CN": "自动换行", "en": "Wrap lines" },
+      "description": { "zh-TW": "關掉就變成橫向滾動", "zh-CN": "关掉就变成横向滚动", "en": "Off scrolls horizontally instead" },
+      "default": true
+    }
+  ]
+}

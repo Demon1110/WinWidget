@@ -1,0 +1,41 @@
+{
+  "id": "winwidget.poem",
+  "name": { "zh-TW": "每日詩詞", "zh-CN": "每日诗词", "en": "Daily poem" },
+  "description": {
+    "zh-TW": "一天一首唐詩宋詞，換一首或複製都行；字用繁體寫，簡體環境自動轉。",
+    "zh-CN": "一天一首唐诗宋词，换一首或复制都行；字用繁体写，简体环境自动转。",
+    "en": "One classic a day, with a next button and a copy button."
+  },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "info",
+  "preview": "preview/instrument.zh-TW.webp",
+  "size": { "width": 300, "height": 290, "minWidth": 240, "minHeight": 220, "resizable": true, "grow": 0.38 },
+  "permissions": ["clipboard"],
+  "settings": [
+    {
+      "key": "source",
+      "type": "select",
+      "label": { "zh-TW": "範圍", "zh-CN": "范围", "en": "Range" },
+      "description": { "zh-TW": "只挑唐詩或只挑宋詩", "zh-CN": "只挑唐诗或只挑宋诗", "en": "Pick from one dynasty only" },
+      "default": "all",
+      "options": [
+        { "value": "all", "label": { "zh-TW": "唐詩宋詞", "zh-CN": "唐诗宋词", "en": "Both" } },
+        { "value": "tang", "label": { "zh-TW": "只唐詩", "zh-CN": "只唐诗", "en": "Tang only" } },
+        { "value": "song", "label": { "zh-TW": "只宋詩", "zh-CN": "只宋诗", "en": "Song only" } }
+      ]
+    },
+    {
+      "key": "size",
+      "type": "slider",
+      "label": { "zh-TW": "字級", "zh-CN": "字号", "en": "Text size" },
+      "description": { "zh-TW": "長詩放大容易溢出", "zh-CN": "长诗放大容易溢出", "en": "Long poems overflow sooner" },
+      "default": 15,
+      "min": 13,
+      "max": 20,
+      "step": 1
+    }
+  ]
+}
