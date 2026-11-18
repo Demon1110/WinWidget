@@ -1,0 +1,47 @@
+{
+  "id": "winwidget.ical",
+  "name": { "zh-TW": "ICS 行程", "zh-CN": "ICS 行程", "en": "ICS agenda" },
+  "description": {
+    "zh-TW": "貼一條行事曆訂閱網址，接下來幾天的行程就按日子排在這裡。",
+    "zh-CN": "贴一条日历订阅网址，接下来几天的行程就按日子排在这里。",
+    "en": "Paste a calendar subscription URL and the next few days line up by date."
+  },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "time",
+  "preview": "preview/instrument.zh-TW.webp",
+  "size": { "width": 320, "height": 300, "minWidth": 260, "minHeight": 220, "resizable": true, "grow": 0.4 },
+  "permissions": ["network:*"],
+  "settings": [
+    {
+      "key": "url",
+      "type": "text",
+      "label": { "zh-TW": "訂閱網址", "zh-CN": "订阅网址", "en": "Subscription URL" },
+      "description": { "zh-TW": ".ics 檔的網址，Google、Outlook、Nextcloud 都能匯出", "zh-CN": ".ics 档的网址，Google、Outlook、Nextcloud 都能导出", "en": "Link to an .ics file; Google, Outlook and Nextcloud all export one" },
+      "default": "",
+      "placeholder": "https://example.com/calendar.ics"
+    },
+    {
+      "key": "days",
+      "type": "slider",
+      "label": { "zh-TW": "往後看幾天", "zh-CN": "往后看几天", "en": "Days ahead" },
+      "description": { "zh-TW": "只列出這段時間內的行程", "zh-CN": "只列出这段时间内的行程", "en": "Only events inside this window" },
+      "default": 7,
+      "min": 1,
+      "max": 30,
+      "step": 1
+    },
+    {
+      "key": "max",
+      "type": "slider",
+      "label": { "zh-TW": "最多幾條", "zh-CN": "最多几条", "en": "Entries kept" },
+      "description": { "zh-TW": "日程太碎時可以調小", "zh-CN": "日程太碎时可以调小", "en": "Turn it down when the day is crowded" },
+      "default": 12,
+      "min": 4,
+      "max": 30,
+      "step": 1
+    }
+  ]
+}

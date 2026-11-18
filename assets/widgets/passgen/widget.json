@@ -1,0 +1,19 @@
+{
+  "id": "winwidget.passgen",
+  "name": { "zh-TW": "隨機密碼", "zh-CN": "随机密码", "en": "Password maker" },
+  "description": {
+    "zh-TW": "現做一組夠亂的密碼，一鍵複製",
+    "zh-CN": "现做一组够乱的密码，一键复制",
+    "en": "A properly random password, copied in one click"
+  },
+  "version": "1.0.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "productivity",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 300, "height": 250, "minWidth": 210, "minHeight": 170, "maxWidth": 720, "maxHeight": 640, "grow": 0.4 },
+  "permissions": ["clipboard"],
+  "settings": []
+}
+

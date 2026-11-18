@@ -1,0 +1,49 @@
+{
+  "id": "winwidget.water",
+  "name": { "zh-TW": "飲水提醒", "zh-CN": "饮水提醒", "en": "Water tracker" },
+  "description": {
+    "zh-TW": "每喝一杯點一下，達標就劃掉；隔一段時間沒動靜會提醒你補水。",
+    "zh-CN": "每喝一杯点一下，达标就划掉；隔一段时间没动静会提醒你补水。",
+    "en": "Tap a cup each time you drink; if it goes quiet too long, you get a nudge."
+  },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "info",
+  "preview": "preview/instrument.zh-TW.webp",
+  "size": { "width": 280, "height": 240, "minWidth": 220, "minHeight": 190, "resizable": true, "grow": 0.3 },
+  "permissions": ["notify"],
+  "settings": [
+    {
+      "key": "goal",
+      "type": "slider",
+      "label": { "zh-TW": "每日目標（杯）", "zh-CN": "每日目标（杯）", "en": "Daily goal (cups)" },
+      "description": { "zh-TW": "畫面上會排出這麼多格水珠", "zh-CN": "画面上会排出这么多格水珠", "en": "That many droplets fill the row" },
+      "default": 8,
+      "min": 4,
+      "max": 16,
+      "step": 1
+    },
+    {
+      "key": "cup",
+      "type": "number",
+      "label": { "zh-TW": "一杯幾毫升", "zh-CN": "一杯几毫升", "en": "Millilitres per cup" },
+      "description": { "zh-TW": "只用來換算總量", "zh-CN": "只用来换算总量", "en": "Only used to show the volume total" },
+      "default": 250,
+      "min": 100,
+      "max": 800,
+      "step": 10
+    },
+    {
+      "key": "remind",
+      "type": "slider",
+      "label": { "zh-TW": "提醒間隔（分鐘）", "zh-CN": "提醒间隔（分钟）", "en": "Reminder every (minutes)" },
+      "description": { "zh-TW": "0 表示不提醒", "zh-CN": "0 表示不提醒", "en": "0 turns reminders off" },
+      "default": 60,
+      "min": 0,
+      "max": 180,
+      "step": 15
+    }
+  ]
+}

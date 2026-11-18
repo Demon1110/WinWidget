@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="ag">
+    <header>
+      <span class="name" id="title"></span>
+      <span class="total" id="total"></span>
+    </header>
+
+    <div class="now">
+      <div class="head">
+        <span class="idx" id="idx">1/1</span>
+        <span class="clock" id="clock" class="w-num">00:00</span>
+      </div>
+      <div class="ttl" id="nowTitle"></div>
+      <div class="bar"><i id="fill"></i></div>
+    </div>
+
+    <div class="ctl" data-no-drag>
+      <button class="w-btn" id="prev" aria-label="previous">‹</button>
+      <button class="w-btn is-primary" id="play"></button>
+      <button class="w-btn" id="next" aria-label="next">›</button>
+      <button class="w-btn" id="reset"></button>
+    </div>
+
+    <ul class="list" id="list" data-no-drag></ul>
+
+    <form class="add" id="form" data-no-drag>
+      <input class="w-input" id="newTitle" autocomplete="off" spellcheck="false">
+      <input class="w-input min" id="newMin" inputmode="numeric" autocomplete="off">
+      <button class="w-btn" type="submit">+</button>
+    </form>
+  </main>
+  <script src="main.js"></script>
+</body>
+</html>

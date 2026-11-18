@@ -1,0 +1,39 @@
+{
+  "id": "winwidget.dataplan",
+  "name": { "zh-TW": "流量月帳", "zh-CN": "流量月账", "en": "Data plan" },
+  "description": {
+    "zh-TW": "把網卡上下行累計換算成本月用量，對著配額看還剩多少、夠不夠撐到月底。",
+    "zh-CN": "把网卡上下行累计换算成本月用量，对着配额看还剩多少、够不够撑到月底。",
+    "en": "Turns adapter counters into this month's traffic, against your quota."
+  },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "system",
+  "preview": "preview/instrument.zh-TW.webp",
+  "size": { "width": 320, "height": 230, "minWidth": 260, "minHeight": 190, "resizable": true, "grow": 0.34 },
+  "permissions": ["system"],
+  "settings": [
+    {
+      "key": "quota",
+      "type": "number",
+      "label": { "zh-TW": "每月配額（GB）", "zh-CN": "每月配额（GB）", "en": "Monthly quota (GB)" },
+      "description": { "zh-TW": "填 0 就只有用量、沒有進度條", "zh-CN": "填 0 就只有用量、没有进度条", "en": "0 hides the bar and keeps the counter" },
+      "default": 20,
+      "min": 0,
+      "max": 2000,
+      "step": 1
+    },
+    {
+      "key": "resetDay",
+      "type": "number",
+      "label": { "zh-TW": "每月幾號歸零", "zh-CN": "每月几号归零", "en": "Cycle starts on day" },
+      "description": { "zh-TW": "帳期從這天重新算，超過 28 一律當 28", "zh-CN": "账期从这天重新算，超过 28 一律当 28", "en": "Clamped to 28 to stay valid in February" },
+      "default": 1,
+      "min": 1,
+      "max": 31,
+      "step": 1
+    }
+  ]
+}

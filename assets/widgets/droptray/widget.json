@@ -1,0 +1,21 @@
+{
+  "id": "winwidget.droptray",
+  "name": { "zh-TW": "檔案收集匣", "zh-CN": "文件收集匣", "en": "File shelf" },
+  "description": {
+    "zh-TW": "把要用的檔案先收進來，一點就開",
+    "zh-CN": "把要用的文件先收进来，一点就开",
+    "en": "Collect the files you need, open them with one click"
+  },
+  "version": "1.0.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "productivity",
+  "preview": "preview/{theme}.{lang}.webp",
+  "size": { "width": 320, "height": 300, "minWidth": 220, "minHeight": 150, "maxWidth": 760, "maxHeight": 900, "grow": 0.4 },
+  "permissions": ["shell.launch"],
+  "settings": [
+    { "key": "limit", "type": "slider", "label": { "zh-TW": "最多收藏", "zh-CN": "最多收藏", "en": "Shelf size" },
+      "default": 20, "min": 5, "max": 40, "step": 5 }
+  ]
+}

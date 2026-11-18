@@ -1,0 +1,37 @@
+body { display: flex; flex-direction: column; }
+
+.mp { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
+
+header { display: flex; align-items: center; gap: 8px; flex: none; }
+.name { font-size: 0.9rem; letter-spacing: 0.03em; flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.now { flex: none; padding: 2px 9px; font-size: 0.7rem; color: var(--w-fg-muted); }
+
+.pick { display: flex; align-items: center; gap: 7px; flex: none; }
+#when {
+  flex: 1 1 0; min-width: 0;
+  font-size: 0.76rem; padding: 3px 7px;
+  font-variant-numeric: tabular-nums;
+}
+#when::-webkit-calendar-picker-indicator { opacity: 0.45; cursor: pointer; }
+.len { flex: none; font-size: 0.66rem; color: var(--w-fg-muted); white-space: nowrap; }
+
+.cities { flex: 1 1 0; min-height: 0; overflow-y: auto; list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; scrollbar-width: thin; scrollbar-color: var(--w-fg-faint) transparent; }
+.city { display: flex; align-items: baseline; gap: 7px; padding: 4px 6px; border-radius: 6px; min-width: 0; }
+.city:hover { background: var(--w-hover); }
+.dot { width: 6px; height: 6px; border-radius: 50%; flex: none; align-self: center; background: var(--w-fg-faint); }
+.city.is-ok .dot { background: var(--w-accent); }
+.city.is-edge .dot { background: var(--w-warn); }
+.cn { flex: 1 1 0; min-width: 0; font-size: 0.76rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.city.is-night .cn { color: var(--w-fg-faint); }
+.tm { flex: none; font-size: 0.78rem; font-variant-numeric: tabular-nums; }
+.city.is-ok .tm { color: var(--w-fg); }
+.city.is-edge .tm { color: var(--w-fg-muted); }
+.city.is-night .tm { color: var(--w-fg-faint); }
+.end { font-size: 0.66rem; color: var(--w-fg-faint); }
+.day { margin-left: 2px; font-size: 0.6rem; color: var(--w-accent); }
+.of { flex: none; width: 3.4em; text-align: right; font-size: 0.63rem; color: var(--w-fg-faint); font-variant-numeric: tabular-nums; }
+
+.hint { flex: none; margin: 0; font-size: 0.64rem; color: var(--w-fg-faint); line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+html[data-theme="paper"] .city { border-bottom: 1px solid var(--w-rule); border-radius: 0; }
+html[data-theme="paper"] #when { background: transparent; border-bottom: 1px solid var(--w-rule); border-radius: 0; }

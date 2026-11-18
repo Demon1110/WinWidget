@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="gen">
+    <div class="pw" id="pw" data-no-drag></div>
+
+    <div class="len">
+      <span class="w-label" id="lenLabel"></span>
+      <input type="range" id="len" min="8" max="40" step="1" value="16" data-no-drag>
+      <b class="w-num" id="lenVal"></b>
+    </div>
+
+    <div class="chips" id="chips" data-no-drag></div>
+
+    <div class="meter">
+      <div class="w-bar" id="bar"><i id="fill"></i></div>
+      <span class="bits w-num" id="bits"></span>
+    </div>
+
+    <footer>
+      <button class="w-btn" id="again" data-no-drag></button>
+      <button class="w-btn is-primary" id="copy" data-no-drag></button>
+    </footer>
+    <div class="toast" id="toast" hidden></div>
+  </main>
+  <script src="main.js"></script>
+</body>
+</html>

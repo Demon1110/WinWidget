@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="shelf">
+    <header>
+      <span class="w-title name" id="title"></span>
+      <span class="w-num count" id="count"></span>
+      <button class="w-btn add" id="add" data-no-drag>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        <span id="addLabel"></span>
+      </button>
+    </header>
+
+    <ul class="list" id="list"></ul>
+
+    <div class="empty" id="empty">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.2 6h13.6l1.7 7.5v5.9a1 1 0 0 1-1 1H4.5a1 1 0 0 1-1-1v-5.9z"/><path d="M3.5 13.5h5l1.4 2.3h3.2l1.4-2.3h5"/></svg>
+      <span class="w-label" id="emptyTitle"></span>
+      <span class="hint" id="emptyHint"></span>
+    </div>
+
+    <div class="toast" id="toast" hidden></div>
+  </main>
+  <script src="main.js"></script>
+</body>
+</html>

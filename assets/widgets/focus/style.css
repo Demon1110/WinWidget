@@ -1,0 +1,45 @@
+body { display: flex; flex-direction: column; }
+
+/* display rules below would otherwise beat the hidden attribute */
+.fo [hidden] { display: none !important; }
+
+.fo { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+
+header { display: flex; align-items: baseline; gap: 8px; flex: none; }
+.name { font-size: 0.92rem; letter-spacing: 0.02em; flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.date { font-size: 0.7rem; color: var(--w-fg-muted); white-space: nowrap; }
+
+.body { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; justify-content: center; }
+
+.ask { display: flex; gap: 5px; align-items: stretch; }
+.ask .w-input { flex: 1 1 0; min-width: 0; font-size: 0.86rem; padding: 5px 9px; }
+.ask .w-btn { flex: none; padding: 5px 11px; font-size: 0.78rem; }
+
+.card { display: flex; flex-direction: column; gap: 5px; min-height: 0; }
+.ttl {
+  font-size: 1.16rem; line-height: 1.35;
+  letter-spacing: -0.01em;
+  cursor: text;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ttl.is-done { text-decoration: line-through; color: var(--w-fg-muted); }
+.hidden-input { font-size: 1.06rem; padding: 4px 8px; }
+.why {
+  flex: 1 1 0; min-height: 2.2em;
+  font-size: 0.72rem; line-height: 1.45;
+  color: var(--w-fg-muted);
+  padding: 5px 8px;
+  resize: none;
+  font-family: inherit;
+}
+.why:focus { color: var(--w-fg); }
+
+footer { display: flex; align-items: center; gap: 7px; flex: none; }
+.mark { font-size: 0.7rem; color: var(--w-fg-muted); }
+.streak { margin-left: auto; font-size: 0.68rem; color: var(--w-accent); white-space: nowrap; }
+.clear { flex: none; padding: 2px 8px; font-size: 0.7rem; color: var(--w-fg-muted); }
+
+html[data-theme="paper"] .why { background: transparent; border-bottom: 1px solid var(--w-rule); border-radius: 0; }
+html[data-theme="paper"] .ttl { font-family: var(--w-font-title, inherit); }
+html[data-theme="paper"] .mark.is-done, html[data-theme="paper"] .streak { color: var(--w-accent); }

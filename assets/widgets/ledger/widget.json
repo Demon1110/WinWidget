@@ -1,0 +1,37 @@
+{
+  "id": "winwidget.ledger",
+  "name": { "zh-TW": "記帳速記", "zh-CN": "记账速记", "en": "Quick ledger" },
+  "description": {
+    "zh-TW": "打個數字、點分類就記一筆；輸入法不用切換，右下角看本月支出。",
+    "zh-CN": "打个数字、点分类就记一笔；不用切输入法，右下角看本月支出。",
+    "en": "Type an amount, tap a category, done. The month's spending stays in view."
+  },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "productivity",
+  "preview": "preview/instrument.zh-TW.webp",
+  "size": { "width": 320, "height": 300, "minWidth": 260, "minHeight": 220, "resizable": true, "grow": 0.36 },
+  "permissions": [],
+  "settings": [
+    {
+      "key": "currency",
+      "type": "text",
+      "label": { "zh-TW": "貨幣符號", "zh-CN": "货币符号", "en": "Currency symbol" },
+      "description": { "zh-TW": "金額前面顯示的符號", "zh-CN": "金额前面显示的符号", "en": "Shown before every amount" },
+      "default": "¥",
+      "placeholder": "¥"
+    },
+    {
+      "key": "keep",
+      "type": "slider",
+      "label": { "zh-TW": "保留筆數", "zh-CN": "保留笔数", "en": "Entries kept" },
+      "description": { "zh-TW": "超過就丟掉最舊的", "zh-CN": "超过就丢掉最旧的", "en": "Older entries drop off" },
+      "default": 40,
+      "min": 10,
+      "max": 200,
+      "step": 10
+    }
+  ]
+}

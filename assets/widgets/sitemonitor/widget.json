@@ -1,0 +1,49 @@
+{
+  "id": "winwidget.sitemonitor",
+  "name": { "zh-TW": "站點監控", "zh-CN": "站点监控", "en": "Site monitor" },
+  "description": {
+    "zh-TW": "把自己的站、內網服務排成一排，定時 ping 一次，綠點就代表還活著。",
+    "zh-CN": "把自己的站、内网服务排成一排，定时 ping 一次，绿点就代表还活着。",
+    "en": "Lines up the sites you care about and pings them on a timer; a dot means it answers."
+  },
+  "version": "1.1.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "system",
+  "preview": "preview/instrument.zh-TW.webp",
+  "size": { "width": 300, "height": 270, "minWidth": 240, "minHeight": 200, "resizable": true, "grow": 0.34 },
+  "permissions": ["system", "shell.open"],
+  "settings": [
+    {
+      "key": "interval",
+      "type": "slider",
+      "label": { "zh-TW": "檢查間隔（秒）", "zh-CN": "检查间隔（秒）", "en": "Check every (seconds)" },
+      "description": { "zh-TW": "每個站點輪流 ping，站多時一輪會久一點", "zh-CN": "每个站点轮流 ping，站多时一轮会久一点", "en": "Sites are pinged one by one, so a round takes longer with more of them" },
+      "default": 60,
+      "min": 30,
+      "max": 300,
+      "step": 15
+    },
+    {
+      "key": "timeout",
+      "type": "slider",
+      "label": { "zh-TW": "逾時（毫秒）", "zh-CN": "超时（毫秒）", "en": "Timeout (ms)" },
+      "description": { "zh-TW": "超過就算不通，內網可以調小", "zh-CN": "超过就算不通，内网可以调小", "en": "Anything slower counts as down" },
+      "default": 2500,
+      "min": 200,
+      "max": 5000,
+      "step": 100
+    },
+    {
+      "key": "max",
+      "type": "slider",
+      "label": { "zh-TW": "最多幾個站點", "zh-CN": "最多几个站点", "en": "Sites kept" },
+      "description": { "zh-TW": "超過就不再新增", "zh-CN": "超过就不再新增", "en": "Adding stops at this count" },
+      "default": 8,
+      "min": 2,
+      "max": 12,
+      "step": 1
+    }
+  ]
+}
