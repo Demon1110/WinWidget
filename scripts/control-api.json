@@ -1,0 +1,238 @@
+{
+  "bridge": "control-center",
+  "source": "src/ui/control.rs::registry",
+  "methods": [
+    {
+      "name": "app.autoUpdate",
+      "handler": "app_update_auto"
+    },
+    {
+      "name": "app.autostart",
+      "handler": "app_autostart"
+    },
+    {
+      "name": "app.close",
+      "handler": "app_close"
+    },
+    {
+      "name": "app.developer",
+      "handler": "app_developer"
+    },
+    {
+      "name": "app.editMode",
+      "handler": "app_edit_mode"
+    },
+    {
+      "name": "app.fileAssociation",
+      "handler": "app_file_association"
+    },
+    {
+      "name": "app.guide",
+      "handler": "app_guide"
+    },
+    {
+      "name": "app.hideAll",
+      "handler": "app_hide_all"
+    },
+    {
+      "name": "app.hotkey",
+      "handler": "app_hotkey"
+    },
+    {
+      "name": "app.hotkeysPause",
+      "handler": "app_hotkeys_pause"
+    },
+    {
+      "name": "app.language",
+      "handler": "app_language"
+    },
+    {
+      "name": "app.lockAll",
+      "handler": "app_lock_all"
+    },
+    {
+      "name": "app.lowResource",
+      "handler": "app_low_resource"
+    },
+    {
+      "name": "app.openFolder",
+      "handler": "app_open_folder"
+    },
+    {
+      "name": "app.pauseFullscreen",
+      "handler": "app_pause_fullscreen"
+    },
+    {
+      "name": "app.rescan",
+      "handler": "app_rescan"
+    },
+    {
+      "name": "app.resetDataDir",
+      "handler": "app_reset_data_dir"
+    },
+    {
+      "name": "app.restart",
+      "handler": "app_restart"
+    },
+    {
+      "name": "app.reveal",
+      "handler": "app_reveal"
+    },
+    {
+      "name": "app.setDataDir",
+      "handler": "app_set_data_dir"
+    },
+    {
+      "name": "app.uiTheme",
+      "handler": "app_ui_theme"
+    },
+    {
+      "name": "app.updateAuto",
+      "handler": "app_update_auto"
+    },
+    {
+      "name": "app.updateCancel",
+      "handler": "app_update_cancel"
+    },
+    {
+      "name": "app.updateCheck",
+      "handler": "app_update_check"
+    },
+    {
+      "name": "app.updateInstall",
+      "handler": "app_update_install"
+    },
+    {
+      "name": "app.updatePage",
+      "handler": "app_update_page"
+    },
+    {
+      "name": "fonts.list",
+      "handler": "fonts_list"
+    },
+    {
+      "name": "instance.appearance",
+      "handler": "instance_appearance"
+    },
+    {
+      "name": "instance.clearAll",
+      "handler": "instance_clear_all"
+    },
+    {
+      "name": "instance.clickThrough",
+      "handler": "instance_click_through"
+    },
+    {
+      "name": "instance.css",
+      "handler": "instance_css"
+    },
+    {
+      "name": "instance.devtools",
+      "handler": "instance_devtools"
+    },
+    {
+      "name": "instance.duplicate",
+      "handler": "instance_duplicate"
+    },
+    {
+      "name": "instance.identify",
+      "handler": "instance_identify"
+    },
+    {
+      "name": "instance.layer",
+      "handler": "instance_layer"
+    },
+    {
+      "name": "instance.locked",
+      "handler": "instance_locked"
+    },
+    {
+      "name": "instance.pickFolder",
+      "handler": "instance_pick_folder"
+    },
+    {
+      "name": "instance.reload",
+      "handler": "instance_reload"
+    },
+    {
+      "name": "instance.remove",
+      "handler": "instance_remove"
+    },
+    {
+      "name": "instance.setting",
+      "handler": "instance_setting"
+    },
+    {
+      "name": "instance.size",
+      "handler": "instance_size"
+    },
+    {
+      "name": "instance.theme",
+      "handler": "instance_theme"
+    },
+    {
+      "name": "market.install",
+      "handler": "market_install"
+    },
+    {
+      "name": "market.list",
+      "handler": "market_list"
+    },
+    {
+      "name": "market.open",
+      "handler": "market_open"
+    },
+    {
+      "name": "package.cancel",
+      "handler": "package_cancel"
+    },
+    {
+      "name": "package.export",
+      "handler": "package_export"
+    },
+    {
+      "name": "package.import",
+      "handler": "package_import"
+    },
+    {
+      "name": "package.install",
+      "handler": "package_install"
+    },
+    {
+      "name": "theme.global",
+      "handler": "theme_global"
+    },
+    {
+      "name": "theme.override",
+      "handler": "theme_override"
+    },
+    {
+      "name": "theme.reset",
+      "handler": "theme_reset"
+    },
+    {
+      "name": "widget.add",
+      "handler": "widget_add"
+    },
+    {
+      "name": "widget.create",
+      "handler": "widget_create"
+    },
+    {
+      "name": "widget.export",
+      "handler": "widget_export"
+    },
+    {
+      "name": "widget.grant",
+      "handler": "widget_grant"
+    },
+    {
+      "name": "widget.openFolder",
+      "handler": "widget_open_folder"
+    },
+    {
+      "name": "widget.uninstall",
+      "handler": "widget_uninstall"
+    }
+  ]
+}

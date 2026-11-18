@@ -5,7 +5,9 @@ use crate::core::util::{jbool, jnum, jstr, req_str, BridgeError, BridgeResult};
 use crate::runtime::app::{App, CONTROL_WIN};
 use crate::runtime::bridge::Reply;
 use serde_json::{json, Map, Value};
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
 /// Everything the control center renders in one go.
 pub fn state_json(app: &App) -> Value {
@@ -309,573 +311,717 @@ where
     Reply::Later
 }
 
+// ── method registry ────────────────────────────────────────────────────────
+
+/// One control-center method. `id` is the bridge request id; only the few methods that answer
+/// from a worker thread need it (the rest ignore it).
+type Method = fn(&mut App, &Value, i64) -> BridgeResult<Reply>;
+
+/// The single source of truth for the control-center bridge API. Tooling reads the `m.insert`
+/// lines below to build the spec and check the front end for drift; adding or renaming a method
+/// is one line here plus its handler.
+fn registry() -> &'static HashMap<&'static str, Method> {
+    static REGISTRY: OnceLock<HashMap<&'static str, Method>> = OnceLock::new();
+    REGISTRY.get_or_init(|| {
+        let mut m: HashMap<&'static str, Method> = HashMap::new();
+        // app
+        m.insert("app.editMode", app_edit_mode);
+        m.insert("app.guide", app_guide);
+        m.insert("app.hotkey", app_hotkey);
+        m.insert("app.hotkeysPause", app_hotkeys_pause);
+        m.insert("app.language", app_language);
+        m.insert("app.uiTheme", app_ui_theme);
+        m.insert("app.lockAll", app_lock_all);
+        m.insert("app.openFolder", app_open_folder);
+        m.insert("app.rescan", app_rescan);
+        m.insert("app.restart", app_restart);
+        m.insert("app.setDataDir", app_set_data_dir);
+        m.insert("app.resetDataDir", app_reset_data_dir);
+        m.insert("app.reveal", app_reveal);
+        m.insert("app.updateCheck", app_update_check);
+        m.insert("app.updateInstall", app_update_install);
+        m.insert("app.updateCancel", app_update_cancel);
+        m.insert("app.updatePage", app_update_page);
+        m.insert("app.updateAuto", app_update_auto);
+        // Kept for pages built against the old spelling.
+        m.insert("app.autoUpdate", app_update_auto);
+        m.insert("app.autostart", app_autostart);
+        m.insert("app.lowResource", app_low_resource);
+        m.insert("app.developer", app_developer);
+        m.insert("app.hideAll", app_hide_all);
+        m.insert("app.pauseFullscreen", app_pause_fullscreen);
+        m.insert("app.fileAssociation", app_file_association);
+        m.insert("app.close", app_close);
+        // fonts
+        m.insert("fonts.list", fonts_list);
+        // instances
+        m.insert("instance.appearance", instance_appearance);
+        m.insert("instance.css", instance_css);
+        m.insert("instance.clickThrough", instance_click_through);
+        m.insert("instance.locked", instance_locked);
+        m.insert("instance.layer", instance_layer);
+        m.insert("instance.theme", instance_theme);
+        m.insert("instance.setting", instance_setting);
+        m.insert("instance.size", instance_size);
+        m.insert("instance.reload", instance_reload);
+        m.insert("instance.devtools", instance_devtools);
+        m.insert("instance.identify", instance_identify);
+        m.insert("instance.duplicate", instance_duplicate);
+        m.insert("instance.remove", instance_remove);
+        m.insert("instance.clearAll", instance_clear_all);
+        m.insert("instance.pickFolder", instance_pick_folder);
+        // widgets
+        m.insert("widget.add", widget_add);
+        m.insert("widget.grant", widget_grant);
+        m.insert("widget.openFolder", widget_open_folder);
+        m.insert("widget.export", widget_export);
+        m.insert("widget.uninstall", widget_uninstall);
+        m.insert("widget.create", widget_create);
+        // themes
+        m.insert("theme.global", theme_global);
+        m.insert("theme.override", theme_override);
+        m.insert("theme.reset", theme_reset);
+        // packages
+        m.insert("package.import", package_import);
+        m.insert("package.cancel", package_cancel);
+        m.insert("package.install", package_install);
+        m.insert("package.export", package_export);
+        // market
+        m.insert("market.list", market_list);
+        m.insert("market.install", market_install);
+        m.insert("market.open", market_open);
+        m
+    })
+}
+
+fn handler_for(method: &str) -> BridgeResult<Method> {
+    registry()
+        .get(method)
+        .copied()
+        .ok_or_else(|| BridgeError::new(format!("unknown method '{method}'")))
+}
+
 fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> {
-    let result = match method {
-        // ── app ────────────────────────────────────────────────────────────
-        "app.editMode" => {
-            app.edit_mode = jbool(p, "on").unwrap_or(false);
-            app.publish_states();
-            refresh(app, None);
-            Ok(Value::Null)
-        }
-        "app.guide" => {
-            // The guide is one self-contained HTML file, so it needs no server when it exists on
-            // disk: opening it straight from the folder keeps the page free of the port and works
-            // even with the app closed afterwards. A single exe has no such file — the copy is
-            // inside the binary — so that one is served by the local HTTP server instead, and the
-            // `file://` form never appears in a shipped build.
-            let paths = crate::core::paths::get();
-            let local = paths.docs_dir().join("developer-guide.html");
-            if !paths.embedded() && local.is_file() {
-                crate::platform::shell::open_path(&local.to_string_lossy())
-                    .map_err(BridgeError::new)?;
-            } else {
-                // `127.0.0.1`, not the card host: this URL is handed to the user's browser, and
-                // Windows itself does not resolve `widgets.localhost` (only Chromium invents it).
-                let url = format!("http://127.0.0.1:{}/__docs/index.html", app.port);
-                crate::platform::shell::open(&url).map_err(BridgeError::new)?;
-            }
-            Ok(Value::Null)
-        }
-        "app.hotkey" => {
-            let action = req_str(p, "action")?;
-            let keys = jstr(p, "keys").unwrap_or_default();
-            app.cfg_mut().hotkeys.insert(action, keys);
-            app.save();
-            reapply_hotkeys(app);
-            refresh(app, None);
-            Ok(Value::Null)
-        }
-        "app.hotkeysPause" => {
-            app.hotkeys_paused = jbool(p, "on").unwrap_or(false);
-            Ok(Value::Null)
-        }
-        "app.language" => {
-            let lang = req_str(p, "lang")?;
-            app.cfg_mut().language = lang.clone();
-            app.save();
-            crate::core::text::set_locale(&lang);
-            let ids: Vec<String> = app.windows.keys().cloned().collect();
-            for id in ids {
-                app.reload_instance(&id);
-            }
-            refresh(app, None);
-            Ok(Value::Null)
-        }
-        "app.uiTheme" => {
-            let mode = req_str(p, "theme")?;
-            let mode = match mode.as_str() {
-                "light" | "dark" => mode,
-                _ => "auto".to_string(),
-            };
-            app.cfg_mut().ui_theme = mode;
-            app.save();
-            refresh(app, None);
-            Ok(Value::Null)
-        }
-        "app.lockAll" => {
-            let on = jbool(p, "on").unwrap_or(false);
-            for inst in app.cfg_mut().instances.iter_mut() {
-                inst.locked = on;
-            }
-            app.save();
-            app.publish_states();
-            app.refresh_tray_menu();
-            refresh(app, None);
-            Ok(Value::Null)
-        }
-        "app.openFolder" => {
-            let which = jstr(p, "which").unwrap_or_else(|| "data".into());
-            let paths = crate::core::paths::get();
-            let path = match which.as_str() {
-                "widgets" => paths.user_widgets_dir(),
-                // 内置组件与主题现在编在 exe 里，没有文件夹可开：内置组件的用法是复制到
-                // 用户目录再改，所以这个按钮落到用户组件目录。
-                "builtin" | "themes" if paths.embedded() => paths.user_widgets_dir(),
-                "builtin" => paths.builtin_widgets_dir(),
-                "db" => paths.db_dir(),
-                "logs" => paths
-                    .log_file()
-                    .parent()
-                    .map(|p| p.to_path_buf())
-                    .unwrap_or_else(|| paths.data_dir.clone()),
-                "themes" => paths.themes_dir(),
-                "instances" => paths.instances_dir(),
-                "exports" => paths.exports_dir(),
-                _ => paths.data_dir.clone(),
-            };
-            std::fs::create_dir_all(&path).ok();
-            // These are folders on this machine, not links: `open` only takes http/https/mailto.
-            crate::platform::shell::open_path(&path.to_string_lossy()).map_err(BridgeError::new)?;
-            Ok(Value::Null)
-        }
-        "app.rescan" => {
-            app.rescan();
-            app.refresh_tray_menu();
-            Ok(Value::Null)
-        }
-        "app.restart" => {
-            let exe = std::env::current_exe().map_err(|e| BridgeError::new(e.to_string()))?;
-            crate::platform::shell::launch(&exe.to_string_lossy()).map_err(BridgeError::new)?;
-            // Let the event loop run the normal exit path: kill exit(0) here would skip the
-            // unload grace period, the final save, and removing the tray icon.
-            app.quit();
-            Ok(Value::Null)
-        }
-        // Move every database to a folder of the user's choosing. The copy happens now; the switch
-        // itself needs a restart, because the folders are resolved once while the app starts.
-        "app.setDataDir" => {
-            let picked = crate::platform::shell::pick("folder", "", "Choose a data folder");
-            match picked {
-                Some(dir) => {
-                    let result =
-                        crate::core::paths::set_data_dir(&dir).map_err(BridgeError::new)?;
-                    Ok(json!({ "dir": result["dir"], "restart": true }))
-                }
-                None => Ok(Value::Null),
-            }
-        }
-        "app.resetDataDir" => {
-            let result = crate::core::paths::reset_data_dir().map_err(BridgeError::new)?;
-            Ok(json!({ "dir": result["dir"], "restart": true }))
-        }
-        "app.reveal" => {
-            let path = req_str(p, "path")?;
-            crate::platform::shell::reveal(&path).map_err(BridgeError::new)?;
-            Ok(Value::Null)
-        }
-        "app.updateCheck" => {
-            crate::market::updater::check_async(app);
-            refresh(app, None);
-            Ok(Value::Null)
-        }
-        "app.updateInstall" => {
-            crate::market::updater::install_async(app);
-            refresh(app, None);
-            Ok(Value::Null)
-        }
-        "app.updateCancel" => {
-            crate::market::updater::cancel(app);
-            refresh(app, None);
-            Ok(Value::Null)
-        }
-        "app.updatePage" => {
-            crate::market::updater::page(app).map_err(BridgeError::new)?;
-            Ok(Value::Null)
-        }
-        "app.updateAuto" | "app.autoUpdate" => {
-            let on = jbool(p, "on").unwrap_or(false);
-            app.cfg_mut().auto_update_check = on;
-            app.save();
-            refresh(app, None);
-            Ok(Value::Null)
-        }
-        "app.autostart" => {
-            let on = jbool(p, "on").unwrap_or(false);
-            crate::platform::set_autostart(on).map_err(BridgeError::new)?;
-            refresh(app, None);
-            Ok(Value::Null)
-        }
-        "app.lowResource" => {
-            let on = jbool(p, "on").unwrap_or(false);
-            app.cfg_mut().low_resource_mode = on;
-            app.save();
-            refresh(app, None);
-            Ok(Value::Null)
-        }
-        "app.developer" => {
-            let on = jbool(p, "on").unwrap_or(false);
-            app.cfg_mut().developer_mode = on;
-            app.save();
-            let ids: Vec<String> = app.windows.keys().cloned().collect();
-            for id in ids {
-                app.reload_instance(&id);
-            }
-            refresh(app, None);
-            Ok(Value::Null)
-        }
-        "app.hideAll" => {
-            let on = jbool(p, "on").unwrap_or(false);
-            app.cfg_mut().hide_all = on;
-            app.set_all_visible(!on, "control");
-            app.save();
-            app.refresh_tray_menu();
-            refresh(app, None);
-            Ok(Value::Null)
-        }
-        "app.pauseFullscreen" => {
-            let on = jbool(p, "on").unwrap_or(false);
-            app.cfg_mut().pause_on_fullscreen = on;
-            app.save();
-            refresh(app, None);
-            Ok(Value::Null)
-        }
-        "app.fileAssociation" => {
-            let on = jbool(p, "on").unwrap_or(false);
-            set_file_association(on).map_err(BridgeError::new)?;
-            refresh(app, None);
-            Ok(Value::Null)
-        }
-        "app.close" => {
-            if let Some(control) = &app.control {
-                control.window.set_visible(false);
-            }
-            Ok(Value::Null)
-        }
+    handler_for(method)?(app, p, id)
+}
 
-        // ── fonts ─────────────────────────────────────────────────────────
-        "fonts.list" => Ok(Value::Array(
-            crate::platform::fonts()
-                .into_iter()
-                .map(Value::String)
-                .collect(),
-        )),
+// ── app ────────────────────────────────────────────────────────────────────
 
-        // ── instances ─────────────────────────────────────────────────────
-        "instance.appearance" => {
-            let inst = instance_of(app, p)?;
-            let key = req_str(p, "key")?;
-            let value = p.get("value").cloned().unwrap_or(Value::Null);
-            if let Some(target) = app.instance_mut(&inst.id) {
-                if value.is_null() {
-                    target.appearance.remove(&key);
-                } else {
-                    target.appearance.insert(key, value);
-                }
-            }
-            app.save();
-            refresh(app, Some(&inst.id));
-            Ok(Value::Null)
-        }
-        "instance.css" => {
-            let inst = instance_of(app, p)?;
-            let css = jstr(p, "css").unwrap_or_default();
-            if let Some(target) = app.instance_mut(&inst.id) {
-                target.custom_css = if css.trim().is_empty() {
-                    None
-                } else {
-                    Some(css)
-                };
-            }
-            app.save();
-            refresh(app, Some(&inst.id));
-            Ok(Value::Null)
-        }
-        "instance.clickThrough" => {
-            let inst = instance_of(app, p)?;
-            let on = jbool(p, "on").unwrap_or(false);
-            app.set_click_through(&inst.id, on);
-            app.refresh_tray_menu();
-            Ok(Value::Null)
-        }
-        "instance.locked" => {
-            let inst = instance_of(app, p)?;
-            let on = jbool(p, "on").unwrap_or(false);
-            if let Some(target) = app.instance_mut(&inst.id) {
-                target.locked = on;
-            }
-            app.save();
-            app.publish_states();
-            refresh(app, None);
-            Ok(Value::Null)
-        }
-        "instance.layer" => {
-            let inst = instance_of(app, p)?;
-            let layer = req_str(p, "layer")?;
-            app.set_layer(&inst.id, &layer);
-            Ok(Value::Null)
-        }
-        "instance.theme" => {
-            let inst = instance_of(app, p)?;
-            let theme = p.get("theme").cloned().unwrap_or(Value::Null);
-            if let Some(target) = app.instance_mut(&inst.id) {
-                target.theme_id = theme.as_str().map(|s| s.to_string());
-            }
-            app.save();
-            refresh(app, Some(&inst.id));
-            Ok(Value::Null)
-        }
-        "instance.setting" => {
-            let inst = instance_of(app, p)?;
-            let key = req_str(p, "key")?;
-            let value = p.get("value").cloned().unwrap_or(Value::Null);
-            if let Some(target) = app.instance_mut(&inst.id) {
-                if value.is_null() {
-                    target.settings.remove(&key);
-                } else {
-                    target.settings.insert(key, value);
-                }
-            }
-            app.save();
-            app.push_settings(&inst.id);
-            refresh(app, None);
-            Ok(Value::Null)
-        }
-        "instance.size" => {
-            let inst = instance_of(app, p)?;
-            let manifest = app
-                .manifest_for(&inst.id)
-                .ok_or_else(|| BridgeError::new("this widget is no longer installed"))?;
-            let s = &manifest.size;
-            let width = jnum(p, "width")
-                .unwrap_or(inst.width)
-                .clamp(s.min_width, s.max_width);
-            let height = jnum(p, "height")
-                .unwrap_or(inst.height)
-                .clamp(s.min_height, s.max_height);
-            if let Some(target) = app.instance_mut(&inst.id) {
-                target.width = width;
-                target.height = height;
-            }
-            app.save();
-            app.place_window(&inst.id);
-            app.push_state(&inst.id);
-            refresh(app, None);
-            Ok(Value::Null)
-        }
-        "instance.reload" => {
-            let inst = instance_of(app, p)?;
-            app.reload_instance(&inst.id);
-            Ok(Value::Null)
-        }
-        "instance.devtools" => {
-            let inst = instance_of(app, p)?;
-            if let Some(win) = app.windows.get(&inst.id) {
-                win.webview.open_devtools();
-            } else {
-                app.want_devtools = Some(inst.id.clone());
-                app.pending_windows.push(inst.id.clone());
-            }
-            Ok(Value::Null)
-        }
-        "instance.identify" => {
-            let inst = instance_of(app, p)?;
-            app.set_visible(&inst.id, true, "control");
-            if let Some(win) = app.windows.get(&inst.id) {
-                win.window.set_focus();
-            }
-            app.event_to(&inst.id, "identify", json!({ "ms": 1600 }));
-            Ok(Value::Null)
-        }
-        "instance.duplicate" => {
-            let inst = instance_of(app, p)?;
-            let new_id = app
-                .duplicate_instance(&inst.id)
-                .ok_or_else(|| BridgeError::new("that widget is no longer on the desktop"))?;
-            refresh(app, None);
-            Ok(json!({ "id": new_id }))
-        }
-        "instance.remove" => {
-            let inst = instance_of(app, p)?;
-            app.remove_instance(&inst.id);
-            app.refresh_tray_menu();
-            refresh(app, None);
-            Ok(Value::Null)
-        }
-        "instance.clearAll" => {
-            let count = app.cfg().instances.len();
-            app.clear_instances();
-            app.refresh_tray_menu();
-            refresh(app, None);
-            Ok(json!({ "removed": count }))
-        }
-        "instance.pickFolder" => {
-            let inst = instance_of(app, p)?;
-            let key = req_str(p, "key")?;
-            let picked = crate::platform::shell::pick("folder", "all", "");
-            if let Some(folder) = picked {
-                if let Some(target) = app.instance_mut(&inst.id) {
-                    target.settings.insert(key, Value::String(folder));
-                }
-                app.save();
-                app.push_settings(&inst.id);
-                refresh(app, None);
-            }
-            Ok(Value::Null)
-        }
+fn app_edit_mode(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    app.edit_mode = jbool(p, "on").unwrap_or(false);
+    app.publish_states();
+    refresh(app, None);
+    Ok(Reply::Now(Value::Null))
+}
 
-        // ── widgets ───────────────────────────────────────────────────────
-        "widget.add" => {
-            let widget = req_str(p, "widget")?;
-            let grant = jbool(p, "grant").unwrap_or(false);
-            if grant {
-                if let Some(manifest) = app.catalog.find(&widget).cloned() {
-                    crate::model::permissions::grant(app.cfg_mut(), &manifest);
-                    app.save();
-                }
-            }
-            let id = app.add_widget(&widget, None).map_err(BridgeError::new)?;
-            if let Some(manifest) = app.catalog.find(&widget).cloned() {
-                let pending = crate::model::permissions::pending(app.cfg(), &manifest);
-                if !pending.is_empty() {
-                    let consent =
-                        json!({ "widget": manifest.id, "then": "load", "permissions": pending });
-                    app.send_to(
-                        CONTROL_WIN,
-                        &format!("{{\"ev\":\"consent\",\"d\":{consent}}}"),
-                    );
-                }
-            }
-            app.refresh_tray_menu();
-            refresh(app, None);
-            Ok(json!({ "id": id }))
-        }
-        "widget.grant" => {
-            let widget = req_str(p, "widget")?;
-            if let Some(manifest) = app.catalog.find(&widget).cloned() {
-                crate::model::permissions::grant(app.cfg_mut(), &manifest);
-                app.save();
-            }
-            app.rescan();
-            for (iid, inst) in app
-                .cfg()
-                .instances
-                .iter()
-                .filter(|i| i.widget.eq_ignore_ascii_case(&widget))
-                .map(|i| (i.id.clone(), i.widget.clone()))
-                .collect::<Vec<_>>()
-            {
-                let _ = inst;
-                app.reload_instance(&iid);
-            }
-            refresh(app, None);
-            Ok(Value::Null)
-        }
-        "widget.openFolder" => {
-            let widget = req_str(p, "widget")?;
-            let dir: PathBuf = app
-                .catalog
-                .find(&widget)
-                .map(|m| m.dir.clone())
-                .ok_or_else(|| BridgeError::new(format!("no widget called {widget}")))?;
-            if crate::core::assets::is_virtual(&dir) {
-                // 内置组件编在 exe 里，没有文件夹可开：先导出成 .fwz 才有可编辑的副本。
-                return Err(BridgeError::new(
-                    "built-in widgets live inside the exe — export it to a .fwz first, then install that copy",
-                ));
-            }
-            crate::platform::shell::open_path(&dir.to_string_lossy()).map_err(BridgeError::new)?;
-            Ok(Value::Null)
-        }
-        "widget.export" => {
-            let widget = req_str(p, "widget")?;
-            let out = crate::market::packages::export(app, &widget).map_err(BridgeError::new)?;
-            Ok(out)
-        }
-        "widget.uninstall" => {
-            let widget = req_str(p, "widget")?;
-            crate::market::packages::uninstall(app, &widget).map_err(BridgeError::new)?;
-            app.refresh_tray_menu();
-            Ok(Value::Null)
-        }
-        "widget.create" => {
-            let name = req_str(p, "name")?;
-            let created = crate::market::packages::create(app, &name).map_err(BridgeError::new)?;
-            app.refresh_tray_menu();
-            refresh(app, None);
-            Ok(created)
-        }
+fn app_guide(app: &mut App, _p: &Value, _id: i64) -> BridgeResult<Reply> {
+    // The guide is one self-contained HTML file, so it needs no server when it exists on
+    // disk: opening it straight from the folder keeps the page free of the port and works
+    // even with the app closed afterwards. A single exe has no such file — the copy is
+    // inside the binary — so that one is served by the local HTTP server instead, and the
+    // `file://` form never appears in a shipped build.
+    let paths = crate::core::paths::get();
+    let local = paths.docs_dir().join("developer-guide.html");
+    if !paths.embedded() && local.is_file() {
+        crate::platform::shell::open_path(&local.to_string_lossy()).map_err(BridgeError::new)?;
+    } else {
+        // `127.0.0.1`, not the card host: this URL is handed to the user's browser, and
+        // Windows itself does not resolve `widgets.localhost` (only Chromium invents it).
+        let url = format!("http://127.0.0.1:{}/__docs/index.html", app.port);
+        crate::platform::shell::open(&url).map_err(BridgeError::new)?;
+    }
+    Ok(Reply::Now(Value::Null))
+}
 
-        // ── themes ────────────────────────────────────────────────────────
-        "theme.global" => {
-            let theme = req_str(p, "id")?;
-            if app.themes.get(Some(&theme)).id != theme {
-                return Err(BridgeError::new(format!("no theme called {theme}")));
-            }
-            app.cfg_mut().theme_id = theme;
-            app.save();
-            refresh_themes(app);
-            Ok(Value::Null)
-        }
-        "theme.override" => {
-            let key = req_str(p, "key")?;
-            let value = p.get("value").cloned().unwrap_or(Value::Null);
-            if value.is_null() {
-                app.cfg_mut().theme.remove(&key);
-            } else {
-                app.cfg_mut().theme.insert(key, value);
-            }
-            app.save();
-            refresh_themes(app);
-            Ok(Value::Null)
-        }
-        "theme.reset" => {
-            app.cfg_mut().theme = Map::new();
-            app.cfg_mut().theme_id = crate::model::themes::DEFAULT_ID.to_string();
-            app.save();
-            refresh_themes(app);
-            Ok(Value::Null)
-        }
+fn app_hotkey(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let action = req_str(p, "action")?;
+    let keys = jstr(p, "keys").unwrap_or_default();
+    app.cfg_mut().hotkeys.insert(action, keys);
+    app.save();
+    reapply_hotkeys(app);
+    refresh(app, None);
+    Ok(Reply::Now(Value::Null))
+}
 
-        // ── packages ──────────────────────────────────────────────────────
-        "package.import" => {
-            if let Some(path) = crate::platform::shell::pick("file", "packages", "") {
-                stage_and_show(app, std::path::Path::new(&path));
-            }
-            Ok(Value::Null)
-        }
-        "package.cancel" => {
-            let token = req_str(p, "token")?;
-            if let Some(staged) = app.staged.remove(&token) {
-                let _ = std::fs::remove_dir_all(&staged.dir);
-            }
-            Ok(Value::Null)
-        }
-        "package.install" => {
-            let token = req_str(p, "token")?;
-            let result = crate::market::packages::install(app, &token).map_err(BridgeError::new)?;
-            app.refresh_tray_menu();
-            refresh(app, None);
-            Ok(result)
-        }
-        "package.export" => {
-            let widget = req_str(p, "widget")?;
-            Ok(crate::market::packages::export(app, &widget).map_err(BridgeError::new)?)
-        }
+fn app_hotkeys_pause(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    app.hotkeys_paused = jbool(p, "on").unwrap_or(false);
+    Ok(Reply::Now(Value::Null))
+}
 
-        // ── market ────────────────────────────────────────────────────────
-        "market.list" => {
-            let want_refresh = jbool(p, "refresh").unwrap_or(false);
-            let url = crate::market::client::list_url_of(app);
-            let site = crate::market::client::site_of(app);
-            let cache = crate::market::client::cache_path();
-            return Ok(spawn(app, id, move || {
-                Ok(crate::market::client::fetch_list(
-                    &url,
-                    &site,
-                    &cache,
-                    want_refresh,
-                ))
-            }));
-        }
-        "market.install" => {
-            let widget = req_str(p, "id")?;
-            let list = crate::market::client::cached_list(&crate::market::client::site_of(app));
-            let url =
-                crate::market::client::download_url(&list, &widget).map_err(BridgeError::new)?;
-            let proxy = app.proxy.clone();
-            let target = widget.clone();
-            std::thread::spawn(move || {
-                let payload = match crate::market::client::download(&url, &target) {
-                    Ok(path) => json!({ "ok": true, "id": target, "path": path.to_string_lossy() }),
-                    Err(e) => json!({ "ok": false, "id": target, "message": e }),
-                };
-                crate::runtime::app::post(
-                    &proxy,
-                    crate::runtime::app::Ev::Command(format!("market.downloaded:{}", payload)),
-                );
-            });
-            Ok(json!({ "status": "downloading" }))
-        }
-        "market.open" => {
-            let url = jstr(p, "url");
-            crate::market::client::open(app, url).map_err(BridgeError::new)?;
-            Ok(Value::Null)
-        }
+fn app_language(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let lang = req_str(p, "lang")?;
+    app.cfg_mut().language = lang.clone();
+    app.save();
+    crate::core::text::set_locale(&lang);
+    let ids: Vec<String> = app.windows.keys().cloned().collect();
+    for id in ids {
+        app.reload_instance(&id);
+    }
+    refresh(app, None);
+    Ok(Reply::Now(Value::Null))
+}
 
-        other => Err(BridgeError::new(format!("unknown method '{other}'"))),
+fn app_ui_theme(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let mode = req_str(p, "theme")?;
+    let mode = match mode.as_str() {
+        "light" | "dark" => mode,
+        _ => "auto".to_string(),
     };
-    result.map(Reply::Now)
+    app.cfg_mut().ui_theme = mode;
+    app.save();
+    refresh(app, None);
+    Ok(Reply::Now(Value::Null))
+}
+
+fn app_lock_all(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let on = jbool(p, "on").unwrap_or(false);
+    for inst in app.cfg_mut().instances.iter_mut() {
+        inst.locked = on;
+    }
+    app.save();
+    app.publish_states();
+    app.refresh_tray_menu();
+    refresh(app, None);
+    Ok(Reply::Now(Value::Null))
+}
+
+fn app_open_folder(_app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let which = jstr(p, "which").unwrap_or_else(|| "data".into());
+    let paths = crate::core::paths::get();
+    let path = match which.as_str() {
+        "widgets" => paths.user_widgets_dir(),
+        // 内置组件与主题现在编在 exe 里，没有文件夹可开：内置组件的用法是复制到
+        // 用户目录再改，所以这个按钮落到用户组件目录。
+        "builtin" | "themes" if paths.embedded() => paths.user_widgets_dir(),
+        "builtin" => paths.builtin_widgets_dir(),
+        "db" => paths.db_dir(),
+        "logs" => paths
+            .log_file()
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| paths.data_dir.clone()),
+        "themes" => paths.themes_dir(),
+        "instances" => paths.instances_dir(),
+        "exports" => paths.exports_dir(),
+        _ => paths.data_dir.clone(),
+    };
+    std::fs::create_dir_all(&path).ok();
+    // These are folders on this machine, not links: `open` only takes http/https/mailto.
+    crate::platform::shell::open_path(&path.to_string_lossy()).map_err(BridgeError::new)?;
+    Ok(Reply::Now(Value::Null))
+}
+
+fn app_rescan(app: &mut App, _p: &Value, _id: i64) -> BridgeResult<Reply> {
+    app.rescan();
+    app.refresh_tray_menu();
+    Ok(Reply::Now(Value::Null))
+}
+
+fn app_restart(app: &mut App, _p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let exe = std::env::current_exe().map_err(|e| BridgeError::new(e.to_string()))?;
+    crate::platform::shell::launch(&exe.to_string_lossy()).map_err(BridgeError::new)?;
+    // Let the event loop run the normal exit path: kill exit(0) here would skip the
+    // unload grace period, the final save, and removing the tray icon.
+    app.quit();
+    Ok(Reply::Now(Value::Null))
+}
+
+// Move every database to a folder of the user's choosing. The copy happens now; the switch
+// itself needs a restart, because the folders are resolved once while the app starts.
+fn app_set_data_dir(_app: &mut App, _p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let picked = crate::platform::shell::pick("folder", "", "Choose a data folder");
+    match picked {
+        Some(dir) => {
+            let result = crate::core::paths::set_data_dir(&dir).map_err(BridgeError::new)?;
+            Ok(Reply::Now(json!({ "dir": result["dir"], "restart": true })))
+        }
+        None => Ok(Reply::Now(Value::Null)),
+    }
+}
+
+fn app_reset_data_dir(_app: &mut App, _p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let result = crate::core::paths::reset_data_dir().map_err(BridgeError::new)?;
+    Ok(Reply::Now(json!({ "dir": result["dir"], "restart": true })))
+}
+
+fn app_reveal(_app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let path = req_str(p, "path")?;
+    crate::platform::shell::reveal(&path).map_err(BridgeError::new)?;
+    Ok(Reply::Now(Value::Null))
+}
+
+fn app_update_check(app: &mut App, _p: &Value, _id: i64) -> BridgeResult<Reply> {
+    crate::market::updater::check_async(app);
+    refresh(app, None);
+    Ok(Reply::Now(Value::Null))
+}
+
+fn app_update_install(app: &mut App, _p: &Value, _id: i64) -> BridgeResult<Reply> {
+    crate::market::updater::install_async(app);
+    refresh(app, None);
+    Ok(Reply::Now(Value::Null))
+}
+
+fn app_update_cancel(app: &mut App, _p: &Value, _id: i64) -> BridgeResult<Reply> {
+    crate::market::updater::cancel(app);
+    refresh(app, None);
+    Ok(Reply::Now(Value::Null))
+}
+
+fn app_update_page(app: &mut App, _p: &Value, _id: i64) -> BridgeResult<Reply> {
+    crate::market::updater::page(app).map_err(BridgeError::new)?;
+    Ok(Reply::Now(Value::Null))
+}
+
+fn app_update_auto(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let on = jbool(p, "on").unwrap_or(false);
+    app.cfg_mut().auto_update_check = on;
+    app.save();
+    refresh(app, None);
+    Ok(Reply::Now(Value::Null))
+}
+
+fn app_autostart(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let on = jbool(p, "on").unwrap_or(false);
+    crate::platform::set_autostart(on).map_err(BridgeError::new)?;
+    refresh(app, None);
+    Ok(Reply::Now(Value::Null))
+}
+
+fn app_low_resource(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let on = jbool(p, "on").unwrap_or(false);
+    app.cfg_mut().low_resource_mode = on;
+    app.save();
+    refresh(app, None);
+    Ok(Reply::Now(Value::Null))
+}
+
+fn app_developer(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let on = jbool(p, "on").unwrap_or(false);
+    app.cfg_mut().developer_mode = on;
+    app.save();
+    let ids: Vec<String> = app.windows.keys().cloned().collect();
+    for id in ids {
+        app.reload_instance(&id);
+    }
+    refresh(app, None);
+    Ok(Reply::Now(Value::Null))
+}
+
+fn app_hide_all(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let on = jbool(p, "on").unwrap_or(false);
+    app.cfg_mut().hide_all = on;
+    app.set_all_visible(!on, "control");
+    app.save();
+    app.refresh_tray_menu();
+    refresh(app, None);
+    Ok(Reply::Now(Value::Null))
+}
+
+fn app_pause_fullscreen(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let on = jbool(p, "on").unwrap_or(false);
+    app.cfg_mut().pause_on_fullscreen = on;
+    app.save();
+    refresh(app, None);
+    Ok(Reply::Now(Value::Null))
+}
+
+fn app_file_association(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let on = jbool(p, "on").unwrap_or(false);
+    set_file_association(on).map_err(BridgeError::new)?;
+    refresh(app, None);
+    Ok(Reply::Now(Value::Null))
+}
+
+fn app_close(app: &mut App, _p: &Value, _id: i64) -> BridgeResult<Reply> {
+    if let Some(control) = &app.control {
+        control.window.set_visible(false);
+    }
+    Ok(Reply::Now(Value::Null))
+}
+
+// ── fonts ──────────────────────────────────────────────────────────────────
+
+fn fonts_list(_app: &mut App, _p: &Value, _id: i64) -> BridgeResult<Reply> {
+    Ok(Reply::Now(Value::Array(
+        crate::platform::fonts()
+            .into_iter()
+            .map(Value::String)
+            .collect(),
+    )))
+}
+
+// ── instances ──────────────────────────────────────────────────────────────
+
+fn instance_appearance(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let inst = instance_of(app, p)?;
+    let key = req_str(p, "key")?;
+    let value = p.get("value").cloned().unwrap_or(Value::Null);
+    if let Some(target) = app.instance_mut(&inst.id) {
+        if value.is_null() {
+            target.appearance.remove(&key);
+        } else {
+            target.appearance.insert(key, value);
+        }
+    }
+    app.save();
+    refresh(app, Some(&inst.id));
+    Ok(Reply::Now(Value::Null))
+}
+
+fn instance_css(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let inst = instance_of(app, p)?;
+    let css = jstr(p, "css").unwrap_or_default();
+    if let Some(target) = app.instance_mut(&inst.id) {
+        target.custom_css = if css.trim().is_empty() {
+            None
+        } else {
+            Some(css)
+        };
+    }
+    app.save();
+    refresh(app, Some(&inst.id));
+    Ok(Reply::Now(Value::Null))
+}
+
+fn instance_click_through(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let inst = instance_of(app, p)?;
+    let on = jbool(p, "on").unwrap_or(false);
+    app.set_click_through(&inst.id, on);
+    app.refresh_tray_menu();
+    Ok(Reply::Now(Value::Null))
+}
+
+fn instance_locked(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let inst = instance_of(app, p)?;
+    let on = jbool(p, "on").unwrap_or(false);
+    if let Some(target) = app.instance_mut(&inst.id) {
+        target.locked = on;
+    }
+    app.save();
+    app.publish_states();
+    refresh(app, None);
+    Ok(Reply::Now(Value::Null))
+}
+
+fn instance_layer(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let inst = instance_of(app, p)?;
+    let layer = req_str(p, "layer")?;
+    app.set_layer(&inst.id, &layer);
+    Ok(Reply::Now(Value::Null))
+}
+
+fn instance_theme(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let inst = instance_of(app, p)?;
+    let theme = p.get("theme").cloned().unwrap_or(Value::Null);
+    if let Some(target) = app.instance_mut(&inst.id) {
+        target.theme_id = theme.as_str().map(|s| s.to_string());
+    }
+    app.save();
+    refresh(app, Some(&inst.id));
+    Ok(Reply::Now(Value::Null))
+}
+
+fn instance_setting(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let inst = instance_of(app, p)?;
+    let key = req_str(p, "key")?;
+    let value = p.get("value").cloned().unwrap_or(Value::Null);
+    if let Some(target) = app.instance_mut(&inst.id) {
+        if value.is_null() {
+            target.settings.remove(&key);
+        } else {
+            target.settings.insert(key, value);
+        }
+    }
+    app.save();
+    app.push_settings(&inst.id);
+    refresh(app, None);
+    Ok(Reply::Now(Value::Null))
+}
+
+fn instance_size(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let inst = instance_of(app, p)?;
+    let manifest = app
+        .manifest_for(&inst.id)
+        .ok_or_else(|| BridgeError::new("this widget is no longer installed"))?;
+    let s = &manifest.size;
+    let width = jnum(p, "width")
+        .unwrap_or(inst.width)
+        .clamp(s.min_width, s.max_width);
+    let height = jnum(p, "height")
+        .unwrap_or(inst.height)
+        .clamp(s.min_height, s.max_height);
+    if let Some(target) = app.instance_mut(&inst.id) {
+        target.width = width;
+        target.height = height;
+    }
+    app.save();
+    app.place_window(&inst.id);
+    app.push_state(&inst.id);
+    refresh(app, None);
+    Ok(Reply::Now(Value::Null))
+}
+
+fn instance_reload(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let inst = instance_of(app, p)?;
+    app.reload_instance(&inst.id);
+    Ok(Reply::Now(Value::Null))
+}
+
+fn instance_devtools(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let inst = instance_of(app, p)?;
+    if let Some(win) = app.windows.get(&inst.id) {
+        win.webview.open_devtools();
+    } else {
+        app.want_devtools = Some(inst.id.clone());
+        app.pending_windows.push(inst.id.clone());
+    }
+    Ok(Reply::Now(Value::Null))
+}
+
+fn instance_identify(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let inst = instance_of(app, p)?;
+    app.set_visible(&inst.id, true, "control");
+    if let Some(win) = app.windows.get(&inst.id) {
+        win.window.set_focus();
+    }
+    app.event_to(&inst.id, "identify", json!({ "ms": 1600 }));
+    Ok(Reply::Now(Value::Null))
+}
+
+fn instance_duplicate(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let inst = instance_of(app, p)?;
+    let new_id = app
+        .duplicate_instance(&inst.id)
+        .ok_or_else(|| BridgeError::new("that widget is no longer on the desktop"))?;
+    refresh(app, None);
+    Ok(Reply::Now(json!({ "id": new_id })))
+}
+
+fn instance_remove(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let inst = instance_of(app, p)?;
+    app.remove_instance(&inst.id);
+    app.refresh_tray_menu();
+    refresh(app, None);
+    Ok(Reply::Now(Value::Null))
+}
+
+fn instance_clear_all(app: &mut App, _p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let count = app.cfg().instances.len();
+    app.clear_instances();
+    app.refresh_tray_menu();
+    refresh(app, None);
+    Ok(Reply::Now(json!({ "removed": count })))
+}
+
+fn instance_pick_folder(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let inst = instance_of(app, p)?;
+    let key = req_str(p, "key")?;
+    let picked = crate::platform::shell::pick("folder", "all", "");
+    if let Some(folder) = picked {
+        if let Some(target) = app.instance_mut(&inst.id) {
+            target.settings.insert(key, Value::String(folder));
+        }
+        app.save();
+        app.push_settings(&inst.id);
+        refresh(app, None);
+    }
+    Ok(Reply::Now(Value::Null))
+}
+
+// ── widgets ────────────────────────────────────────────────────────────────
+
+fn widget_add(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let widget = req_str(p, "widget")?;
+    let grant = jbool(p, "grant").unwrap_or(false);
+    if grant {
+        if let Some(manifest) = app.catalog.find(&widget).cloned() {
+            crate::model::permissions::grant(app.cfg_mut(), &manifest);
+            app.save();
+        }
+    }
+    let id = app.add_widget(&widget, None).map_err(BridgeError::new)?;
+    if let Some(manifest) = app.catalog.find(&widget).cloned() {
+        let pending = crate::model::permissions::pending(app.cfg(), &manifest);
+        if !pending.is_empty() {
+            let consent = json!({ "widget": manifest.id, "then": "load", "permissions": pending });
+            app.send_to(
+                CONTROL_WIN,
+                &format!("{{\"ev\":\"consent\",\"d\":{consent}}}"),
+            );
+        }
+    }
+    app.refresh_tray_menu();
+    refresh(app, None);
+    Ok(Reply::Now(json!({ "id": id })))
+}
+
+fn widget_grant(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let widget = req_str(p, "widget")?;
+    if let Some(manifest) = app.catalog.find(&widget).cloned() {
+        crate::model::permissions::grant(app.cfg_mut(), &manifest);
+        app.save();
+    }
+    app.rescan();
+    for (iid, inst) in app
+        .cfg()
+        .instances
+        .iter()
+        .filter(|i| i.widget.eq_ignore_ascii_case(&widget))
+        .map(|i| (i.id.clone(), i.widget.clone()))
+        .collect::<Vec<_>>()
+    {
+        let _ = inst;
+        app.reload_instance(&iid);
+    }
+    refresh(app, None);
+    Ok(Reply::Now(Value::Null))
+}
+
+fn widget_open_folder(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let widget = req_str(p, "widget")?;
+    let dir: PathBuf = app
+        .catalog
+        .find(&widget)
+        .map(|m| m.dir.clone())
+        .ok_or_else(|| BridgeError::new(format!("no widget called {widget}")))?;
+    if crate::core::assets::is_virtual(&dir) {
+        // 内置组件编在 exe 里，没有文件夹可开：先导出成 .fwz 才有可编辑的副本。
+        return Err(BridgeError::new(
+            "built-in widgets live inside the exe — export it to a .fwz first, then install that copy",
+        ));
+    }
+    crate::platform::shell::open_path(&dir.to_string_lossy()).map_err(BridgeError::new)?;
+    Ok(Reply::Now(Value::Null))
+}
+
+fn widget_export(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let widget = req_str(p, "widget")?;
+    let out = crate::market::packages::export(app, &widget).map_err(BridgeError::new)?;
+    Ok(Reply::Now(out))
+}
+
+fn widget_uninstall(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let widget = req_str(p, "widget")?;
+    crate::market::packages::uninstall(app, &widget).map_err(BridgeError::new)?;
+    app.refresh_tray_menu();
+    Ok(Reply::Now(Value::Null))
+}
+
+fn widget_create(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let name = req_str(p, "name")?;
+    let created = crate::market::packages::create(app, &name).map_err(BridgeError::new)?;
+    app.refresh_tray_menu();
+    refresh(app, None);
+    Ok(Reply::Now(created))
+}
+
+// ── themes ─────────────────────────────────────────────────────────────────
+
+fn theme_global(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let theme = req_str(p, "id")?;
+    if app.themes.get(Some(&theme)).id != theme {
+        return Err(BridgeError::new(format!("no theme called {theme}")));
+    }
+    app.cfg_mut().theme_id = theme;
+    app.save();
+    refresh_themes(app);
+    Ok(Reply::Now(Value::Null))
+}
+
+fn theme_override(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let key = req_str(p, "key")?;
+    let value = p.get("value").cloned().unwrap_or(Value::Null);
+    if value.is_null() {
+        app.cfg_mut().theme.remove(&key);
+    } else {
+        app.cfg_mut().theme.insert(key, value);
+    }
+    app.save();
+    refresh_themes(app);
+    Ok(Reply::Now(Value::Null))
+}
+
+fn theme_reset(app: &mut App, _p: &Value, _id: i64) -> BridgeResult<Reply> {
+    app.cfg_mut().theme = Map::new();
+    app.cfg_mut().theme_id = crate::model::themes::DEFAULT_ID.to_string();
+    app.save();
+    refresh_themes(app);
+    Ok(Reply::Now(Value::Null))
+}
+
+// ── packages ───────────────────────────────────────────────────────────────
+
+fn package_import(app: &mut App, _p: &Value, _id: i64) -> BridgeResult<Reply> {
+    if let Some(path) = crate::platform::shell::pick("file", "packages", "") {
+        stage_and_show(app, std::path::Path::new(&path));
+    }
+    Ok(Reply::Now(Value::Null))
+}
+
+fn package_cancel(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let token = req_str(p, "token")?;
+    if let Some(staged) = app.staged.remove(&token) {
+        let _ = std::fs::remove_dir_all(&staged.dir);
+    }
+    Ok(Reply::Now(Value::Null))
+}
+
+fn package_install(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let token = req_str(p, "token")?;
+    let result = crate::market::packages::install(app, &token).map_err(BridgeError::new)?;
+    app.refresh_tray_menu();
+    refresh(app, None);
+    Ok(Reply::Now(result))
+}
+
+fn package_export(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let widget = req_str(p, "widget")?;
+    Ok(Reply::Now(
+        crate::market::packages::export(app, &widget).map_err(BridgeError::new)?,
+    ))
+}
+
+// ── market ─────────────────────────────────────────────────────────────────
+
+fn market_list(app: &mut App, p: &Value, id: i64) -> BridgeResult<Reply> {
+    let want_refresh = jbool(p, "refresh").unwrap_or(false);
+    let url = crate::market::client::list_url_of(app);
+    let site = crate::market::client::site_of(app);
+    let cache = crate::market::client::cache_path();
+    Ok(spawn(app, id, move || {
+        Ok(crate::market::client::fetch_list(
+            &url,
+            &site,
+            &cache,
+            want_refresh,
+        ))
+    }))
+}
+
+fn market_install(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let widget = req_str(p, "id")?;
+    let list = crate::market::client::cached_list(&crate::market::client::site_of(app));
+    let url = crate::market::client::download_url(&list, &widget).map_err(BridgeError::new)?;
+    let proxy = app.proxy.clone();
+    let target = widget.clone();
+    std::thread::spawn(move || {
+        let payload = match crate::market::client::download(&url, &target) {
+            Ok(path) => json!({ "ok": true, "id": target, "path": path.to_string_lossy() }),
+            Err(e) => json!({ "ok": false, "id": target, "message": e }),
+        };
+        crate::runtime::app::post(
+            &proxy,
+            crate::runtime::app::Ev::Command(format!("market.downloaded:{}", payload)),
+        );
+    });
+    Ok(Reply::Now(json!({ "status": "downloading" })))
+}
+
+fn market_open(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let url = jstr(p, "url");
+    crate::market::client::open(app, url).map_err(BridgeError::new)?;
+    Ok(Reply::Now(Value::Null))
 }
 
 fn reapply_hotkeys(app: &mut App) {
@@ -962,4 +1108,86 @@ fn set_file_association(on: bool) -> Result<(), String> {
         let _ = hkcu.delete_subkey_all(r"Software\Classes\WinWidget.Archive");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn registry_covers_every_method() {
+        let r = registry();
+        // 57 methods + 1 legacy alias.
+        assert_eq!(r.len(), 58);
+        // The old and new spellings of the auto-update toggle share one handler.
+        assert_eq!(r["app.updateAuto"] as usize, r["app.autoUpdate"] as usize);
+        for name in [
+            "app.editMode",
+            "app.guide",
+            "app.hotkey",
+            "app.hotkeysPause",
+            "app.language",
+            "app.uiTheme",
+            "app.lockAll",
+            "app.openFolder",
+            "app.rescan",
+            "app.restart",
+            "app.setDataDir",
+            "app.resetDataDir",
+            "app.reveal",
+            "app.updateCheck",
+            "app.updateInstall",
+            "app.updateCancel",
+            "app.updatePage",
+            "app.updateAuto",
+            "app.autoUpdate",
+            "app.autostart",
+            "app.lowResource",
+            "app.developer",
+            "app.hideAll",
+            "app.pauseFullscreen",
+            "app.fileAssociation",
+            "app.close",
+            "fonts.list",
+            "instance.appearance",
+            "instance.css",
+            "instance.clickThrough",
+            "instance.locked",
+            "instance.layer",
+            "instance.theme",
+            "instance.setting",
+            "instance.size",
+            "instance.reload",
+            "instance.devtools",
+            "instance.identify",
+            "instance.duplicate",
+            "instance.remove",
+            "instance.clearAll",
+            "instance.pickFolder",
+            "widget.add",
+            "widget.grant",
+            "widget.openFolder",
+            "widget.export",
+            "widget.uninstall",
+            "widget.create",
+            "theme.global",
+            "theme.override",
+            "theme.reset",
+            "package.import",
+            "package.cancel",
+            "package.install",
+            "package.export",
+            "market.list",
+            "market.install",
+            "market.open",
+        ] {
+            assert!(r.contains_key(name), "missing method {name}");
+        }
+    }
+
+    #[test]
+    fn unknown_method_is_rejected() {
+        assert!(handler_for("app.noSuchMethod").is_err());
+        assert!(handler_for("").is_err());
+    }
 }

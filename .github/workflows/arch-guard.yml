@@ -18,3 +18,5 @@ jobs:
           python-version: "3.11"
       - name: Check layer dependencies
         run: python3 scripts/check-arch.py
+      - name: Check control-center API bindings
+        run: python3 scripts/gen-api-spec.py --check
