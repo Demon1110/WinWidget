@@ -300,9 +300,14 @@ async function openOverlay(display, effectId) {
     width: Math.max(1, Math.round(Number(b.width) || 1920)),
     height: Math.max(1, Math.round(Number(b.height) || 1080)),
     title: "玩出花 - " + (fxOf(effectId) ? t(fxOf(effectId).name) : "特效"),
+    // 特效画在壁纸上、所有窗口之下：看得见，但从不挡在用户正在做的事前面。
+    layer: "desktop",
     transparent: true,
+    // 玻璃笔画在页面自己身上；`seeThrough` 把窗户上那层 DWM 底色也关掉，
+    // 壁纸才会从特效的空白处透出来，而不是被一张白底盖住。
+    seeThrough: true,
     frame: false,
-    alwaysOnTop: true,
+    alwaysOnTop: false,
     skipTaskbar: true,
     resizable: false,
     minimizable: false,
@@ -319,10 +324,8 @@ async function openOverlay(display, effectId) {
   });
   const id = reply && reply.id;
   if (!id && id !== 0) throw new Error("window was not created");
-  // 先把「点得穿」和「永远压在最上」办好，再让它无声无息地出现：
-  // 出现这一下绝不能把用户正在打字的窗口顶掉。
+  // 先把「点得穿」办好，再让它无声无息地出现：出现这一下绝不能把用户正在打字的窗口顶掉。
   await widget.call("win.setIgnoreMouseEvents", { win: id, ignore: true });
-  await widget.call("win.setAlwaysOnTop", { win: id, flag: true });
   await widget.call("win.showInactive", { win: id });
   return { id, displayId: display.id, fresh: true };
 }

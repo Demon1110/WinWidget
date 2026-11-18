@@ -234,7 +234,6 @@ pub fn build_custom(
     let skip_taskbar = jbool(&o, "skipTaskbar").unwrap_or(false);
     let rounded = jbool(&o, "roundedCorners").unwrap_or(true);
     let background = jstr(&o, "backgroundColor").unwrap_or_else(|| "rgba(0,0,0,0)".into());
-
     let mut builder = WindowBuilder::new()
         .with_title(title.clone())
         .with_decorations(frame)
@@ -254,6 +253,16 @@ pub fn build_custom(
     }
     let window = builder.build(event_loop).map_err(|e| e.to_string())?;
     let hwnd = window.hwnd();
+
+    // A transparent window has to stay transparent: the class brush would erase the whole client
+    // area to a solid colour first, and a page with no background of its own then shows that
+    // colour instead of the desktop behind it.
+    if transparent {
+        w::clear_background_brush(hwnd);
+    }
+    if transparent && jbool(&o, "seeThrough").unwrap_or(false) {
+        w::set_see_through(hwnd, true);
+    }
 
     if always_on_top {
         w::set_topmost(hwnd, true);
@@ -280,6 +289,20 @@ pub fn build_custom(
         };
         w::fit_client(hwnd, px, py, to_px(width), to_px(height));
         w::polish_frame(hwnd, rounded);
+    }
+    // `layer: "desktop"` puts the window directly above the wallpaper and below every ordinary
+    // window — the place a desktop-level canvas belongs, so an effect can play on the wallpaper
+    // without ever standing in front of the user's work.
+    if jstr(&o, "layer").as_deref() == Some("desktop") {
+        w::place_above_desktop(hwnd);
+    }
+    if transparent {
+        // Real per-pixel alpha is a pair: the glass frame over the whole client area, and DWM's
+        // blur-behind with an empty region. A card gets both; without them a transparent window
+        // still paints its web view's white sheet over whatever is behind it. They have to be
+        // stated *after* the frame is dropped, because a frame change clears them.
+        w::extend_frame(hwnd);
+        w::per_pixel_alpha(hwnd);
     }
     // `focusable: false` is the uTools option for overlay windows: they show up on top of the
     // user's work without ever becoming the active window. The style stops a click from doing it,

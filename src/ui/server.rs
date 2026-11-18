@@ -63,23 +63,42 @@ pub struct Server_ {
 }
 
 /// Binds a loopback-only port and serves pages on a background thread.
+///
+/// The port is drawn from the high range on purpose: Chromium (and therefore WebView2) refuses a
+/// whole list of low ports as unsafe, and `127.0.0.1:0` can hand back exactly one of them — 6666,
+/// for instance, answers the page with `ERR_UNSAFE_PORT` and a blank white window.
 pub fn start(state: ServeState) -> Result<u16, String> {
-    let server = Server::http("127.0.0.1:0")
-        .map_err(|e| format!("the local server could not start: {e}"))?;
-    let port = server
-        .server_addr()
-        .to_ip()
-        .map(|a| a.port())
-        .ok_or_else(|| "the local server has no address".to_string())?;
-    state.lock().port = port;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let mut last = String::new();
+    for attempt in 0..24u32 {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.subsec_nanos())
+            .unwrap_or(0);
+        let port = 40000 + ((nanos / 7 + attempt * 997) % 20000) as u16;
+        let server = match Server::http(("127.0.0.1", port)) {
+            Ok(server) => server,
+            Err(e) => {
+                last = format!("{e}");
+                continue;
+            }
+        };
+        let port = server
+            .server_addr()
+            .to_ip()
+            .map(|a| a.port())
+            .ok_or_else(|| "the local server has no address".to_string())?;
+        state.lock().port = port;
 
-    let shared = state.clone();
-    std::thread::spawn(move || {
-        for request in server.incoming_requests() {
-            handle(&shared, request, port);
-        }
-    });
-    Ok(port)
+        let shared = state.clone();
+        std::thread::spawn(move || {
+            for request in server.incoming_requests() {
+                handle(&shared, request, port);
+            }
+        });
+        return Ok(port);
+    }
+    Err(format!("the local server could not start: {last}"))
 }
 
 fn handle(state: &ServeState, request: Request, port: u16) {
