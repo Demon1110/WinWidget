@@ -259,7 +259,43 @@ pub fn build_custom(
         w::set_topmost(hwnd, true);
     }
     if !frame {
+        // Windows keeps a thin caption edge on a top-level window; a frameless window has to mean
+        // its client area really is the window rectangle, otherwise a full-screen surface leaves
+        // a sliver of the screen uncovered. tao also reserved room for an invisible shadow frame,
+        // so the geometry is set again once that frame is gone.
+        w::drop_frame(hwnd);
+        let scale = {
+            let s = window.scale_factor();
+            if s > 0.0 { s } else { 1.0 }
+        };
+        let to_px = |v: f64| (v * scale).round() as i32;
+        let (px, py) = match (jnum(&o, "x"), jnum(&o, "y")) {
+            (Some(x), Some(y)) => (to_px(x), to_px(y)),
+            _ => {
+                let p = window
+                    .outer_position()
+                    .unwrap_or(PhysicalPosition::new(0, 0));
+                (p.x, p.y)
+            }
+        };
+        w::fit_client(hwnd, px, py, to_px(width), to_px(height));
         w::polish_frame(hwnd, rounded);
+    }
+    // `focusable: false` is the uTools option for overlay windows: they show up on top of the
+    // user's work without ever becoming the active window. The style stops a click from doing it,
+    // but WebView2 grabs the focus for itself while its page loads, so the foreground is handed
+    // back afterwards.
+    if !jbool(&o, "focusable").unwrap_or(true) {
+        w::set_no_activate(hwnd, true);
+        let before = w::foreground_window();
+        std::thread::spawn(move || {
+            for _ in 0..8 {
+                std::thread::sleep(std::time::Duration::from_millis(250));
+                if before != 0 && before != hwnd && w::foreground_window() == hwnd {
+                    w::force_foreground(before);
+                }
+            }
+        });
     }
     if let Some(opacity) = jnum(&o, "opacity") {
         set_opacity(hwnd, opacity);

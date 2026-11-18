@@ -675,6 +675,63 @@ pub fn clear_frame(hwnd: HWND) {
     }
 }
 
+/// Strips the caption and sizing edge from a window that asked to be frameless. Windows keeps an
+/// 8px edge on a top-level window even after the frame is polished away, which leaves a sliver of
+/// the screen uncovered when a window is meant to cover a whole monitor; with no frame styles the
+/// client area is the window rectangle itself.
+pub fn drop_frame(hwnd: HWND) {
+    const WS_FRAME: isize = 0x00C0_0000 /* CAPTION */ | 0x0004_0000 /* THICKFRAME */
+        | 0x0008_0000 /* SYSMENU */ | 0x0001_0000 /* MINIMIZEBOX */
+        | 0x0002_0000 /* MAXIMIZEBOX */ | 0x0080_0000 /* BORDER */;
+    unsafe {
+        let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+        if style & WS_FRAME == 0 {
+            return;
+        }
+        SetWindowLongPtrW(hwnd, GWL_STYLE, (style & !WS_FRAME) | WS_POPUP);
+        SetWindowPos(
+            hwnd,
+            0,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+        );
+    }
+}
+
+/// Puts a frameless window on screen so that its *page* — the client area — covers exactly the
+/// rectangle asked for, in pixels. Windows still keeps an invisible border around a top-level
+/// window, and tao reserved room for it when the window was built; measuring it once here is the
+/// only way for a full-screen surface to really reach all four screen edges.
+pub fn fit_client(hwnd: HWND, x: i32, y: i32, w: i32, h: i32) {
+    if w <= 0 || h <= 0 {
+        return;
+    }
+    unsafe {
+        let mut wr = RECT::default();
+        let _ = GetWindowRect(hwnd, &mut wr);
+        let mut cr = RECT::default();
+        let _ = GetClientRect(hwnd, &mut cr);
+        let pad_w = (wr.right - wr.left) - (cr.right - cr.left);
+        let pad_h = (wr.bottom - wr.top) - (cr.bottom - cr.top);
+        let mut origin = POINT { x: 0, y: 0 };
+        let _ = ClientToScreen(hwnd, &mut origin);
+        let off_x = origin.x - wr.left;
+        let off_y = origin.y - wr.top;
+        SetWindowPos(
+            hwnd,
+            0,
+            x - off_x,
+            y - off_y,
+            w + pad_w,
+            h + pad_h,
+            SWP_NOZORDER | SWP_NOACTIVATE,
+        );
+    }
+}
+
 /// Stops DWM from drawing the window's non-client frame. With the frame extended over the whole
 /// window, DWM otherwise paints its caption — the window text on a pale strip — across the top of
 /// the card, even though `WS_CAPTION` was never set and the margins are zero. Turning the
@@ -773,6 +830,19 @@ pub fn set_topmost(hwnd: HWND, on: bool) {
             0,
             0,
             SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+        );
+    }
+}
+
+/// A window that never takes the foreground. Overlays need this: they appear on top of whatever
+/// the user is doing, so becoming active would steal the caret out of their editor.
+pub fn set_no_activate(hwnd: HWND, on: bool) {
+    unsafe {
+        let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+        SetWindowLongPtrW(
+            hwnd,
+            GWL_EXSTYLE,
+            if on { ex | WS_EX_NOACTIVATE } else { ex & !WS_EX_NOACTIVATE },
         );
     }
 }

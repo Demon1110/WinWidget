@@ -14,7 +14,7 @@
 
 ## 功能
 
-- **56 个内置组件**：clock、analogclock、flipclock、worldclock、calendar、countdown、pomodoro、timer、progress、weather、forecast、airquality、sunmoon、sysinfo、usage、netspeed、disks、battery、network、pcinfo、recyclebin、volume、power、notes、todo、launcher、habits、calculator、search、infocard、rss、currency、dailyimage、onthisday、media、photoframe、whitenoise、label；工具类 droptray、qrshare、units、passgen；生活记录 ledger、water、chargeguard、dataplan；系统网络 sitemonitor、github、ical；专注 agenda、focus、quicknotes；内容 poem、moonphase、meetplan。
+- **57 个内置组件**：clock、analogclock、flipclock、worldclock、calendar、countdown、pomodoro、timer、progress、weather、forecast、airquality、sunmoon、sysinfo、usage、netspeed、disks、battery、network、pcinfo、recyclebin、volume、power、notes、todo、launcher、habits、calculator、search、infocard、rss、currency、dailyimage、onthisday、media、photoframe、whitenoise、label；工具类 droptray、qrshare、units、passgen；生活记录 ledger、water、chargeguard、dataplan；系统网络 sitemonitor、github、ical；专注 agenda、focus、quicknotes；内容 poem、moonphase、meetplan；屏幕特效 bloom（39 款全屏特效，穿透底层运行）。
 - **三种层级**：桌面层（贴在壁纸上、Win+D 不会被带走）、置顶（总在最前）、普通；可锁定位置、可鼠标穿透、可按比例缩放、可吸附对齐。
 - **外观逐卡可调**：透明 / 磨砂（DWM 亚克力）、阴影、背景色与不透明度、文字色、强调色（可取 Windows 系统色）、字体、字号比例、圆角、内边距、整卡透明度、自定义 CSS。
 - **三套主题**：`instrument`（深色仪器）、`paper`（浅色纸张）、`type`（排印风），主题切换即时生效，单张卡片也可单独指定主题。
@@ -49,7 +49,7 @@ WinWidget/
 ├─ Cargo.toml
 ├─ build.rs                   # 把 assets/ 压进二进制（+ 图标与版本资源）
 ├─ assets/                    # 与宿主解耦的前端资产（源码在这里改；发布时编进 exe）
-│  ├─ widgets/                # 56 个内置组件，每个一个文件夹
+│  ├─ widgets/                # 57 个内置组件，每个一个文件夹
 │  ├─ sdk/                    # base.css、widget-sdk.js、widget.d.ts、three themes/
 │  ├─ ui/control-center/      # 控制中心页面（index.html / style.css / app.js / i18n.js）
 │  ├─ ui/docs/                # 内置文档页
@@ -114,7 +114,7 @@ pwsh -File scripts/package-windows.ps1 -SkipBuild -Version 1.2.0   # 不重编�
 python scripts/build-docs.py                  # 三语开发指南：docs/*.md → assets/docs/developer-guide.html（+ index.html）
 ```
 
-**发布件只有一个文件**：`dist\WinWidget-<版本>-windows-x64.exe`（约 5 MB），旁边一份 `.sha256`。没有 zip，也没有安装包——`assets\` 整棵（38 个组件、SDK、主题、控制中心、开发文档）在编译时就被 `build.rs` 压进二进制，运行时从内存读，不落盘、不解压。`assets\` 里只有运行时真要的东西：Markdown 源文件（`docs\組件開發指南.md`、各里程碑说明）和里程碑截图都放在仓库根目录的 `docs\`，不进二进制。
+**发布件只有一个文件**：`dist\WinWidget-<版本>-windows-x64.exe`（约 5 MB），旁边一份 `.sha256`。没有 zip，也没有安装包——`assets\` 整棵（57 个组件、SDK、主题、控制中心、开发文档）在编译时就被 `build.rs` 压进二进制，运行时从内存读，不落盘、不解压。`assets\` 里只有运行时真要的东西：Markdown 源文件（`docs\組件開發指南.md`、各里程碑说明）和里程碑截图都放在仓库根目录的 `docs\`，不进二进制。
 
 脚本末尾有一道自检：把产物拷到一个**没有 `assets\`** 的临时目录里跑 `winwidget list`，能列出 30+ 个内置组件才算出包成功——否则说明资源没编进去，只是从仓库的 `assets\` 里捡到的。
 

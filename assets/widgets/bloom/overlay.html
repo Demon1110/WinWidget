@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>玩出花 - 特效渲染</title>
+  <style>
+    /* 这一页是盖在桌面上的透明画布，不是一张卡片：把 base.css 的卡片外观全部让开。 */
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden !important;
+      background: transparent !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      zoom: 1 !important;
+      pointer-events: none !important;
+    }
+    #bloom-canvas {
+      display: block;
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none !important;
+    }
+  </style>
+</head>
+<body>
+  <!-- SDK 会在 DOMContentLoaded 之后自己发 ready，卡片那边的新窗口回调因此能挂上第一支特效。 -->
+  <script src="three.iife.js"></script>
+  <script src="overlay.js"></script>
+</body>
+</html>
