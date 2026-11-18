@@ -14,9 +14,10 @@
 //! [`unsupported_reason`].
 
 use crate::core::api::{Ctx, Reply};
+use crate::core::bus::{post, Ev};
 use crate::core::util::{jbool, jnum, jstr, req_str, BridgeError, BridgeResult};
 use crate::platform::win32 as w;
-use crate::runtime::app::{post, App, Ev};
+use crate::runtime::app::App;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use tao::dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize};

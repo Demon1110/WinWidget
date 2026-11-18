@@ -9,8 +9,8 @@
 //! which is what the `schedule` permission exists for instead.
 
 use crate::core::api::{Ctx, Reply};
+use crate::core::ports::ScheduleHost;
 use crate::core::util::{jstr, now_ms, BridgeError, BridgeResult};
-use crate::runtime::app::App;
 use serde_json::{json, Map, Value, Value::Null};
 
 const OWNS: &[&str] = &[
@@ -147,8 +147,9 @@ fn bump(item: &mut Value, ok: bool) {
 // ── the clock ───────────────────────────────────────────────────────────────
 
 /// Called once a second from `App::tick`: fires everything whose minute has arrived and pushes the
-/// `schedule` event into the widget that owns it.
-pub fn tick(app: &mut App) {
+/// `schedule` event into the widget that owns it. Takes a [`ScheduleHost`] so the scheduling
+/// logic stays testable without constructing an `App`.
+pub fn tick(host: &dyn ScheduleHost) {
     let Some(parts) = local_parts() else {
         return;
     };
@@ -203,15 +204,8 @@ pub fn tick(app: &mut App) {
     }
     for (widget, code, label) in due {
         let payload = json!({ "code": code, "label": label, "at": minute_start });
-        let instances: Vec<String> = app
-            .cfg()
-            .instances
-            .iter()
-            .filter(|i| i.widget.eq_ignore_ascii_case(&widget))
-            .map(|i| i.id.clone())
-            .collect();
-        for instance in instances {
-            app.event_to(&instance, "schedule", payload.clone());
+        for instance in host.instances_of_widget(&widget) {
+            host.event_to(&instance, "schedule", payload.clone());
         }
     }
 }

@@ -37,6 +37,28 @@ pub trait Host: Send + Sync {
     fn send_to(&self, target: &str, body: &str);
 }
 
+/// The narrow slice of the host that the `events` category needs. Expressed in domain terms
+/// ("does this widget have pending permissions?", "refresh the control center") so the core
+/// module never has to name `runtime::app::App`, `AppConfig` or `Manifest`. Every method is
+/// object-safe and returns owned values; the `App` impl keeps the detailed logic.
+pub trait EventsHost {
+    /// True when this widget declares permissions the user has not allowed yet.
+    fn has_pending_permissions(&self, instance: &str) -> bool;
+    /// Bring the control center's state up to date after a page announced itself ready.
+    fn refresh_control_state(&mut self);
+}
+
+/// The narrow slice of the host that the `schedule` clock needs: find the live instances of a
+/// widget and deliver an event to one of them. Both stay object-safe (owned returns, no
+/// borrowed `AppConfig` leaking into core).
+pub trait ScheduleHost {
+    /// Instance ids currently mounted for a widget id (case-insensitive match, as the old
+    /// `app.cfg().instances` scan did).
+    fn instances_of_widget(&self, widget: &str) -> Vec<String>;
+    /// Send a named event with a JSON payload to one instance.
+    fn event_to(&self, instance: &str, ev: &str, data: serde_json::Value);
+}
+
 /// The capabilities injected into a single API call. Static references keep this a
 /// zero-allocation hop: the concrete adapters are stateless singletons in `platform`.
 pub struct Ports {

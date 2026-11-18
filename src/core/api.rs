@@ -14,10 +14,11 @@
 //!
 //! `None` means "not mine, try the next module"; `Some` is the answer (or a spawned reply).
 
+use crate::core::bus::{post, Ev};
 use crate::core::ports::Ports;
 use crate::core::util::{BridgeError, BridgeResult};
 use crate::model::manifest::Manifest;
-use crate::runtime::app::{post, App, Ev};
+use crate::runtime::app::App;
 use serde_json::{json, Value};
 
 /// What a handler answers with: the value now, or a thread that will post the value later.

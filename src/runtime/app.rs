@@ -1,6 +1,7 @@
 //! The host itself: owns the config, the windows, the tray and the data the pages see.
 
 use crate::core::config::{AppConfig, ConfigStore, InstanceConfig};
+use crate::core::ports::{EventsHost, ScheduleHost};
 use crate::model::manifest::Manifest;
 use crate::platform::tray::TrayHandle;
 use crate::runtime::window::WidgetWin;
@@ -14,44 +15,10 @@ pub const CONTROL_WIN: &str = "$control";
 pub const CONTROL_TITLE: &str = "WinWidget";
 pub const CONTROL_URL: &str = "/__ui/control-center/index.html";
 
-/// True while a window (and its WebView) is being built on the loop thread.
-static BUILDING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-/// Events our own threads wanted to post during a build.
-static HELD: std::sync::Mutex<Vec<Ev>> = std::sync::Mutex::new(Vec::new());
-
-/// Posts an event to the loop, holding it back while a window is being built.
-///
-/// Creating a WebView pumps the thread's Windows messages (`webview2-com`'s
-/// `wait_with_pump`), and tao has no guard for that: a message reaching its
-/// thread target during the pump re-enters `EventLoopRunner::poll` while the
-/// event handler is taken, which panics and takes the whole process with it.
-/// So while we build, our threads park their events here and hand them over
-/// once the build is done.
-pub fn post(proxy: &EventLoopProxy<Ev>, event: Ev) -> bool {
-    use std::sync::atomic::Ordering;
-    if BUILDING.load(Ordering::SeqCst) {
-        if let Ok(mut held) = HELD.lock() {
-            held.push(event);
-        }
-        return true;
-    }
-    proxy.send_event(event).is_ok()
-}
-
-fn begin_build() {
-    BUILDING.store(true, std::sync::atomic::Ordering::SeqCst);
-}
-
-fn end_build(proxy: &EventLoopProxy<Ev>) {
-    BUILDING.store(false, std::sync::atomic::Ordering::SeqCst);
-    let held = match HELD.lock() {
-        Ok(mut held) => std::mem::take(&mut *held),
-        Err(_) => Vec::new(),
-    };
-    for event in held {
-        let _ = proxy.send_event(event);
-    }
-}
+// The event protocol and its guarded poster now live in `core::bus`, where the capability
+// modules can reach them without depending on this (runtime) module. Re-exported here so
+// every existing `runtime::app::Ev` / `runtime::app::post` caller keeps working unchanged.
+pub use crate::core::bus::{begin_build, end_build, post, Ev};
 
 /// What the toolbar / card state needs to know about one mounted card.
 #[derive(Clone)]
@@ -86,24 +53,6 @@ pub struct PendingNote {
     pub title: String,
     pub body: String,
     pub instance: String,
-}
-
-pub enum Ev {
-    Ipc {
-        win: String,
-        msg: String,
-    },
-    Reply {
-        win: String,
-        body: String,
-    },
-    Sample(Value),
-    Audio(Value),
-    Media(Value),
-    Command(String),
-    Tick,
-    /// A page queued something that has to be built on the loop (a custom window, today).
-    Wake,
 }
 
 pub struct App {
@@ -1208,7 +1157,8 @@ impl App {
 
     pub fn tick(&mut self) {
         // Widget-requested schedules (`utools.requestSchedule`) ride the same one-second clock.
-        crate::core::schedule::tick(self);
+        let host: &dyn ScheduleHost = &*self;
+        crate::core::schedule::tick(host);
         // Remember where the user was before a card took the foreground, for paste/type to return to.
         let foreign = crate::platform::win32::foreign_foreground();
         if foreign != 0 {
@@ -1562,6 +1512,37 @@ impl App {
                 }
             }
         }
+    }
+}
+
+// The narrow host views the `events` and `schedule` core categories are allowed to see. All the
+// detailed field access (cfg, manifest, instances) stays here in runtime instead of leaking into
+// core through a `use runtime::app::App`.
+
+impl EventsHost for App {
+    fn has_pending_permissions(&self, instance: &str) -> bool {
+        self.manifest_for(instance)
+            .map(|m| !crate::model::permissions::pending(self.cfg(), &m).is_empty())
+            .unwrap_or(false)
+    }
+
+    fn refresh_control_state(&mut self) {
+        self.push_state_to_control(None);
+    }
+}
+
+impl ScheduleHost for App {
+    fn instances_of_widget(&self, widget: &str) -> Vec<String> {
+        self.cfg()
+            .instances
+            .iter()
+            .filter(|i| i.widget.eq_ignore_ascii_case(widget))
+            .map(|i| i.id.clone())
+            .collect()
+    }
+
+    fn event_to(&self, instance: &str, ev: &str, data: serde_json::Value) {
+        App::event_to(self, instance, ev, data);
     }
 }
 

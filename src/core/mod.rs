@@ -26,6 +26,7 @@
 pub mod ai;
 pub mod api;
 pub mod assets;
+pub mod bus;
 pub mod clipboard;
 pub mod config;
 pub mod db;

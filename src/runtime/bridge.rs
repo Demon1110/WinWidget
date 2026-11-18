@@ -91,7 +91,8 @@ fn notify_at(app: &mut App, instance: &str, win: Option<u32>, method: &str, p: &
         return;
     }
     if method == "log" || method == "ready" {
-        crate::core::events::notify(app, instance, method, p);
+        let host: &mut dyn crate::core::ports::EventsHost = app;
+        crate::core::events::notify(host, instance, method, p);
         return;
     }
     crate::core::logging::warn(&format!("{instance}: unknown notification '{method}'"));
