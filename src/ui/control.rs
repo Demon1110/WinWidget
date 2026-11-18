@@ -999,10 +999,26 @@ fn market_list(app: &mut App, p: &Value, id: i64) -> BridgeResult<Reply> {
     }))
 }
 
+/// Widget ids with a download in flight. A page that keeps sending `market.install` (slow network,
+/// impatient clicking) must not start several downloads of the same package.
+fn downloads() -> &'static std::sync::Mutex<std::collections::HashSet<String>> {
+    static IN_FLIGHT: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+        std::sync::OnceLock::new();
+    IN_FLIGHT.get_or_init(|| std::sync::Mutex::new(std::collections::HashSet::new()))
+}
+
 fn market_install(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
     let widget = req_str(p, "id")?;
     let list = crate::market::client::cached_list(&crate::market::client::site_of(app));
     let url = crate::market::client::download_url(&list, &widget).map_err(BridgeError::new)?;
+    {
+        let mut in_flight = downloads().lock().unwrap_or_else(|e| e.into_inner());
+        if !in_flight.insert(widget.clone()) {
+            return Ok(Reply::Now(
+                json!({ "status": "downloading", "id": widget, "already": true }),
+            ));
+        }
+    }
     let proxy = app.proxy.clone();
     let target = widget.clone();
     std::thread::spawn(move || {
@@ -1010,6 +1026,9 @@ fn market_install(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
             Ok(path) => json!({ "ok": true, "id": target, "path": path.to_string_lossy() }),
             Err(e) => json!({ "ok": false, "id": target, "message": e }),
         };
+        if let Ok(mut in_flight) = downloads().lock() {
+            in_flight.remove(&target);
+        }
         crate::runtime::app::post(
             &proxy,
             crate::runtime::app::Ev::Command(format!("market.downloaded:{}", payload)),

@@ -1321,6 +1321,11 @@ impl App {
             );
             return;
         }
+        // The bytes are down: the page may take the button out of "下載中…" while packaging runs.
+        self.send_to(
+            CONTROL_WIN,
+            &format!("{{\"ev\":\"installDone\",\"d\":{}}}", json!({ "id": id })),
+        );
         let path = std::path::PathBuf::from(
             payload
                 .get("path")

@@ -68,7 +68,12 @@ if (host) {
     } else if (msg.ev === "install") {
       if (sheet && sheet.kind === "install" && sheet.data.token !== msg.d.token) api("package.cancel", { token: sheet.data.token });
       openSheet("install", msg.d);
+    } else if (msg.ev === "installDone") {
+      installing = null;
+      render();
     } else if (msg.ev === "installError") {
+      installing = null;
+      render();
       openSheet("error", msg.d);
     } else if (msg.ev === "consent") {
       openSheet("allow", msg.d);
@@ -424,6 +429,7 @@ function pageOnline() {
   let body;
   if (!market && (marketBusy || !marketErr)) body = `<div class="none" data-key="m-wait">${t("正在讀取組件市場…")}</div>`;
   else if (!market) body = `<div class="none" data-key="m-err">${esc(marketErr)}<br><button class="btn small" data-action="mRefresh" style="margin-top:12px">${t("重試")}</button></div>`;
+  else if (market.error && !all.length) body = `<div class="none" data-key="m-err">${esc(market.error)}<br><button class="btn small" data-action="mRefresh" style="margin-top:12px">${t("重試")}</button></div>`;
   else {
     const note = market.offline ? `<div class="market-note" data-key="m-off">${t("連不上組件市場，顯示的是上次的清單。")}</div>` : "";
     // updates first, then the newest
@@ -1094,8 +1100,8 @@ function onAction(a) {
       if (installing) break;
       installing = a.dataset.widget;
       render();
-      // the host downloads and checks it, then shows the usual install sheet with its permissions
-      api("market.install", { id: installing }).catch(() => {}).finally(() => { installing = null; render(); });
+      // the host only starts the download here; `installing` is cleared when it reports back
+      api("market.install", { id: installing }).catch(() => { installing = null; render(); });
       break;
     case "pickFolder":
       api("instance.pickFolder", { id, key: a.dataset.k }).then((r) => {

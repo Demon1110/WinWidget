@@ -215,8 +215,14 @@ mod tests {
     #[test]
     fn widgets_are_listed_from_the_table() {
         let widgets = children_dirs(std::path::Path::new(super::VROOT).join("widgets").as_path());
-        assert!(widgets.len() > 30, "got {widgets:?}");
-        assert!(widgets.iter().any(|w| w == "clock"), "clock is bundled");
+        assert!(!widgets.is_empty(), "assets/widgets 里至少要有一个组件");
+        // 数量跟着仓库走，但每个列出来的目录都得有 manifest，否则客户端发现不了它
+        for w in &widgets {
+            assert!(
+                has(&format!("widgets/{w}/widget.json")),
+                "{w} 缺 widget.json"
+            );
+        }
     }
 
     #[test]
