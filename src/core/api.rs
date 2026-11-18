@@ -137,7 +137,7 @@ pub type Handler = fn(&mut Ctx, &str, &Value) -> Option<BridgeResult<Reply>>;
 /// documentation lists them; `widget` last, because it is WinWidget's own protocol rather than a
 /// uTools category, and `payment` is there even though it has nothing to answer yet.
 pub const CHAIN: &[(&str, Handler)] = &[
-    ("window", crate::core::window::call),
+    ("window", crate::runtime::window_category::call),
     ("system", crate::core::system::call),
     ("screen", crate::core::screen::call),
     ("input", crate::core::input::call),

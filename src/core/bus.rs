@@ -2,8 +2,8 @@
 //!
 //! `Ev` is plain data (strings/JSON), and [`post`] is the one way a thread hands an event
 //! to the loop. Both live in `core` because the capability modules (`core::api::spawn_reply`,
-//! `core::window`) need to post replies and IPC without reaching into `runtime::app` for the
-//! protocol type. `runtime::app` re-exports them, so existing callers keep working.
+//! `runtime::window_category`) need to post replies and IPC without reaching into `runtime::app`
+//! for the protocol type. `runtime::app` re-exports them, so existing callers keep working.
 
 use serde_json::Value;
 use tao::event_loop::EventLoopProxy;

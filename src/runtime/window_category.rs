@@ -1,4 +1,8 @@
-//! The window layer: cards, the main-window window family and custom windows.
+//! The `window` API category: cards, the main-window window family and custom windows.
+//!
+//! This is the one uTools category that owns live `tao::Window` / `wry::WebView` handles, so it
+//! lives in `runtime` next to those handles rather than in `core` with the other categories.
+//! `core::api::CHAIN` registers [`call`] across the layer boundary.
 //!
 //! Two kinds of window live here:
 //!
@@ -41,22 +45,6 @@ pub fn call(ctx: &mut Ctx, method: &str, p: &Value) -> Option<BridgeResult<Reply
         Ok(None) => Err(BridgeError::new(format!("unknown method '{method}'"))),
         Err(e) => Err(e),
     })
-}
-
-/// Hides this card and gives the keyboard back to the window below it — the step every uTools
-/// `hideMainWindowPaste*` and `hideMainWindowTypeString` starts with.
-pub fn hide_for_input(app: &mut App, instance: &str) {
-    let hwnd = app.windows.get(instance).map(|win| win.hwnd());
-    let remembered = app.last_foreign_focus as crate::platform::win32::HWND;
-    app.set_visible(instance, false, "api");
-    // The remembered window is where the user actually was; z-order behind the card is only a
-    // fallback, and it happily lands on the terminal that launched us.
-    if crate::platform::win32::can_take_focus(remembered) {
-        crate::platform::win32::force_foreground(remembered);
-    } else if let Some(hwnd) = hwnd {
-        crate::platform::win32::activate_behind(hwnd);
-    }
-    app.refresh_tray_menu();
 }
 
 /// `ready` and `log` sent by a custom window's page, with no `id`: the first is what fires
@@ -567,7 +555,10 @@ pub fn card_notify(app: &mut App, instance: &str, method: &str, params: &Value) 
             true
         }
         "window.menu" => {
-            crate::ui::menus::widget_menu(app, instance);
+            // The menu is a UI-layer action. Post it to the loop rather than calling `ui::menus`
+            // upward from runtime — `main.rs` already routes `Ev::Command` into `menus::run`.
+            let action = format!("menu:{instance}");
+            post(&app.proxy, Ev::Command(action));
             true
         }
         "window.devtools" => {
@@ -1264,3 +1255,53 @@ pub fn state_json(app: &App, id: u32) -> Value {
 
 /// Every custom window still alive, by id.
 pub type Registry = HashMap<u32, CustomWin>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dip_round_trip_at_real_scales() {
+        for scale in [1.0, 1.25, 1.5, 2.0] {
+            for dip in [0.0, 12.0, 96.0, 333.0] {
+                assert_eq!(
+                    from_dip(to_dip(from_dip(dip, scale), scale), scale),
+                    from_dip(dip, scale)
+                );
+            }
+        }
+        // A non-positive scale is treated as "no scaling", not a divide-by-zero.
+        assert_eq!(to_dip(96.0, 0.0), 96.0);
+        assert_eq!(from_dip(96.0, -1.0), 96.0);
+    }
+
+    #[test]
+    fn parses_hex_and_css_colours() {
+        assert_eq!(parse_color("#fff", false), (255, 255, 255, 255));
+        assert_eq!(parse_color("#000000", false), (0, 0, 0, 255));
+        assert_eq!(parse_color("#4cc9f0", false), (0x4c, 0xc9, 0xf0, 255));
+        assert_eq!(parse_color("#11223344", false), (0x11, 0x22, 0x33, 0x44));
+        assert_eq!(parse_color("rgb(1, 2, 3)", false), (1, 2, 3, 255));
+        assert_eq!(parse_color("rgba(1, 2, 3, 0.5)", false), (1, 2, 3, 128));
+        assert_eq!(parse_color("transparent", true), (0, 0, 0, 0));
+        assert_eq!(parse_color("transparent", false), (255, 255, 255, 255));
+        assert_eq!(parse_color("not a colour", false), (255, 255, 255, 255));
+    }
+
+    #[test]
+    fn snap_metrics_scale_and_clamp() {
+        assert_eq!(snap_metrics(1.0), (12, 8, (1, 5, 4)));
+        assert_eq!(snap_metrics(2.0), (24, 16, (2, 10, 8)));
+        // A tiny scale still leaves a one-pixel guide and a positive snap reach.
+        let (gap, reach, (thickness, _, _)) = snap_metrics(0.01);
+        assert!(gap >= 0 && reach >= 1 && thickness >= 1);
+    }
+
+    #[test]
+    fn unsupported_methods_explain_why() {
+        assert!(unsupported_reason("capturePage").is_some());
+        assert!(unsupported_reason("printToPDF").is_some());
+        assert!(unsupported_reason("window.hide").is_none());
+        assert!(unsupported_reason("").is_none());
+    }
+}

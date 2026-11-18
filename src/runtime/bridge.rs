@@ -78,7 +78,7 @@ fn call_at(
 /// fires `createBrowserWindow`'s callback, so it stays with the window category.
 fn notify_at(app: &mut App, instance: &str, win: Option<u32>, method: &str, p: &Value) {
     if let Some(win) = win {
-        if crate::core::window::custom_notify(app, win, method, p) {
+        if crate::runtime::window_category::custom_notify(app, win, method, p) {
             return;
         }
         if method.starts_with("window.") {
@@ -87,7 +87,9 @@ fn notify_at(app: &mut App, instance: &str, win: Option<u32>, method: &str, p: &
         crate::core::logging::warn(&format!("win {win}: unknown notification '{method}'"));
         return;
     }
-    if method.starts_with("window.") && crate::core::window::card_notify(app, instance, method, p) {
+    if method.starts_with("window.")
+        && crate::runtime::window_category::card_notify(app, instance, method, p)
+    {
         return;
     }
     if method == "log" || method == "ready" {

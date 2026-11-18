@@ -68,7 +68,7 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
                 return Err(BridgeError::new("text is required"));
             }
             let instance = ctx.instance.to_string();
-            crate::core::window::hide_for_input(ctx.app, &instance);
+            hide_for_input(ctx, &instance);
             ctx.spawn_reply(move || {
                 std::thread::sleep(std::time::Duration::from_millis(120));
                 crate::core::logging::info(&format!(
@@ -94,7 +94,7 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
 /// then presses Ctrl+V — the whole of what a uTools paste API does, run off the UI thread.
 fn paste_after_hiding(ctx: &mut Ctx) {
     let instance = ctx.instance.to_string();
-    crate::core::window::hide_for_input(ctx.app, &instance);
+    hide_for_input(ctx, &instance);
     ctx.spawn_reply(|| {
         std::thread::sleep(std::time::Duration::from_millis(140));
         // Where the keystroke actually lands decides whether the paste worked, so say it.
@@ -125,4 +125,22 @@ fn paths_of(p: &Value, keys: &[&str]) -> BridgeResult<Vec<String>> {
         }
     }
     Ok(Vec::new())
+}
+
+/// Hides this card and gives the keyboard back to the window below it — the step every uTools
+/// `hideMainWindowPaste*` and `hideMainWindowTypeString` starts with. This lives here rather than
+/// in the window category so the input category does not depend on a runtime-level module.
+fn hide_for_input(ctx: &mut Ctx, instance: &str) {
+    let app = &mut *ctx.app;
+    let hwnd = app.windows.get(instance).map(|win| win.hwnd());
+    let remembered = app.last_foreign_focus as w::HWND;
+    app.set_visible(instance, false, "api");
+    // The remembered window is where the user actually was; z-order behind the card is only a
+    // fallback, and it happily lands on the terminal that launched us.
+    if w::can_take_focus(remembered) {
+        w::force_foreground(remembered);
+    } else if let Some(hwnd) = hwnd {
+        w::activate_behind(hwnd);
+    }
+    app.refresh_tray_menu();
 }

@@ -199,6 +199,14 @@ pub fn run(app: &mut App, action: &str) {
         None => (action, None),
     };
     match verb {
+        // A card asked for its right-click menu (`window.menu`). It arrives as an Ev::Command so
+        // the runtime does not have to call into the ui layer directly. The instance is the whole
+        // argument (ids contain no ':').
+        "menu" => {
+            if let Some(instance) = arg {
+                widget_menu(app, instance);
+            }
+        }
         // A drag the window started itself, because the page never saw the press. The argument is
         // "instance:dx:dy".
         "autodrag" => {
@@ -207,7 +215,7 @@ pub fn run(app: &mut App, action: &str) {
             let dx = parts.next().and_then(|v| v.parse::<i32>().ok());
             let dy = parts.next().and_then(|v| v.parse::<i32>().ok());
             if let (false, Some(dx), Some(dy)) = (instance.is_empty(), dx, dy) {
-                crate::core::window::drag_by(app, instance, dx, dy);
+                crate::runtime::window_category::drag_by(app, instance, dx, dy);
             }
         }
         "control.open" | "tray.open" => {

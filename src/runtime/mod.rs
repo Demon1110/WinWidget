@@ -10,3 +10,4 @@ pub mod monitor;
 pub mod shim;
 pub mod snap;
 pub mod window;
+pub mod window_category;

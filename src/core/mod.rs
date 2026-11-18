@@ -4,7 +4,6 @@
 //! knows where to look here:
 //!
 //! - `events`     事件 — the notifications a page and the host exchange without an `id`
-//! - `window`     窗口 — cards, the main window, `createBrowserWindow`
 //! - `system`     系统 — device figures, folders, shells, notifications
 //! - `screen`     屏幕 — displays, DIP/pixel conversion, screen pictures
 //! - `input`      输入 — paste/type into the window the user came from
@@ -21,7 +20,9 @@
 //! - `payment`    支付 — reserved
 //!
 //! `widget` holds WinWidget's own protocol (settings, storage, audio, media, files, power, net),
-//! and `api` is the dispatcher that walks the list.
+//! and `api` is the dispatcher that walks the list. The `window` category is the exception: it
+//! owns live `tao::Window` / `wry::WebView` handles, so it lives in `runtime::window_category`
+//! where those handles belong, and `api::CHAIN` reaches it there.
 
 pub mod ai;
 pub mod api;
@@ -51,4 +52,3 @@ pub mod text;
 pub mod ubrowser;
 pub mod util;
 pub mod widget;
-pub mod window;

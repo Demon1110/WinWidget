@@ -64,10 +64,10 @@ pub struct App {
     pub port: u16,
     pub windows: HashMap<String, WidgetWin>,
     /// The custom windows widgets opened (`utools.createBrowserWindow`), by their id.
-    pub customs: crate::core::window::Registry,
+    pub customs: crate::runtime::window_category::Registry,
     /// Windows asked for by a page and still owed to the event loop, which is the only place a
     /// window may be created.
-    pub pending_customs: Vec<(u32, crate::core::window::CustomSpec)>,
+    pub pending_customs: Vec<(u32, crate::runtime::window_category::CustomSpec)>,
     next_custom: u32,
     pub control: Option<ControlWin>,
     pub control_pending: bool,
@@ -650,7 +650,7 @@ impl App {
     /// window), so it is queued and the loop is woken up for it.
     pub fn create_custom(
         &mut self,
-        spec: crate::core::window::CustomSpec,
+        spec: crate::runtime::window_category::CustomSpec,
     ) -> crate::core::util::BridgeResult<u32> {
         use crate::core::util::BridgeError;
         if self.manifest_for(&spec.instance).is_none() {
@@ -667,8 +667,10 @@ impl App {
         }
         let id = self.next_custom;
         self.next_custom += 1;
-        self.pending_customs
-            .push((id, crate::core::window::CustomSpec { file, ..spec }));
+        self.pending_customs.push((
+            id,
+            crate::runtime::window_category::CustomSpec { file, ..spec },
+        ));
         let _ = self.proxy.send_event(Ev::Wake);
         Ok(id)
     }
@@ -678,7 +680,7 @@ impl App {
     fn custom_url(
         &self,
         manifest: &Manifest,
-        spec: &crate::core::window::CustomSpec,
+        spec: &crate::runtime::window_category::CustomSpec,
         id: u32,
     ) -> String {
         // `test.html?name=1` keeps its own query; the window markers are appended after it.
@@ -709,7 +711,7 @@ impl App {
     /// The windows still owed to the loop are built after the cards, on the same pass, so a page
     /// that opens one during `ready` does not have to wait for the next heartbeat.
     fn build_customs(&mut self, target: &tao::event_loop::EventLoopWindowTarget<Ev>) {
-        let wanted: Vec<(u32, crate::core::window::CustomSpec)> =
+        let wanted: Vec<(u32, crate::runtime::window_category::CustomSpec)> =
             std::mem::take(&mut self.pending_customs);
         for (id, spec) in wanted {
             let Some(manifest) = self.manifest_for(&spec.instance) else {
@@ -720,7 +722,7 @@ impl App {
                 continue;
             };
             let url = self.custom_url(&manifest, &spec, id);
-            match crate::core::window::build_custom(
+            match crate::runtime::window_category::build_custom(
                 target,
                 &spec,
                 url,
@@ -774,7 +776,7 @@ impl App {
     }
     /// One window's state, as the JS `BrowserWindow` getters read it.
     pub fn custom_state(&self, id: u32) -> Value {
-        crate::core::window::state_json(self, id)
+        crate::runtime::window_category::state_json(self, id)
     }
 
     /// The page inside a custom window said `ready`: that is what `createBrowserWindow`'s callback
@@ -789,7 +791,7 @@ impl App {
         let Some(parent) = self.customs.get(&id).map(|win| win.parent.clone()) else {
             return;
         };
-        let state = crate::core::window::state_json(self, id);
+        let state = crate::runtime::window_category::state_json(self, id);
         let payload = json!({ "id": id, "state": state });
         if let Some(pid) = parent
             .strip_prefix("win:")
