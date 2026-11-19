@@ -25,8 +25,11 @@ const LIST_TTL: Duration = Duration::from_secs(12);
 /// GATT reads take a second or more on some earbuds; one reading a minute is plenty.
 const BATTERY_TTL: Duration = Duration::from_secs(60);
 
+/// Cached battery readings: device address -> (level, time it was taken).
+type BatteryCache = HashMap<String, (Option<u8>, Instant)>;
+
 static LIST: Mutex<Option<(Instant, Value)>> = Mutex::new(None);
-static BATTERY: Mutex<Option<HashMap<String, (Option<u8>, Instant)>>> = Mutex::new(None);
+static BATTERY: Mutex<Option<BatteryCache>> = Mutex::new(None);
 static BUSY: Mutex<()> = Mutex::new(());
 
 /// Paired devices, newest state first. `refresh` ignores the short list cache; `battery` skips the
