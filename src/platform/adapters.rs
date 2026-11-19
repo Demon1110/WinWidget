@@ -5,7 +5,7 @@
 //! the runtime injects [`real_ports`] into every API call. To test a capability, inject a
 //! fake `impl ClipboardPort` / `impl SystemPort` instead — no Windows required.
 
-use crate::core::ports::{ClipboardPort, Ports, SystemPort};
+use crate::core::ports::{BluetoothPort, ClipboardPort, Ports, SystemPort};
 use crate::platform::win32 as w;
 
 struct WinClipboard;
@@ -36,12 +36,22 @@ impl SystemPort for WinSystem {
     }
 }
 
+struct WinBluetooth;
+
+impl BluetoothPort for WinBluetooth {
+    fn list(&self, with_battery: bool, refresh: bool) -> serde_json::Value {
+        crate::platform::bluetooth::list(with_battery, refresh)
+    }
+}
+
 static CLIPBOARD: WinClipboard = WinClipboard;
 static SYSTEM: WinSystem = WinSystem;
+static BLUETOOTH: WinBluetooth = WinBluetooth;
 
 static REAL_PORTS: Ports = Ports {
     clipboard: &CLIPBOARD,
     system: &SYSTEM,
+    bluetooth: &BLUETOOTH,
 };
 
 /// The real capability set, injected into API calls by the runtime. Keeping this a

@@ -208,12 +208,14 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
         }
 
         // ── bluetooth devices ────────────────────────────────────────────────────────────────
-        // Enumeration and the GATT battery reads both block, so they run on a worker.
+        // Enumeration and the GATT battery reads both block, so they run on a worker. The port is
+        // a `'static` reference, so it moves into the worker freely — core never names platform.
         "bluetooth.list" => {
             ctx.require("bluetooth")?;
             let battery = jbool(p, "battery").unwrap_or(true);
             let refresh = jbool(p, "refresh").unwrap_or(false);
-            ctx.spawn_value(move || crate::platform::bluetooth::list(battery, refresh));
+            let bt = ctx.ports.bluetooth;
+            ctx.spawn_value(move || bt.list(battery, refresh));
             Ok(Reply::Later)
         }
 

@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use windows::core::{HSTRING, GUID};
+use windows::core::{GUID, HSTRING};
 use windows::Devices::Bluetooth::GenericAttributeProfile::GattCommunicationStatus;
 use windows::Devices::Bluetooth::{BluetoothConnectionStatus, BluetoothDevice, BluetoothLEDevice};
 use windows::Devices::Enumeration::DeviceInformation;
@@ -97,8 +97,14 @@ fn build(with_battery: bool) -> Value {
 /// keyboards and earbuds that Windows Settings still lists as connected.
 fn enumerate() -> Result<Vec<(DeviceInformation, bool)>, String> {
     let queries = [
-        (BluetoothDevice::GetDeviceSelectorFromPairingState(true), false),
-        (BluetoothLEDevice::GetDeviceSelectorFromPairingState(true), true),
+        (
+            BluetoothDevice::GetDeviceSelectorFromPairingState(true),
+            false,
+        ),
+        (
+            BluetoothLEDevice::GetDeviceSelectorFromPairingState(true),
+            true,
+        ),
     ];
     let mut out = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
@@ -325,7 +331,14 @@ fn kind_of(major: i32, minor: i32, name: &str) -> &'static str {
 fn guess_kind(name: &str) -> &'static str {
     let name = name.to_lowercase();
     const AUDIO: [&str; 8] = [
-        "airpod", "headphone", "headset", "earbud", "buds", "speaker", "sound", "audio",
+        "airpod",
+        "headphone",
+        "headset",
+        "earbud",
+        "buds",
+        "speaker",
+        "sound",
+        "audio",
     ];
     const WEARABLE: [&str; 4] = ["watch", "band", "fit", "ring"];
     if AUDIO.iter().any(|k| name.contains(k)) {
@@ -401,7 +414,10 @@ fn read_battery(id: &str) -> Option<u8> {
 
 /// Is there a Bluetooth radio, and is it on? Drives the card's empty state.
 fn radio_state() -> (bool, String) {
-    let radios = match Radio::GetRadiosAsync().ok().and_then(|operation| operation.get().ok()) {
+    let radios = match Radio::GetRadiosAsync()
+        .ok()
+        .and_then(|operation| operation.get().ok())
+    {
         Some(list) => list,
         None => return (false, "unknown".into()),
     };

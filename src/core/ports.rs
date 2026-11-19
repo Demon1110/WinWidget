@@ -28,6 +28,16 @@ pub trait SystemPort: Send + Sync {
     fn light_mode(&self) -> bool;
 }
 
+/// Paired Bluetooth devices and their reported battery levels.
+///
+/// Enumeration and GATT reads block, so the adapter does the work on the caller's worker thread;
+/// the trait is `Send + Sync` like the other ports so the `'static` reference can be moved there.
+pub trait BluetoothPort: Send + Sync {
+    /// `with_battery` enables the slow GATT reads; `refresh` bypasses the short device-list cache.
+    /// Returns the same JSON shape the page expects.
+    fn list(&self, with_battery: bool, refresh: bool) -> serde_json::Value;
+}
+
 /// Sending a bridge answer back to a page. The runtime implements this for `App`, so a
 /// transport/capability only needs `&dyn Host` rather than a mutable handle to the whole
 /// application. Kept as the contract for the next refactoring step; [`Ports`] only carries
@@ -64,6 +74,7 @@ pub trait ScheduleHost {
 pub struct Ports {
     pub clipboard: &'static dyn ClipboardPort,
     pub system: &'static dyn SystemPort,
+    pub bluetooth: &'static dyn BluetoothPort,
 }
 
 /// A do-nothing set for callers that have no host behind them (used by unit tests that
@@ -92,5 +103,45 @@ impl SystemPort for NullPorts {
     }
     fn light_mode(&self) -> bool {
         true
+    }
+}
+
+impl BluetoothPort for NullPorts {
+    fn list(&self, _with_battery: bool, _refresh: bool) -> serde_json::Value {
+        serde_json::json!([])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct FakeBluetooth;
+
+    impl BluetoothPort for FakeBluetooth {
+        fn list(&self, with_battery: bool, refresh: bool) -> serde_json::Value {
+            serde_json::json!({ "battery": with_battery, "refresh": refresh })
+        }
+    }
+
+    /// `bluetooth.list` runs the port on a worker thread. The field in `Ports` is a `&'static dyn`,
+    /// so it must be movable into a `'static` closure — that is the whole reason this capability
+    /// is a port rather than a direct `core -> platform` call.
+    #[test]
+    fn bluetooth_port_is_movable_into_worker_thread() {
+        static FAKE: FakeBluetooth = FakeBluetooth;
+        let port: &'static dyn BluetoothPort = &FAKE;
+        let handle = std::thread::spawn(move || port.list(true, false));
+        let value = handle.join().unwrap();
+        assert_eq!(
+            value,
+            serde_json::json!({ "battery": true, "refresh": false })
+        );
+    }
+
+    #[test]
+    fn null_bluetooth_port_returns_empty_list() {
+        let value = NullPorts.list(false, true);
+        assert_eq!(value, serde_json::json!([]));
     }
 }
