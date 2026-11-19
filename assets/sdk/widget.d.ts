@@ -28,6 +28,20 @@ declare namespace WinWidget {
     icon: string | null;
   }
 
+  interface RenameResult {
+    from: string;
+    to: string;
+    ok: boolean;
+    /** Why this item failed; null when it succeeded. */
+    error: string | null;
+  }
+
+  interface RenameReport {
+    /** True only when every item was renamed. */
+    ok: boolean;
+    items: RenameResult[];
+  }
+
   /** Where the widget is listed in the widget library. */
   type Category = "time" | "weather" | "system" | "productivity" | "info" | "media";
 
@@ -421,6 +435,13 @@ declare namespace WinWidget {
       open(target: string): Promise<void>;
       /** Opens a program, shortcut, folder or document by its full path, as a double-click would (no arguments). Needs "shell.launch". */
       launch(path: string): Promise<void>;
+      /** Opens a link with a specific program, e.g. a browser chosen for one site. Needs "shell.launch". */
+      openWith(target: string, app: string): Promise<void>;
+      /**
+       * Renames files in place. Each target must stay in the source's folder and not already exist.
+       * Show a preview and ask before calling this. Needs "shell.launch".
+       */
+      rename(items: Array<{ from: string; to: string }>): Promise<RenameReport>;
       /** Name, kind and icon of a path. Needs "shell.launch". */
       info(path: string, options?: { size?: number }): Promise<PathInfo>;
       /** Asks the user to choose a file or folder; null if they cancel. Needs "shell.launch". */
@@ -431,6 +452,11 @@ declare namespace WinWidget {
       reveal(path: string): Promise<void>;
       /** Moves a file or folder to the recycle bin, so a mistake stays recoverable. Needs "shell.launch". */
       trash(path: string): Promise<boolean>;
+      /**
+       * Shows or hides Explorer's desktop icons. `visible` is null when the icon window could not
+       * be found (for example while Explorer is restarting). Needs "shell.launch".
+       */
+      desktopIcons(action?: "query" | "show" | "hide" | "toggle"): Promise<{ supported: boolean; visible: boolean | null }>;
       /**
        * Full paths of files dropped on the widget. Needs "shell.launch".
        *   document.addEventListener("drop", async e => { e.preventDefault(); add(await widget.shell.paths(e.dataTransfer.files)); });

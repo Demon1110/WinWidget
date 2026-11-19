@@ -432,6 +432,26 @@ widget.shell.open("https://example.com");
 
 A widget page can't navigate away or open windows itself; use this to open web pages.
 
+### Opening with a chosen browser: `widget.shell.openWith` (needs `shell.launch`)
+
+```js
+// app is the browser's full path, e.g. C:\Program Files\Google\Chrome\Application\chrome.exe
+await widget.shell.openWith("https://example.com", chromePath);
+```
+
+Like `open`, it accepts a link or an existing file. The second argument must be an existing program path on this machine, not a program name. This is how you give different sites different browsers.
+
+### Renaming a batch: `widget.shell.rename` (needs `shell.launch`)
+
+```js
+const report = await widget.shell.rename([
+  { from: "C:\\Users\\me\\Downloads\\IMG_001.jpg", to: "C:\\Users\\me\\Downloads\\trip-001.jpg" },
+]);
+// report = { ok: false, items: [{ from, to, ok, error: "…" }] }
+```
+
+Each item must stay in its source folder. An existing target, a cross-folder move, an illegal Windows character or a reserved name fails for that item only; files are never overwritten. Preview the plan and ask the user before calling this. `report.ok` is true only when every item succeeded; handle partial failures from `items`.
+
 ### Opening programs and files: `widget.shell.launch` (needs `shell.launch`)
 
 ```js
@@ -832,7 +852,7 @@ By default a widget can only show its own content: it can't go online, can't rea
 | `schedule` | `utools.requestSchedule` / `getSchedules` / `removeSchedule`: registering scheduled tasks (users see a clear warning when allowing it) |
 | `sharp` | `utools.sharp`: processing pictures in the host (users see a clear warning when allowing it) |
 | `ubrowser` | `utools.ubrowser`: fetching pages (users see a clear warning when allowing it) |
-| `shell.launch` | `widget.shell.launch`, `pick`, `save`, `reveal`, `trash`, `info`, `paths`, `fileIcon`: opening programs and files, choosing files, choosing where to save, showing a file in Explorer, moving it to the recycle bin, reading names and icons (users see a clear warning when allowing it) |
+| `shell.launch` | `widget.shell.launch`, `openWith`, `rename`, `pick`, `save`, `reveal`, `trash`, `info`, `paths`, `fileIcon`: opening programs and files, opening a link with a chosen program, renaming files in place, choosing files, choosing where to save, showing a file in Explorer, moving it to the recycle bin, reading names and icons (users see a clear warning when allowing it) |
 
 Reading a folder needs no permission: the widget can read only the pictures in the folder the user chose in its settings. See [`widget.files`](#a-folder-the-user-chose-widgetfiles).
 
@@ -1251,7 +1271,7 @@ The SDK wraps all of these. The table shows the underlying names so you can matc
 | `power.do` | `widget.power(action)` (built-in widgets only) |
 | `net.fetch` | `widget.fetch(url, options)` |
 | `notify.show` / `cancel` | `widget.notify(...)` |
-| `shell.open` / `launch` / `info` / `pick` / `save` / `reveal` / `trash` / `paths` | `widget.shell.*` |
+| `shell.open` / `launch` / `openWith` / `rename` / `info` / `pick` / `save` / `reveal` / `trash` / `paths` | `widget.shell.*` |
 | `file.icon` | `widget.fileIcon(spec, { size })`: `spec` is a path, an extension such as `.pdf`, or `"folder"` |
 | `clipboard.readText` / `writeText` / `readImage` / `writeImage` / `readFiles` / `writeFiles` | `widget.clipboard.*` (needs the `clipboard` permission) |
 | `screen.capture` / `captureDisplay` / `captureInteractive` / `displays` / `primary` / `nearest` / `matching` / `cursor` / `toDip` / `toScreen` / `colorPick` | `widget.screen.*`, `utools.screen.*` (needs the `screen` permission; `captureInteractive` starts Windows' own snipping overlay) |
@@ -1374,6 +1394,8 @@ Anything returning a Promise can be awaited; "sync" means it returns immediately
 | `widget.fetch(url, {method, headers, body, as})` | `network:` | Promise | no CORS, 8 MB per call |
 | `widget.shell.open(url)` | `shell.open` | Promise | open in the default browser |
 | `widget.shell.launch(path)` | `shell.launch` | Promise | program, shortcut, folder, document |
+| `widget.shell.openWith(target, app)` | `shell.launch` | Promise | open a link with a chosen program |
+| `widget.shell.rename([{from,to}])` | `shell.launch` | Promise | rename in place, per-item result |
 | `widget.shell.info(path, {size})` | `shell.launch` | Promise | name, kind, icon |
 | `widget.shell.pick({type, filter, title})` | `shell.launch` | Promise | file or folder dialog |
 | `widget.shell.paths(files)` | `shell.launch` | Promise | paths of dropped files |

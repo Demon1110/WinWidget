@@ -34,12 +34,15 @@ const OWNS: &[&str] = &[
     "notify.cancel",
     "shell.open",
     "shell.launch",
+    "shell.openWith",
+    "shell.rename",
     "shell.info",
     "shell.pick",
     "shell.save",
     "shell.reveal",
     "shell.trash",
     "shell.paths",
+    "shell.desktopIcons",
     "file.icon",
     "text.chinese",
 ];
@@ -165,6 +168,22 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
             crate::platform::shell::launch(&path).map_err(BridgeError::new)?;
             Ok(Reply::Now(Value::Null))
         }
+        "shell.openWith" => {
+            ctx.require("shell.launch")?;
+            let target = req_str(p, "target")?;
+            let app = req_str(p, "app")?;
+            crate::platform::shell::open_with(&target, &app).map_err(BridgeError::new)?;
+            Ok(Reply::Now(Value::Null))
+        }
+        "shell.rename" => {
+            ctx.require("shell.launch")?;
+            let items = p
+                .get("items")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            Ok(Reply::Now(crate::platform::shell::rename(&items)))
+        }
         "shell.info" => {
             ctx.require("shell.launch")?;
             let path = req_str(p, "path")?;
@@ -211,6 +230,40 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
         // File paths need WebView2's extra-object messaging, which wry doesn't expose; dropped files
         // are still accepted by the control center.
         "shell.paths" => Ok(Reply::Now(Value::Array(Vec::new()))),
+        // Show or hide Explorer's desktop icons. This is a reversible shell setting, so it stays
+        // under the shell.launch permission rather than adding a new consent prompt.
+        "shell.desktopIcons" => {
+            ctx.require("shell.launch")?;
+            let action = jstr(p, "action").unwrap_or_else(|| "query".into());
+            let current = w::desktop_icons_visible();
+            match action.as_str() {
+                "query" => Ok(Reply::Now(json!({
+                    "supported": current.is_some(),
+                    "visible": current,
+                }))),
+                "show" | "hide" | "toggle" => {
+                    let target = match action.as_str() {
+                        "show" => true,
+                        "hide" => false,
+                        _ => current.ok_or_else(|| {
+                            BridgeError::new("未找到桌面图标窗口，请回到桌面后重试。")
+                        })?,
+                    };
+                    if action == "toggle" {
+                        w::set_desktop_icons_visible(!target).map_err(BridgeError::new)?;
+                    } else {
+                        w::set_desktop_icons_visible(target).map_err(BridgeError::new)?;
+                    }
+                    Ok(Reply::Now(json!({
+                        "supported": true,
+                        "visible": w::desktop_icons_visible().unwrap_or(!target),
+                    })))
+                }
+                other => Err(BridgeError::new(format!(
+                    "unknown desktopIcons action '{other}'"
+                ))),
+            }
+        }
         "file.icon" => {
             ctx.require("shell.launch")?;
             let spec = req_str(p, "path")?;

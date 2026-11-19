@@ -963,6 +963,79 @@ fn wallpaper_host() -> (HWND, HWND) {
     }
 }
 
+/// The `SHELLDLL_DefView` window that owns the desktop icons. Unlike `wallpaper_host`, this
+/// searches every top-level window, so it also works on the classic desktop where DefView lives
+/// under a `WorkerW` instead of `Progman`.
+fn defview_window() -> HWND {
+    let prog = progman();
+    if prog != 0 {
+        let class = wide("SHELLDLL_DefView");
+        let def = unsafe { FindWindowExW(prog, 0, class.as_ptr(), std::ptr::null()) };
+        if def != 0 {
+            return def;
+        }
+    }
+
+    struct Search {
+        defview: HWND,
+    }
+    unsafe extern "system" fn cb(hwnd: HWND, data: isize) -> i32 {
+        let s = &mut *(data as *mut Search);
+        let class = wide("SHELLDLL_DefView");
+        let def = unsafe { FindWindowExW(hwnd, 0, class.as_ptr(), std::ptr::null()) };
+        if def != 0 {
+            s.defview = def;
+            return 0;
+        }
+        1
+    }
+    let mut s = Search { defview: 0 };
+    unsafe {
+        EnumWindows(Some(cb), &mut s as *mut Search as isize);
+    }
+    s.defview
+}
+
+/// The list view inside DefView that actually draws the icons.
+fn desktop_icon_list() -> HWND {
+    let defview = defview_window();
+    if defview == 0 {
+        return 0;
+    }
+    let class = wide("SysListView32");
+    unsafe { FindWindowExW(defview, 0, class.as_ptr(), std::ptr::null()) }
+}
+
+/// Whether Explorer is currently drawing desktop icons. `None` means the desktop icon window was
+/// not found (for example while Explorer is restarting).
+pub fn desktop_icons_visible() -> Option<bool> {
+    let view = desktop_icon_list();
+    if view == 0 {
+        return None;
+    }
+    Some(unsafe { IsWindowVisible(view) } != 0)
+}
+
+/// Shows or hides Explorer's desktop icons. The Explorer preference is updated too, so the state
+/// survives an Explorer restart; a failure to write it does not undo the immediate change.
+pub fn set_desktop_icons_visible(visible: bool) -> Result<(), String> {
+    let view = desktop_icon_list();
+    if view == 0 {
+        return Err("未找到桌面图标窗口，请回到桌面后重试。".into());
+    }
+    unsafe {
+        ShowWindow(view, if visible { SW_SHOWNOACTIVATE_ALT } else { SW_HIDE });
+    }
+
+    use winreg::enums::HKEY_CURRENT_USER;
+    use winreg::RegKey;
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    if let Ok((key, _)) = hkcu.create_subkey(r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced") {
+        let _ = key.set_value("HideIcons", &u32::from(!visible));
+    }
+    Ok(())
+}
+
 /// Mounts an effect window *behind the desktop icons*, on the wallpaper layer.
 ///
 /// This is fundamentally different from `place_above_desktop` (used by cards). A top-level window
