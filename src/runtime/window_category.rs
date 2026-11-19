@@ -111,6 +111,10 @@ pub struct CustomWin {
     /// The page is gone (destroyed or closed): further calls are refused like Electron's.
     pub destroyed: bool,
     pub ignore_mouse: bool,
+    /// Mounted as a child of the shell's wallpaper host, below the desktop icons. Such a window
+    /// must never go through tao's window-flags diff (set_visible/set_ignore_cursor_events/
+    /// set_fullscreen/set_outer_position), which would rewrite its style back to WS_POPUP.
+    pub wallpaper: bool,
 }
 
 impl CustomWin {
@@ -215,7 +219,11 @@ pub fn build_custom(
         .filter(|v| *v > 0.0)
         .unwrap_or(DEFAULT_HEIGHT);
     let title = jstr(&o, "title").unwrap_or_default();
-    let transparent = jbool(&o, "transparent").unwrap_or(false);
+    // `wallpaper` is a different z-order band from `desktop`: it becomes a child of the shell's
+    // wallpaper host, below the desktop icons, so it can never cover or block the desktop. Such a
+    // window is opaque (it *is* the wallpaper), so none of the per-pixel-alpha machinery applies.
+    let wallpaper = jstr(&o, "layer").as_deref() == Some("wallpaper");
+    let transparent = !wallpaper && jbool(&o, "transparent").unwrap_or(false);
     let frame = jbool(&o, "frame").unwrap_or(true);
     let resizable = jbool(&o, "resizable").unwrap_or(true);
     let show = jbool(&o, "show").unwrap_or(true);
@@ -245,44 +253,54 @@ pub fn build_custom(
 
     // A transparent window has to stay transparent: the class brush would erase the whole client
     // area to a solid colour first, and a page with no background of its own then shows that
-    // colour instead of the desktop behind it.
+    // colour instead of the desktop behind it. A wallpaper window is opaque and needs none of it.
     if transparent {
         w::clear_background_brush(hwnd);
     }
 
-    if always_on_top {
+    // A wallpaper window must never be topmost: that would put it in front of everything again.
+    // It is mounted after the web view exists (below), so the whole child-HWND tree comes along.
+    if always_on_top && !wallpaper {
         w::set_topmost(hwnd, true);
     }
+    let scale = {
+        let s = window.scale_factor();
+        if s > 0.0 {
+            s
+        } else {
+            1.0
+        }
+    };
+    let to_px = |v: f64| (v * scale).round() as i32;
+    let (px, py) = match (jnum(&o, "x"), jnum(&o, "y")) {
+        (Some(x), Some(y)) => (to_px(x), to_px(y)),
+        _ => {
+            let p = window
+                .outer_position()
+                .unwrap_or(PhysicalPosition::new(0, 0));
+            (p.x, p.y)
+        }
+    };
+    // The monitor rectangle in physical pixels, used when mounting a wallpaper window.
+    let screen = w::RECT {
+        left: px,
+        top: py,
+        right: px + to_px(width),
+        bottom: py + to_px(height),
+    };
     if !frame {
         // Windows keeps a thin caption edge on a top-level window; a frameless window has to mean
         // its client area really is the window rectangle, otherwise a full-screen surface leaves
         // a sliver of the screen uncovered. tao also reserved room for an invisible shadow frame,
         // so the geometry is set again once that frame is gone.
         w::drop_frame(hwnd);
-        let scale = {
-            let s = window.scale_factor();
-            if s > 0.0 {
-                s
-            } else {
-                1.0
-            }
-        };
-        let to_px = |v: f64| (v * scale).round() as i32;
-        let (px, py) = match (jnum(&o, "x"), jnum(&o, "y")) {
-            (Some(x), Some(y)) => (to_px(x), to_px(y)),
-            _ => {
-                let p = window
-                    .outer_position()
-                    .unwrap_or(PhysicalPosition::new(0, 0));
-                (p.x, p.y)
-            }
-        };
         w::fit_client(hwnd, px, py, to_px(width), to_px(height));
         w::polish_frame(hwnd, rounded);
     }
     // `layer: "desktop"` puts the window directly above the wallpaper and below every ordinary
     // window — the place a desktop-level canvas belongs, so an effect can play on the wallpaper
-    // without ever standing in front of the user's work.
+    // without ever standing in front of the user's work. A `wallpaper` window is mounted later,
+    // after its web view exists, because it becomes a child of the shell's wallpaper host.
     if jstr(&o, "layer").as_deref() == Some("desktop") {
         w::place_above_desktop(hwnd);
     }
@@ -355,6 +373,26 @@ pub fn build_custom(
             .map_err(|e| format!("WebView2 could not be created: {e}"))?
     };
 
+    // Mount a wallpaper window only now that the web view (and its whole child-HWND tree) exists:
+    // becoming a child of the shell host reparents that tree too. If the host cannot be found we
+    // fail the creation rather than leave a stray top-level window covering the desktop.
+    if wallpaper {
+        if w::place_on_wallpaper(hwnd, &screen) {
+            crate::core::logging::info(&format!(
+                "win {id}: mounted on the wallpaper layer at {},{} {}x{}",
+                screen.left,
+                screen.top,
+                screen.width(),
+                screen.height()
+            ));
+        } else {
+            crate::core::logging::warn(&format!(
+                "win {id}: could not find the wallpaper host; effect window discarded"
+            ));
+            return Err("could not mount the effect on the wallpaper layer".into());
+        }
+    }
+
     // Click-through asked for at creation time: apply it to the top-level window straight away.
     // WebView2's child HWNDs come later, so `mark_custom_loaded` re-applies once the page is ready.
     let ignore_mouse = jbool(&o, "ignoreMouseEvents").unwrap_or(false);
@@ -363,10 +401,17 @@ pub fn build_custom(
     }
 
     if show {
-        window.set_visible(true);
+        // tao's set_visible runs a window-flags diff that rewrites GWL_STYLE back to WS_POPUP and
+        // would tear a wallpaper window off its host. Use the raw ShowWindow for that layer.
+        if wallpaper {
+            w::show_no_activate(hwnd);
+        } else {
+            window.set_visible(true);
+        }
     }
 
     Ok(CustomWin {
+        wallpaper,
         id,
         parent: spec.parent.clone(),
         instance: spec.instance.clone(),
@@ -877,20 +922,71 @@ fn invoke(app: &mut App, id: u32, m: &str, p: &Value) -> BridgeResult<Reply> {
             win.max,
             win.background.clone(),
             win.destroyed,
+            win.wallpaper,
         )
     };
-    let (scale, bounds, content, title, resizable, closable, min, max, background, destroyed) =
-        snapshot;
+    let (
+        scale,
+        bounds,
+        content,
+        title,
+        resizable,
+        closable,
+        min,
+        max,
+        background,
+        destroyed,
+        wallpaper,
+    ) = snapshot;
     if destroyed && m != "isDestroyed" {
         return Err(BridgeError::new(format!("window {id} has been destroyed")));
     }
     let (x, y, width, height) = bounds;
 
+    // A wallpaper window is a child of the shell host, pinned behind the icons. Anything that
+    // moves, resizes or re-bands it through tao would either rewrite its style back to WS_POPUP
+    // or place it in front of the desktop again. The effect page never needs these, so refuse
+    // them explicitly rather than let the mount silently break.
+    if wallpaper
+        && matches!(
+            m,
+            "focus"
+                | "blur"
+                | "setSize"
+                | "setContentSize"
+                | "setPosition"
+                | "setBounds"
+                | "setContentBounds"
+                | "setMinimumSize"
+                | "setMaximumSize"
+                | "center"
+                | "setResizable"
+                | "maximize"
+                | "unmaximize"
+                | "minimize"
+                | "restore"
+                | "setFullScreen"
+                | "setAlwaysOnTop"
+                | "moveTop"
+                | "setSkipTaskbar"
+        )
+    {
+        return Ok(Reply::Now(json!({
+            "unsupported": "this window is pinned to the wallpaper layer and cannot be moved, resized or raised"
+        })));
+    }
+
     let reply = match m {
         // ── visibility ───────────────────────────────────────────────────
+        // A wallpaper window never uses tao's set_visible: the flags diff behind it rewrites
+        // GWL_STYLE to WS_POPUP and would detach us from the shell host (back over the desktop).
         "show" => {
             if let Some(win) = app.customs.get(&id) {
-                win.window.set_visible(true);
+                if wallpaper {
+                    w::show_no_activate(win.hwnd());
+                } else {
+                    win.window.set_visible(true);
+                }
             }
             Value::Null
         }
@@ -902,7 +998,11 @@ fn invoke(app: &mut App, id: u32, m: &str, p: &Value) -> BridgeResult<Reply> {
         }
         "hide" => {
             if let Some(win) = app.customs.get(&id) {
-                win.window.set_visible(false);
+                if wallpaper {
+                    w::hide(win.hwnd());
+                } else {
+                    win.window.set_visible(false);
+                }
             }
             Value::Null
         }

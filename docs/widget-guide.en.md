@@ -629,7 +629,7 @@ win.on("closed", () => widget.log("window closed"));
 | `backgroundColor` | white | `"#0f1a24"` or `"rgba(15,26,36,0.9)"`, for example |
 | `transparent` | `false` | Only for a real transparent background, with `frame:false` |
 | `seeThrough` | `false` | With `transparent`: tells DWM to stop drawing its own backdrop behind the window, so the page's alpha lands on what is behind it |
-| `layer` | none | `"desktop"` → the window sits above the wallpaper and below every ordinary window (desktop-level effects, wallpaper-sized canvases) |
+| `layer` | none | `"desktop"` → above the wallpaper, below every ordinary window; `"wallpaper"` → **below the desktop icons**, as the new wallpaper: icons and apps stay fully visible and clickable. Use this for full-screen effects |
 | `fullscreen` | `false` | Open full screen |
 | `webPreferences.preload` | — | **Does not run** (no Node); use `ipcRenderer` below instead |
 
@@ -707,8 +707,9 @@ These methods keep their uTools names and **neither throw nor go silent**: the h
 - Opening is **asynchronous**: `createBrowserWindow` returns the object at once, but `win.id` only gets a value when the window really exists (it is `0` if read synchronously); every method waits for creation, so the snippet above works as written.
 - Windows and the card share an origin and CSP: do not treat "only the card may see this" as a security boundary.
 - `show: false` plus `show()` in the callback is uTools' own advice; without it the page may flash white before it paints.
-- Full-screen effect / wallpaper-sized canvas: `{ frame: false, transparent: true, seeThrough: true, layer: "desktop", skipTaskbar: true, focusable: false }`, then cover the target monitor with `setBounds()`.
-- For a full-screen layer above every window, swap `layer: "desktop"` for `alwaysOnTop: true`. WebView2 only shows what is behind the window in those two placements: an ordinary top-most window supplies its own opaque white sheet and hides the desktop entirely. "Show the effect without getting in the way" means `layer: "desktop"`.
+- Full-screen dynamic effect: `{ frame: false, layer: "wallpaper", skipTaskbar: true, focusable: false, backgroundColor: "#0a0e1a" }` with `x/y/width/height` set to the monitor. The host mounts the window as a child *below* the desktop icon layer (`SHELLDLL_DefView`), so icons, the desktop context menu and every app window naturally stay above it and keep their input. No `transparent`/`seeThrough` needed — the page is opaque and becomes the wallpaper.
+- Do **not** build a full-screen effect with `transparent + seeThrough + layer:"desktop"`: that produces a top-level owned window, which Win32 always paints *above* the desktop icons. No amount of transparency or click-through fixes that; it covers the desktop.
+- A `wallpaper` window is pinned: move/resize/raise/fullscreen methods return `{ unsupported: … }`, and it never goes through tao's `set_visible`. Show it with `showInactive`, close it with `destroy`.
 
 ---
 

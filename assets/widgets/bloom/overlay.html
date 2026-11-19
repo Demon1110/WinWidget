@@ -4,16 +4,27 @@
   <meta charset="utf-8">
   <title>玩出花 - 特效渲染</title>
   <style>
-    /* 这一页是盖在桌面上的透明画布，不是一张卡片：把 base.css 的卡片外观全部让开。 */
+    /* 这一页就是新的桌面壁纸（挂在图标层之下），不是盖在桌面上的透明卡片。
+       宿主会给自定义窗口注入 base.css / 主题 CSS / 卡片外观，这里全部用 !important 钉死：
+       body 是不透明深色底，canvas 保持透明，特效粒子画在它上面，空白露出这层底色。 */
     html, body {
       margin: 0 !important;
       padding: 0 !important;
-      width: 100vw;
-      height: 100vh;
+      width: 100vw !important;
+      height: 100vh !important;
+      min-width: 100vw !important;
+      min-height: 100vh !important;
+      max-width: 100vw !important;
+      max-height: 100vh !important;
       overflow: hidden !important;
-      background: transparent !important;
+      background: #0a0e1a !important;
+      background-color: #0a0e1a !important;
+      opacity: 1 !important;
+      border: 0 !important;
       border-radius: 0 !important;
       box-shadow: none !important;
+      text-shadow: none !important;
+      transform: none !important;
       zoom: 1 !important;
       pointer-events: none !important;
     }
@@ -21,9 +32,14 @@
       display: block;
       position: fixed;
       inset: 0;
-      width: 100vw;
-      height: 100vh;
+      width: 100vw !important;
+      height: 100vh !important;
+      background: transparent !important;
       pointer-events: none !important;
+    }
+    /* SDK 会往自定义窗口塞卡片用的缩放手柄 / 编辑标签 / 报错条；壁纸层一概不要。 */
+    .fw-resize, .fw-edit-label, .fw-error-bar, .fw-ring {
+      display: none !important;
     }
   </style>
 </head>

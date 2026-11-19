@@ -30,8 +30,19 @@ pub const WS_EX_TRANSPARENT: isize = 0x0000_0020;
 pub const WS_EX_NOACTIVATE: isize = 0x0800_0000;
 
 pub const HWND_TOP: HWND = 0;
+pub const HWND_BOTTOM: HWND = 1;
 pub const HWND_NOTOPMOST: HWND = -2;
 pub const HWND_TOPMOST: HWND = -1;
+
+/// Windows 11 24H2+ creates Progman with this bit and draws the wallpaper in DWM rather than in a
+/// GDI window. It also moves the desktop icons (SHELLDLL_DefView) into a layered child of Progman.
+/// When set, the wallpaper host is Progman itself and our window must be a child *below* DefView.
+pub const WS_EX_NOREDIRECTIONBITMAP: isize = 0x0020_0000;
+/// Undocumented shell message: ask Explorer to separate the wallpaper from the icon layer by
+/// creating a WorkerW host. Harmless (a no-op when already present); sent with a timeout because
+/// it crosses into explorer.exe, which may be busy.
+pub const WM_SPAWN_WORKERW: u32 = 0x052C;
+pub const SMTO_ABORTIFHUNG: u32 = 0x0002;
 
 pub const SW_HIDE: i32 = 0;
 pub const SW_SHOWNOACTIVATE: i32 = 4;
@@ -253,6 +264,21 @@ extern "system" {
     ) -> i32;
     pub fn ShowWindow(hwnd: HWND, cmd: i32) -> i32;
     pub fn FindWindowW(class: *const u16, name: *const u16) -> HWND;
+    pub fn FindWindowExW(
+        parent: HWND,
+        child_after: HWND,
+        class: *const u16,
+        name: *const u16,
+    ) -> HWND;
+    pub fn SendMessageTimeoutW(
+        hwnd: HWND,
+        msg: u32,
+        w: usize,
+        l: isize,
+        flags: u32,
+        timeout: u32,
+        result: *mut usize,
+    ) -> isize;
     pub fn EnumWindows(
         callback: Option<unsafe extern "system" fn(HWND, isize) -> i32>,
         data: isize,
@@ -858,6 +884,153 @@ pub fn detach_from_desktop(hwnd: HWND) {
             SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, 0);
         }
     }
+}
+
+/// Finds the window that owns the desktop icon layer.
+///
+/// Windows 11 24H2+ ("raised desktop") creates `Progman` with `WS_EX_NOREDIRECTIONBITMAP` and
+/// keeps `SHELLDLL_DefView` (the icons) as its child; the wallpaper is composed by DWM behind it.
+/// Older Windows separates the two into a `WorkerW` that sits below the icon host. Both cases are
+/// handled: we return the window the effect must become a child of, and the `DefView` handle whose
+/// z-order position our window has to sit *below*.
+fn wallpaper_host() -> (HWND, HWND) {
+    let prog = progman();
+    if prog == 0 {
+        return (0, 0);
+    }
+    unsafe {
+        let raised = GetWindowLongPtrW(prog, GWL_EXSTYLE) & WS_EX_NOREDIRECTIONBITMAP != 0;
+        // Only the classic desktop needs a wallpaper WorkerW. On raised desktops the message is
+        // pointless and would add a cross-process round trip for every display's effect window.
+        if !raised {
+            let mut result: usize = 0;
+            let _ = SendMessageTimeoutW(
+                prog,
+                WM_SPAWN_WORKERW,
+                0,
+                0,
+                SMTO_ABORTIFHUNG,
+                1000,
+                &mut result,
+            );
+        }
+
+        let defview_class = wide("SHELLDLL_DefView");
+        let find_defview = |host: HWND| -> HWND {
+            FindWindowExW(host, 0, defview_class.as_ptr(), std::ptr::null())
+        };
+
+        // Raised desktop: Progman owns the icons, so it is the host and we sit below DefView.
+        if raised {
+            return (prog, find_defview(prog));
+        }
+
+        // Classic desktop: find the top-level window that hosts DefView, then take the WorkerW
+        // just below it in z-order — that is the wallpaper surface Explorer draws on.
+        struct Search {
+            defview_parent: HWND,
+            worker: HWND,
+        }
+        unsafe extern "system" fn cb(hwnd: HWND, data: isize) -> i32 {
+            let s = &mut *(data as *mut Search);
+            let class = wide("SHELLDLL_DefView");
+            let def = FindWindowExW(hwnd, 0, class.as_ptr(), std::ptr::null());
+            if def != 0 {
+                s.defview_parent = hwnd;
+                let worker_class = wide("WorkerW");
+                s.worker = FindWindowExW(0, hwnd, worker_class.as_ptr(), std::ptr::null());
+                return 0;
+            }
+            1
+        }
+        let mut s = Search {
+            defview_parent: 0,
+            worker: 0,
+        };
+        EnumWindows(Some(cb), &mut s as *mut Search as isize);
+
+        if s.worker != 0 {
+            return (s.worker, 0);
+        }
+        // Some shells keep DefView directly under Progman with no separate WorkerW. In that case
+        // parent to Progman and let the caller place us below DefView.
+        let host = if s.defview_parent != 0 {
+            s.defview_parent
+        } else {
+            prog
+        };
+        (host, find_defview(host))
+    }
+}
+
+/// Mounts an effect window *behind the desktop icons*, on the wallpaper layer.
+///
+/// This is fundamentally different from `place_above_desktop` (used by cards). A top-level window
+/// owned by Progman is always painted above Progman's children — i.e. above the desktop icons — so
+/// no amount of transparency or click-through can stop it from covering and blocking the desktop.
+/// The only correct fix is to become a child of the wallpaper host and sit below `SHELLDLL_DefView`
+/// in z-order: icons and every application window then naturally stay on top and keep their input.
+///
+/// Returns false when the wallpaper host cannot be found; callers must then hide the window rather
+/// than show a stray top-level overlay. `screen` is the monitor rectangle in screen coordinates.
+pub fn place_on_wallpaper(hwnd: HWND, screen: &RECT) -> bool {
+    let (host, defview) = wallpaper_host();
+    if host == 0 {
+        return false;
+    }
+    unsafe {
+        // Drop the top-level popup/owner identity and become a real child of the wallpaper host.
+        let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+        SetWindowLongPtrW(
+            hwnd,
+            GWL_STYLE,
+            (style & !WS_POPUP) | WS_CHILD | WS_CLIPCHILDREN,
+        );
+        SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, 0);
+        if SetParent(hwnd, host) == 0 {
+            return false;
+        }
+
+        // Child coordinates are relative to the host's client area, not the screen.
+        let mut origin = POINT {
+            x: screen.left,
+            y: screen.top,
+        };
+        ScreenToClient(host, &mut origin);
+        SetWindowPos(
+            hwnd,
+            0,
+            origin.x,
+            origin.y,
+            screen.width(),
+            screen.height(),
+            SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+        );
+
+        // The decisive step: insert *after* DefView so Windows stacks the icons above us (verified
+        // on a 24H2 raised desktop — GetWindow(GW_CHILD) then lists DefView first, us second).
+        // Without an explicit z-order, a new child defaults to the top and would cover the icons.
+        let after = if defview != 0 && IsWindow(defview) != 0 {
+            defview
+        } else {
+            HWND_BOTTOM
+        };
+        SetWindowPos(
+            hwnd,
+            after,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+        );
+
+        // Belt and braces: never take focus, never eat a click. z-order already guarantees the
+        // desktop stays usable, but a stray Explorer restack must not be able to lock the mouse.
+        set_no_activate(hwnd, true);
+        set_click_through(hwnd, true);
+    }
+    true
 }
 
 /// Puts a card in the topmost band, or back in with the ordinary windows.
@@ -2476,4 +2649,38 @@ pub fn base64_decode(input: &str) -> Option<Vec<u8>> {
         }
     }
     Some(out)
+}
+
+#[cfg(test)]
+mod wallpaper_tests {
+    use super::*;
+
+    /// The wallpaper mount only works if the shell really exposes an icon layer we can sit below.
+    /// This is read-only: it never creates or moves a window, so it is safe in CI and on a live
+    /// desktop. On non-Windows dev builds there is no Progman and the test is a no-op.
+    #[test]
+    fn wallpaper_host_finds_the_icon_layer() {
+        let prog = progman();
+        if prog == 0 {
+            return; // not a Windows shell (or headless CI) — nothing to assert
+        }
+        let (host, defview) = wallpaper_host();
+        assert_ne!(host, 0, "the shell must expose a wallpaper host");
+        let raised =
+            unsafe { GetWindowLongPtrW(prog, GWL_EXSTYLE) } & WS_EX_NOREDIRECTIONBITMAP != 0;
+        if raised {
+            // Win11 24H2+: Progman owns the icons directly, so it is both the host and the place
+            // whose child z-order our effect window has to be inserted below.
+            assert_eq!(host, prog, "raised desktop must parent to Progman");
+            assert_ne!(defview, 0, "SHELLDLL_DefView must be a child of Progman");
+            assert_eq!(class_name(defview), "SHELLDLL_DefView");
+        } else {
+            // Classic desktop: the host is the WorkerW below the icon layer.
+            assert_ne!(
+                class_name(host),
+                "",
+                "the wallpaper host must be a real window"
+            );
+        }
+    }
 }

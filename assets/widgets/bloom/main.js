@@ -300,12 +300,12 @@ async function openOverlay(display, effectId) {
     width: Math.max(1, Math.round(Number(b.width) || 1920)),
     height: Math.max(1, Math.round(Number(b.height) || 1080)),
     title: "玩出花 - " + (fxOf(effectId) ? t(fxOf(effectId).name) : "特效"),
-    // 特效画在壁纸上、所有窗口之下：看得见，但从不挡在用户正在做的事前面。
-    layer: "desktop",
-    transparent: true,
-    // 玻璃笔画在页面自己身上；`seeThrough` 把窗户上那层 DWM 底色也关掉，
-    // 壁纸才会从特效的空白处透出来，而不是被一张白底盖住。
-    seeThrough: true,
+    // 关键：`wallpaper` 让宿主把窗口挂成桌面图标层（SHELLDLL_DefView）之下的子窗口。
+    // 这样图标、桌面右键菜单、其它应用窗口天然都在特效之上，鼠标自然落回它们身上，
+    // 不靠任何透明/穿透技巧去"假装"不挡。若用 `desktop`，窗口是顶层 owned 窗口，
+    // 永远绘制在图标之上，怎么调透明度都会盖住桌面。
+    layer: "wallpaper",
+    // 壁纸层是不透明的：它本身就是新的桌面背景，不需要 per-pixel alpha / seeThrough。
     frame: false,
     alwaysOnTop: false,
     skipTaskbar: true,
@@ -316,9 +316,10 @@ async function openOverlay(display, effectId) {
     closable: true,
     focusable: false,
     show: false,
-    // 从建窗这一刻就请求穿透；WebView2 的子窗口稍后才建好，宿主会在页面 ready 时再补一次。
+    // 兜底：即便 Explorer 重建导致 z 序短暂异常，也不让窗口吃掉鼠标或抢焦点。
     ignoreMouseEvents: true,
-    backgroundColor: "#00000000",
+    // 深色底，与各款霓虹/星空特效的调性一致；壁纸层不透明，这个颜色就是桌面底色。
+    backgroundColor: "#0a0e1a",
   };
   const reply = await widget.call("win.create", {
     file: "overlay.html?fx=" + encodeURIComponent(effectId) + "&d=" + encodeURIComponent(String(display.id)),
