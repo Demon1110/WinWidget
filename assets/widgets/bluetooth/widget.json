@@ -10,6 +10,7 @@
   "author": "WinWidget",
   "entry": "index.html",
   "icon": "icon.svg",
+  "preview": "preview/preview.webp",
   "category": "system",
   "size": {
     "width": 340,

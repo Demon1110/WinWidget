@@ -144,8 +144,8 @@ my-widget/
 ├─ index.html       # 卡片内容，<body> 就是卡片本身
 ├─ style.css
 ├─ main.js
-└─ icon.svg
-└─ preview/         # 可选：{theme}.{lang}.webp 预览图，控制中心里显示
+├─ icon.svg
+└─ preview/         # 可选：推荐一张 preview.webp；需要主题/语言版本时再用 {theme}.{lang}.webp
 ```
 
 `widget.json` 里声明设置项后，控制中心会**自动生成表单**，不需要写任何 UI：
