@@ -97,8 +97,9 @@ pub struct OptionSpec {
     pub label: Option<Value>,
 }
 
-/// A command-line program the widget downloads and runs. The host verifies the SHA-256 before
-/// anything is executed, and stores the file under the widget's `bin\` folder.
+/// A command-line program the widget downloads and runs. When the declaration includes a
+/// SHA-256, the host verifies it before anything is executed, and stores the file under the
+/// widget's `bin\` folder.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct ToolSpec {
@@ -106,8 +107,9 @@ pub struct ToolSpec {
     pub name: String,
     /// An https URL. Redirects are checked against the widget's `network:` permissions too.
     pub url: String,
-    /// 64 hex characters; the downloaded file is rejected when it does not match.
-    pub sha256: String,
+    /// Optional 64 hex characters. When present the downloaded file is rejected if it does not
+    /// match; when absent the host only checks HTTPS and the optional size.
+    pub sha256: Option<String>,
     /// The file name under `bin\`. Defaults to the last segment of `url`; must end with `.exe`.
     pub filename: Option<String>,
     /// Optional expected size in bytes; the download must match exactly. The hard limit is 512 MB.
@@ -121,7 +123,7 @@ impl Default for ToolSpec {
         ToolSpec {
             name: String::new(),
             url: String::new(),
-            sha256: String::new(),
+            sha256: None,
             filename: None,
             size: None,
             timeout: Some(30_000),
@@ -237,11 +239,13 @@ impl Manifest {
                         tool.name
                     ));
                 }
-                if !valid_sha256(&tool.sha256) {
-                    return Err(format!(
-                        "tool \"{}\" needs a 64-character hex sha256",
-                        tool.name
-                    ));
+                if let Some(hash) = &tool.sha256 {
+                    if !valid_sha256(hash) {
+                        return Err(format!(
+                            "tool \"{}\" sha256 must be 64 hex characters",
+                            tool.name
+                        ));
+                    }
                 }
                 tool.file_name()?;
                 if let Some(size) = tool.size {
@@ -460,7 +464,22 @@ mod tests {
     }
 
     #[test]
-    fn rejects_a_tool_without_permission_or_hash() {
+    fn accepts_a_tool_without_a_hash() {
+        let (mut manifest, dir) = manifest_with_tools(
+            "no-hash",
+            r#"[{
+                "name": "ocr",
+                "url": "https://example.com/tools/ocr.exe"
+            }]"#,
+            r#"["tool.exec", "network:example.com"]"#,
+        );
+        assert!(manifest.validate().is_ok());
+        assert!(manifest.tools[0].sha256.is_none());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn rejects_a_tool_without_permission_or_a_bad_hash() {
         let (mut manifest, dir) = manifest_with_tools(
             "no-permission",
             r#"[{

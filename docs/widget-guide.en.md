@@ -836,7 +836,7 @@ WinWidget handles these for you:
 
 ## Third-party CLI tools
 
-A widget can hand a command-line program to the host instead of shipping it in the `.fwz`. The host downloads it once, verifies the SHA-256, keeps it under the widget's `bin\` folder and runs it without a shell. This is how a small widget can do screenshots, OCR, translation or conversion with a well-known CLI.
+A widget can hand a command-line program to the host instead of shipping it in the `.fwz`. The host downloads it once, verifies the SHA-256 when the declaration includes one, keeps it under the widget's `bin\` folder and runs it without a shell. This is how a small widget can do screenshots, OCR, translation or conversion with a well-known CLI.
 
 Declare the program in `widget.json`:
 
@@ -860,15 +860,17 @@ Declare the program in `widget.json`:
 |---|---|
 | `name` | The name used by `widget.tool.run()`; lowercase letters, digits, dots, dashes and underscores, 1–32 characters |
 | `url` | An `https://` address. Redirects are followed, but every hop must also be allowed |
-| `sha256` | **Required.** 64 hex characters; a download that does not match is deleted |
+| `sha256` | Optional. 64 hex characters. When present, a download that does not match is deleted. When omitted, there is no content check |
 | `filename` | The file under `bin\`; defaults to the last segment of `url`. Must end with `.exe` |
-| `size` | Optional expected size in bytes; also caps the download at 512 MB |
+| `size` | Optional expected size in bytes; must match exactly. The hard download limit is 512 MB |
 | `timeout` | Optional default run timeout in ms, 1 000–300 000; default 30 000 |
 
 The download host must be declared as `network:<host>`, and `tool.exec` must be in `permissions`. A third-party widget asks the user to allow both. The cache is `<widget folder>\bin\<filename>`; built-in widgets fall back to `%AppData%\WinWidget\db\tools\<widget-id>`.
 
+**Without `sha256` there is no integrity check.** HTTPS protects the transfer, but the host cannot tell whether the file at that URL changed later. Omit the hash only when the publisher does not provide one, and download from a host you trust; supply the hash whenever possible.
+
 ```js
-// First run downloads and verifies; later runs reuse the cached file.
+// First run downloads (and verifies when a hash is declared); later runs reuse the cached file.
 const result = await widget.tool.run("ocr", {
   args: ["--lang", "chi_sim", "shot.png"],
   timeout: 60000,
@@ -916,7 +918,7 @@ By default a widget can only show its own content: it can't go online, can't rea
 | `sharp` | `utools.sharp`: processing pictures in the host (users see a clear warning when allowing it) |
 | `ubrowser` | `utools.ubrowser`: fetching pages (users see a clear warning when allowing it) |
 | `shell.launch` | `widget.shell.launch`, `openWith`, `rename`, `pick`, `save`, `reveal`, `trash`, `info`, `paths`, `fileIcon`: opening programs and files, opening a link with a chosen program, renaming files in place, choosing files, choosing where to save, showing a file in Explorer, moving it to the recycle bin, reading names and icons (users see a clear warning when allowing it) |
-| `tool.exec` | `widget.tool.*`: downloading the CLI programs declared in `tools`, checking their SHA-256 and running them (users see a clear warning when allowing it; the download hosts need `network:` too) |
+| `tool.exec` | `widget.tool.*`: downloading the CLI programs declared in `tools`, checking their SHA-256 when declared, and running them (users see a clear warning when allowing it; the download hosts need `network:` too) |
 
 Reading a folder needs no permission: the widget can read only the pictures in the folder the user chose in its settings. See [`widget.files`](#a-folder-the-user-chose-widgetfiles).
 

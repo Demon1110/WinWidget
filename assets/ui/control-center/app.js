@@ -532,7 +532,7 @@ function permInfo(p) {
   if (p === "media") return { icon: "note", title: t("讀取和控制正在播放的媒體"), desc: t("看到正在播放的歌名、歌手和封面，可以播放、暫停和切換曲目。") };
   if (p === "clipboard") return { icon: "note", title: t("讀寫剪貼簿"), desc: t("讀取你複製的文字，或把文字放進剪貼簿。只在你信任這個組件時允許。"), warn: true };
   if (p === "screen") return { icon: "chip", title: t("擷取螢幕畫面"), desc: t("把整個螢幕截成圖片交給組件處理。只在你信任這個組件時允許。"), warn: true };
-  if (p === "tool.exec") return { icon: "tool", title: t("執行第三方工具"), desc: t("下載並執行組件宣告的命令列工具，會先核對 SHA-256。只在你信任這個組件時允許。"), warn: true };
+  if (p === "tool.exec") return { icon: "tool", title: t("執行第三方工具"), desc: t("下載並執行組件宣告的命令列工具，有宣告 SHA-256 時會先核對。只在你信任這個組件時允許。"), warn: true };
   const h = p.slice(8);
   if (h === "*") return { icon: "globe", title: t("連到任何網站"), desc: t("可以和任何網站收發資料。"), warn: true };
   if (h.startsWith("*.")) return { icon: "globe", title: t("連到 {host} 和它的子網域", { host: h.slice(2) }), desc: t("和這些網站收發資料。") };

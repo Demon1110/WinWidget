@@ -47,7 +47,8 @@ declare namespace WinWidget {
     name: string;
     filename: string;
     url: string;
-    sha256: string;
+    /** The declared SHA-256, or null when the widget did not provide one. */
+    sha256: string | null;
     /** The expected size from widget.json, if the widget declared one. */
     size: number | null;
     /** Full path under the widget's bin folder (or the data folder for built-in widgets). */
@@ -511,8 +512,8 @@ declare namespace WinWidget {
 
     /**
      * Third-party CLI programs declared in widget.json "tools". The host downloads each https URL
-     * into the widget's bin folder, checks its SHA-256, then runs it. Needs "tool.exec" and the
-     * matching "network:<host>" permission.
+     * into the widget's bin folder, checks its SHA-256 when one is declared, then runs it. Needs
+     * "tool.exec" and the matching "network:<host>" permission.
      */
     tool: {
       list(): Promise<ToolInfo[]>;

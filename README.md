@@ -24,7 +24,7 @@
 - **单实例**：第二次启动不会起两个进程，而是把已在运行的实例的控制中心唤到前台。
 - **组件包（`.fwz`）**：支持拖拽到控制中心安装、导出、卸载，注册 `HKCU\Software\Classes\.fwz` 后双击即可安装。
 - **权限模型**：组件在 `widget.json` 里声明所需能力（文件、媒体、系统信息、音频等），首次使用时由控制中心授权，未授权的能力调用直接失败。
-- **第三方 CLI 工具**：组件在 `widget.json` 的 `tools` 里声明 exe 的 HTTPS 地址和 SHA-256，宿主按需下载到组件的 `bin` 目录，校验后不经 shell 执行，返回退出码、stdout 和 stderr，方便扩展截屏、OCR、翻译等能力。
+- **第三方 CLI 工具**：组件在 `widget.json` 的 `tools` 里声明 exe 的 HTTPS 地址和可选 SHA-256，宿主按需下载到组件的 `bin` 目录，声明哈希时校验，随后不经 shell 执行，返回退出码、stdout 和 stderr，方便扩展截屏、OCR、翻译等能力。
 - **开发者模式**：改完组件文件保存即热重载，页面上自动重载 + 保留组件状态；同时打开 WebView2 devtools。
 - **低资源模式**：给 WebView2 追加 `--disable-gpu --disable-gpu-compositing` 等参数，降低显存与 CPU 占用。
 - **全屏自动隐藏**：用 Windows 自己的 `SHQueryUserNotificationState` 判断是否有全屏应用/演示在跑，全屏时收起全部卡片。

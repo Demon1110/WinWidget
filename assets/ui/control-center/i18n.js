@@ -187,7 +187,7 @@ const PHRASES = [
   ["打開你電腦上的程式、資料夾和檔案，並讀取它們的名稱和圖標。只在你信任這個組件時允許。", "打开你电脑上的程序、文件夹和文件，并读取它们的名称和图标。只在你信任这个组件时允许。", "Opens programs, folders and files on your PC, and reads their names and icons. Allow it only for widgets you trust."],
   ["剪貼簿", "剪贴板", "clipboard"],
   ["執行第三方工具", "运行第三方工具", "run third-party tools"],
-  ["下載並執行組件宣告的命令列工具，會先核對 SHA-256。只在你信任這個組件時允許。", "下载并运行组件声明的命令行工具，会先核对 SHA-256。只在你信任这个组件时允许。", "Downloads and runs CLI tools declared by the widget, checking their SHA-256 first. Allow it only for widgets you trust."],
+  ["下載並執行組件宣告的命令列工具，有宣告 SHA-256 時會先核對。只在你信任這個組件時允許。", "下载并运行组件声明的命令行工具，声明了 SHA-256 时会先核对。只在你信任这个组件时允许。", "Downloads and runs CLI tools declared by the widget, checking SHA-256 when one is declared. Allow it only for widgets you trust."],
   ["螢幕擷取", "屏幕截取", "screen capture"],
   ["讀寫剪貼簿", "读写剪贴板", "Read and write the clipboard"],
   ["讀取你複製的文字，或把文字放進剪貼簿。只在你信任這個組件時允許。", "读取你复制的文字，或把文字放进剪贴板。只在你信任这个组件时允许。", "Reads the text you copied, or puts text into the clipboard. Allow it only for widgets you trust."],

@@ -705,7 +705,8 @@
 
     /**
      * Third-party CLI tools declared in widget.json "tools". The host downloads the https URL
-     * into the widget's bin folder, checks the SHA-256 and runs it without a shell.
+     * into the widget's bin folder, checks the SHA-256 when the declaration includes one, and
+     * runs it without a shell.
      * Needs "tool.exec" and the matching "network:<host>" permission.
      */
     tool: Object.freeze({

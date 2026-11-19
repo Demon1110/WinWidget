@@ -6,16 +6,16 @@
 //! "tools": [{
 //!   "name": "ocr",
 //!   "url": "https://example.com/ocr.exe",
-//!   "sha256": "…64 hex characters…",
+//!   "sha256": "…optional 64 hex characters…",
 //!   "filename": "ocr.exe"
 //! }],
 //! "permissions": ["tool.exec", "network:example.com"]
 //! ```
 //!
-//! The host downloads it once into `<widget folder>\bin`, verifies the SHA-256 and remembers the
-//! result in a small sidecar file. Later runs use the cached file. Execution never goes through a
-//! shell: the widget supplies an argument array, and the host captures stdout, stderr and the exit
-//! code with a timeout.
+//! The host downloads it once into `<widget folder>\bin`, verifies the SHA-256 when the
+//! declaration includes one, and remembers the result in a small sidecar file. Later runs use the
+//! cached file. Execution never goes through a shell: the widget supplies an argument array, and
+//! the host captures stdout, stderr and the exit code with a timeout.
 
 use crate::core::api::{Ctx, Reply};
 use crate::core::util::{jbool, jnum, jstr, req_str, BridgeError, BridgeResult};
@@ -177,7 +177,7 @@ fn status_value(dir: &Path, id: &str, spec: &ToolSpec) -> Value {
         "name": spec.name,
         "filename": file_name,
         "url": spec.url,
-        "sha256": spec.sha256.to_lowercase(),
+        "sha256": spec.sha256.as_ref().map(|s| s.to_lowercase()),
         "size": spec.size,
         "path": path.to_string_lossy(),
         "cached": cached,
@@ -235,12 +235,14 @@ fn ensure_tool(
             ));
         }
     }
-    if !actual.eq_ignore_ascii_case(&spec.sha256) {
-        let _ = std::fs::remove_file(&part);
-        return Err(format!(
-            "tool \"{}\" failed its SHA-256 check (got {actual})",
-            spec.name
-        ));
+    if let Some(expected) = &spec.sha256 {
+        if !actual.eq_ignore_ascii_case(expected) {
+            let _ = std::fs::remove_file(&part);
+            return Err(format!(
+                "tool \"{}\" failed its SHA-256 check (got {actual})",
+                spec.name
+            ));
+        }
     }
 
     // Windows refuses a rename over an existing file. The verified .part is complete at this point,
@@ -266,11 +268,15 @@ fn cached_tool(path: &Path, meta: &Path, spec: &ToolSpec) -> Result<Option<Prepa
         }));
     }
 
-    // No sidecar, or the file changed since we verified it. Hash the existing file before deciding
-    // to download again; a file that already matches does not need another request.
-    let actual = sha256_file(path)?;
+    // No sidecar, or the file changed since we verified it. When a hash is declared, hash the
+    // existing file before deciding to download again; without one there is nothing to compare.
     let size = file_len(path);
-    if actual.eq_ignore_ascii_case(&spec.sha256) && spec.size.map(|n| n == size).unwrap_or(true) {
+    let size_matches = spec.size.map(|n| n == size).unwrap_or(true);
+    let hash_matches = match &spec.sha256 {
+        Some(expected) => sha256_file(path)?.eq_ignore_ascii_case(expected),
+        None => true,
+    };
+    if size_matches && hash_matches {
         let _ = write_meta(path, spec);
         return Ok(Some(Prepared {
             path: path.to_path_buf(),
@@ -285,7 +291,7 @@ fn cached_tool(path: &Path, meta: &Path, spec: &ToolSpec) -> Result<Option<Prepa
 #[serde(rename_all = "camelCase")]
 struct CachedMeta {
     url: String,
-    sha256: String,
+    sha256: Option<String>,
     size: u64,
     mtime: u64,
 }
@@ -309,8 +315,13 @@ fn cache_is_fresh(path: &Path, spec: &ToolSpec) -> Result<bool, String> {
         Err(_) => return Ok(false),
     };
     let size = file.len();
+    let hash_matches = match (&meta.sha256, &spec.sha256) {
+        (Some(a), Some(b)) => a.eq_ignore_ascii_case(b),
+        (None, None) => true,
+        _ => false,
+    };
     if !meta.url.eq_ignore_ascii_case(&spec.url)
-        || !meta.sha256.eq_ignore_ascii_case(&spec.sha256)
+        || !hash_matches
         || meta.size != size
         || meta.mtime != mtime_stamp(&file)
         || spec.size.map(|n| n != size).unwrap_or(false)
@@ -324,7 +335,7 @@ fn write_meta(path: &Path, spec: &ToolSpec) -> Result<(), String> {
     let file = std::fs::metadata(path).map_err(|e| e.to_string())?;
     let meta = CachedMeta {
         url: spec.url.clone(),
-        sha256: spec.sha256.to_lowercase(),
+        sha256: spec.sha256.as_ref().map(|s| s.to_lowercase()),
         size: file.len(),
         mtime: mtime_stamp(&file),
     };
@@ -825,8 +836,18 @@ mod tests {
         assert!(third.downloaded);
 
         let mut bad = spec.clone();
-        bad.sha256 = "0".repeat(64);
+        bad.sha256 = Some("0".repeat(64));
         assert!(super::ensure_tool(&manifest.dir, &manifest.id, &allowed, &bad, true).is_err());
+
+        // Without a declared hash the download still succeeds and the sidecar keeps the cache fresh.
+        let mut no_hash = spec.clone();
+        no_hash.sha256 = None;
+        let fourth =
+            super::ensure_tool(&manifest.dir, &manifest.id, &allowed, &no_hash, true).unwrap();
+        assert!(fourth.downloaded);
+        let fifth =
+            super::ensure_tool(&manifest.dir, &manifest.id, &allowed, &no_hash, false).unwrap();
+        assert!(!fifth.downloaded, "an unhashed cache should be reused");
         let _ = std::fs::remove_dir_all(dir);
     }
 }
