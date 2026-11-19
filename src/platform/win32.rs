@@ -849,13 +849,14 @@ pub fn place_above_desktop(hwnd: HWND) {
         // Directly above the desktop and below every ordinary window, the way the shell stacks a
         // desktop widget.
         let above = GetWindow(prog, GW_HWNDPREV);
+        // Already the window immediately above Progman: restacking would use HWND_TOP and lift the
+        // card above ordinary windows, or (when the owner link is stale) push it behind the wallpaper.
+        if above == hwnd {
+            return;
+        }
         SetWindowPos(
             hwnd,
-            if above != 0 && above != hwnd {
-                above
-            } else {
-                HWND_TOP
-            },
+            if above != 0 { above } else { HWND_TOP },
             rect.left,
             rect.top,
             rect.width(),
@@ -865,6 +866,31 @@ pub fn place_above_desktop(hwnd: HWND) {
         // Restacking re-composites the window, which is one of the moments DWM is happy to paint
         // its caption again: re-state the policy every time the card goes back to the desktop.
         disable_nc_rendering(hwnd);
+    }
+}
+
+/// Puts a desktop card back below ordinary windows after Windows activates it, without changing its
+/// owner or style. This is the activation path; the full `place_above_desktop` also re-parents and
+/// resizes, which is the wrong thing to do while the user is clicking inside a card.
+pub fn restack_above_desktop(hwnd: HWND) {
+    let prog = progman();
+    if prog == 0 {
+        return;
+    }
+    unsafe {
+        let above = GetWindow(prog, GW_HWNDPREV);
+        if above == 0 || above == hwnd {
+            return;
+        }
+        SetWindowPos(
+            hwnd,
+            above,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+        );
     }
 }
 

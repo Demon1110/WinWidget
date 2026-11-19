@@ -250,6 +250,7 @@ impl WidgetWin {
         }
         if layer != self.layer {
             self.layer = layer.to_string();
+            set_meta_layer(hwnd, layer);
             match layer {
                 "desktop" => {
                     // Leaving the topmost band first: a card that is still topmost sits above every
@@ -386,7 +387,7 @@ pub fn build(
     w::extend_frame(hwnd);
     w::disable_nc_rendering(hwnd);
     install_proc(hwnd);
-    remember(hwnd, &inst.id, proxy.clone());
+    remember(hwnd, &inst.id, proxy.clone(), &inst.layer);
     if inst.layer == "desktop" {
         w::place_above_desktop(hwnd);
     }
@@ -511,6 +512,8 @@ fn old_procs() -> &'static Mutex<HashMap<usize, isize>> {
 struct WindowMeta {
     instance: String,
     proxy: tao::event_loop::EventLoopProxy<Ev>,
+    /// Current layer, so the window procedure can put a desktop card back after activation.
+    layer: String,
     /// When this window last reported its size to the app (`WM_SIZE` throttling).
     last_bounds: std::time::Instant,
 }
@@ -520,18 +523,43 @@ fn meta() -> &'static Mutex<HashMap<usize, WindowMeta>> {
     META.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-fn remember(hwnd: w::HWND, instance: &str, proxy: tao::event_loop::EventLoopProxy<Ev>) {
+fn remember(
+    hwnd: w::HWND,
+    instance: &str,
+    proxy: tao::event_loop::EventLoopProxy<Ev>,
+    layer: &str,
+) {
     if let Ok(mut map) = meta().lock() {
         map.insert(
             hwnd as usize,
             WindowMeta {
                 instance: instance.to_string(),
                 proxy,
+                layer: layer.to_string(),
                 // The web view is already built at the right size, so the first report may wait a frame.
                 last_bounds: std::time::Instant::now(),
             },
         );
     }
+}
+
+fn set_meta_layer(hwnd: w::HWND, layer: &str) {
+    if let Ok(mut map) = meta().lock() {
+        if let Some(meta) = map.get_mut(&(hwnd as usize)) {
+            meta.layer = layer.to_string();
+        }
+    }
+}
+
+fn is_desktop_layer(hwnd: w::HWND) -> bool {
+    meta()
+        .lock()
+        .ok()
+        .and_then(|map| {
+            map.get(&(hwnd as usize))
+                .map(|meta| meta.layer == "desktop")
+        })
+        .unwrap_or(false)
 }
 
 fn previous_proc(hwnd: w::HWND) -> isize {
@@ -724,8 +752,13 @@ unsafe extern "system" fn card_proc(hwnd: w::HWND, msg: u32, wp: usize, lp: isiz
             w::extend_frame(hwnd);
             w::disable_nc_rendering(hwnd);
         }
+        // Windows raises the activated window to the top of the non-topmost band. A desktop card
+        // must stay directly above the desktop instead, so put it back without activating it again.
         w::WM_ACTIVATE => {
             w::disable_nc_rendering(hwnd);
+            if wp != 0 && is_desktop_layer(hwnd) {
+                w::restack_above_desktop(hwnd);
+            }
         }
         // Activating a card — a click — is the moment the frame would be painted: the caption strip
         // across the top and the 1px border around the card. The card has no non-client area at all,
