@@ -80,6 +80,32 @@ pub fn icon_data_url(manifest: &Manifest, size: u32) -> Option<String> {
     Some(value)
 }
 
+/// Preview files are authored as WebP, but a PNG/JPEG next to it is accepted as a fallback so
+/// widgets can ship before a converter is available.
+fn preview_candidates(rel: &str) -> Vec<String> {
+    let mut out = vec![rel.to_string()];
+    let path = std::path::Path::new(rel);
+    let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
+        return out;
+    };
+    if !ext.eq_ignore_ascii_case("webp") {
+        return out;
+    }
+    let Some(stem) = rel.strip_suffix(ext) else {
+        return out;
+    };
+    for alt in ["png", "jpg", "jpeg"] {
+        out.push(format!("{stem}{alt}"));
+    }
+    out
+}
+
+fn existing_preview(manifest: &Manifest, rel: &str) -> Option<String> {
+    preview_candidates(&rel.replace('\\', "/"))
+        .into_iter()
+        .find(|candidate| crate::core::assets::file_exists(&manifest.dir, candidate))
+}
+
 /// Where the picture in the library comes from.
 pub fn preview_url(manifest: &Manifest, theme: &str, lang: &str) -> Option<String> {
     let template = manifest.preview.as_deref()?.trim();
@@ -90,9 +116,7 @@ pub fn preview_url(manifest: &Manifest, theme: &str, lang: &str) -> Option<Strin
         .replace("{theme}", theme)
         .replace("{lang}", lang)
         .replace('\\', "/");
-    if !crate::core::assets::file_exists(&manifest.dir, &rel) {
-        return None;
-    }
+    let rel = existing_preview(manifest, &rel)?;
     let folder = manifest
         .dir
         .file_name()
@@ -143,7 +167,7 @@ fn collect_previews(manifest: &Manifest, template: &str, themes: &[String]) -> V
     };
     let langs = ["zh-TW", "zh-CN", "en"];
     let mut push = |rel: String| {
-        if crate::core::assets::file_exists(&manifest.dir, &rel) {
+        if let Some(rel) = existing_preview(manifest, &rel) {
             let kind = if manifest.builtin { "builtin" } else { "user" };
             out.push(format!(
                 "/__preview/{kind}/{folder}/{rel}?v={}",
@@ -166,4 +190,59 @@ fn collect_previews(manifest: &Manifest, template: &str, themes: &[String]) -> V
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{preview_candidates, preview_url, Manifest};
+
+    #[test]
+    fn webp_preview_falls_back_to_png_then_jpeg() {
+        assert_eq!(
+            preview_candidates("preview/device.webp"),
+            vec![
+                "preview/device.webp",
+                "preview/device.png",
+                "preview/device.jpg",
+                "preview/device.jpeg"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_png_preview_is_not_rewritten() {
+        assert_eq!(
+            preview_candidates("preview/device.png"),
+            vec!["preview/device.png"]
+        );
+        assert_eq!(
+            preview_candidates("preview/no-extension"),
+            vec!["preview/no-extension"]
+        );
+    }
+
+    #[test]
+    fn a_missing_webp_falls_back_to_the_png_on_disk() {
+        let dir = std::env::temp_dir().join(format!(
+            "winwidget-preview-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(dir.join("preview")).expect("create the preview folder");
+        std::fs::write(dir.join("preview/preview.png"), b"png").expect("write a fake png");
+
+        let manifest = Manifest {
+            dir: dir.clone(),
+            preview: Some("preview/preview.webp".into()),
+            ..Manifest::default()
+        };
+
+        let url = preview_url(&manifest, "instrument", "zh-CN").expect("a png should be accepted");
+        assert!(url.contains("preview/preview.png"), "{url}");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
