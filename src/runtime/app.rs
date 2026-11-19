@@ -792,11 +792,24 @@ impl App {
     /// The page inside a custom window said `ready`: that is what `createBrowserWindow`'s callback
     /// waits for, so the creator hears about it now.
     pub fn mark_custom_loaded(&mut self, id: u32) {
-        if let Some(win) = self.customs.get_mut(&id) {
+        // A page that asked for click-through set it at creation time, but WebView2 builds its
+        // child HWNDs asynchronously — often after `ready`. Re-apply now that the subtree exists,
+        // otherwise those late children eat the mouse and the effect blocks the desktop beneath.
+        let click_through = if let Some(win) = self.customs.get_mut(&id) {
             if win.loaded {
                 return;
             }
             win.loaded = true;
+            if win.ignore_mouse {
+                Some(win.hwnd())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        if let Some(hwnd) = click_through {
+            crate::platform::win32::set_click_through(hwnd, true);
         }
         let Some(parent) = self.customs.get(&id).map(|win| win.parent.clone()) else {
             return;
