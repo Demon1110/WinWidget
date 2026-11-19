@@ -683,6 +683,10 @@
       open: (target) => call("shell.open", { target }),
       /** Opens a program, shortcut, folder or file by its full path. Needs "shell.launch". */
       launch: (path) => call("shell.launch", { path }),
+      /** Opens a link with a specific program, e.g. a chosen browser. Needs "shell.launch". */
+      openWith: (target, app) => call("shell.openWith", { target, app }),
+      /** Renames files in place: [{ from, to }]; "to" must stay in the same folder. Needs "shell.launch". */
+      rename: (items) => call("shell.rename", { items: [...(items || [])] }),
       /** { path, exists, name, kind: "app"|"folder"|"file"|"missing", icon: data URL }. Needs "shell.launch". */
       info: (path, options) => call("shell.info", { path, size: (options && options.size) || 64 }),
       /** A file or folder dialog: pick({ type: "file"|"folder", filter: "programs"|"images"|"all", title }) → path or null. */
@@ -695,6 +699,8 @@
       paths: (files) => callWithFiles("shell.paths", {}, [...(files || [])]),
       /** Moves a file or folder to the recycle bin. Needs "shell.launch". */
       trash: (path) => call("shell.trash", { path }),
+      /** Explorer desktop icons: "query" | "show" | "hide" | "toggle" → { supported, visible }. Needs "shell.launch". */
+      desktopIcons: (action) => call("shell.desktopIcons", { action: String(action || "query") }),
     }),
 
     /** The Windows clipboard; needs the "clipboard" permission. */

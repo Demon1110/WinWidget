@@ -55,6 +55,155 @@ pub fn open_any(target: &str) -> Result<(), String> {
     open_path(target)
 }
 
+/// Opens a link with a specific program: the browser chooser for the web launcher.
+/// `app` is the browser's full path; the URL is passed as its command-line argument.
+pub fn open_with(target: &str, app: &str) -> Result<(), String> {
+    let app = crate::core::paths::expand_env(app);
+    if !Path::new(&app).is_file() {
+        return Err(format!("{app} is not a program"));
+    }
+    let target = target.trim();
+    if target.is_empty() {
+        return Err("missing target".into());
+    }
+    if !is_link(target) && !Path::new(&crate::core::paths::expand_env(target)).exists() {
+        return Err(format!("{target} does not exist"));
+    }
+    shell_execute_with(&app, target)
+}
+
+fn shell_execute_with(app: &str, params: &str) -> Result<(), String> {
+    use crate::platform::win32 as w;
+    let op = w::wide("open");
+    let file = w::wide(app);
+    let args = w::wide(params);
+    let result = unsafe {
+        w::ShellExecuteW(
+            0,
+            op.as_ptr(),
+            file.as_ptr(),
+            args.as_ptr(),
+            std::ptr::null(),
+            1,
+        )
+    };
+    if result as usize > 32 {
+        Ok(())
+    } else {
+        Err(format!("Windows could not open \"{params}\" with \"{app}\""))
+    }
+}
+
+/// Renames files in place. The new name must stay in the same folder, may not already exist,
+/// and must be a legal Windows name; the page is expected to show a preview before calling this.
+pub fn rename(items: &[Value]) -> Value {
+    let mut results = Vec::new();
+    let mut all_ok = true;
+    for item in items.iter().take(500) {
+        let from = item.get("from").and_then(Value::as_str).unwrap_or_default();
+        let to = item.get("to").and_then(Value::as_str).unwrap_or_default();
+        let result = rename_one(from, to);
+        if result.is_err() {
+            all_ok = false;
+        }
+        results.push(json!({
+            "from": from,
+            "to": to,
+            "ok": result.is_ok(),
+            "error": result.err(),
+        }));
+    }
+    if items.len() > 500 {
+        all_ok = false;
+        results.push(json!({
+            "from": "",
+            "to": "",
+            "ok": false,
+            "error": "a batch may contain at most 500 files",
+        }));
+    }
+    json!({ "ok": all_ok, "items": results })
+}
+
+fn rename_one(from: &str, to: &str) -> Result<(), String> {
+    let from = crate::core::paths::expand_env(from);
+    let to = crate::core::paths::expand_env(to);
+    if from.trim().is_empty() || to.trim().is_empty() {
+        return Err("missing path".into());
+    }
+
+    let from_path = Path::new(&from);
+    if !from_path.exists() {
+        return Err(format!("{from} does not exist"));
+    }
+    if from_path == Path::new(&to) {
+        return Ok(());
+    }
+
+    let to_path = Path::new(&to);
+    let Some(name) = to_path.file_name().and_then(|n| n.to_str()) else {
+        return Err("the new name is empty".into());
+    };
+    if name.chars().any(|c| c < ' ' || "<>:\"/\\|?*".contains(c)) {
+        return Err(format!("\"{name}\" is not a legal Windows file name"));
+    }
+    if name.ends_with(' ') || name.ends_with('.') {
+        return Err("a Windows file name may not end with a space or a dot".into());
+    }
+    if is_reserved_name(name) {
+        return Err(format!("\"{name}\" is reserved by Windows"));
+    }
+
+    let Some(from_dir) = from_path.parent() else {
+        return Err("the source has no folder".into());
+    };
+    let Some(to_dir) = to_path.parent() else {
+        return Err("the target has no folder".into());
+    };
+    let a = from_dir
+        .canonicalize()
+        .map_err(|e| format!("cannot read the source folder: {e}"))?;
+    let b = to_dir
+        .canonicalize()
+        .map_err(|e| format!("cannot read the target folder: {e}"))?;
+    if !same_path(&a, &b) {
+        return Err("renaming may not move a file to another folder".into());
+    }
+
+    if to_path.exists() {
+        let same = from_path
+            .canonicalize()
+            .ok()
+            .zip(to_path.canonicalize().ok())
+            .map(|(x, y)| same_path(&x, &y))
+            .unwrap_or(false);
+        if !same {
+            return Err(format!("{name} already exists"));
+        }
+    }
+
+    std::fs::rename(from_path, to_path).map_err(|e| format!("{name}: {e}"))
+}
+
+fn same_path(a: &Path, b: &Path) -> bool {
+    a == b
+        || a.to_string_lossy()
+            .eq_ignore_ascii_case(&b.to_string_lossy())
+}
+
+fn is_reserved_name(name: &str) -> bool {
+    let stem = name.split('.').next().unwrap_or("").trim().to_ascii_uppercase();
+    if ["CON", "PRN", "AUX", "NUL"].contains(&stem.as_str()) {
+        return true;
+    }
+    if stem.len() == 4 {
+        if let Some(n) = stem.strip_prefix("COM").or_else(|| stem.strip_prefix("LPT")) {
+            return n.chars().all(|c| c.is_ascii_digit()) && !n.starts_with('0');
+        }
+    }
+    false
+}
+
 fn shell_execute(target: &str) -> Result<(), String> {
     use crate::platform::win32 as w;
     let op = w::wide("open");
@@ -298,6 +447,7 @@ pub fn icon(spec: &str, size: i32) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn icon_rejects_names_that_are_not_paths_or_extensions() {
@@ -342,5 +492,88 @@ mod tests {
         for text in [r"D:\java\git", "/home/user", "C:a.txt", ""] {
             assert!(!is_link(text), "{text} should not be a link");
         }
+    }
+
+    fn scratch_dir(tag: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "winwidget-rename-{tag}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn renames_a_file_in_place() {
+        let dir = scratch_dir("ok");
+        let from = dir.join("before.txt");
+        let to = dir.join("after.txt");
+        std::fs::write(&from, "x").unwrap();
+        let report = rename(&[json!({
+            "from": from.to_string_lossy(),
+            "to": to.to_string_lossy(),
+        })]);
+        assert_eq!(report["ok"], true, "{report}");
+        assert!(!from.exists());
+        assert!(to.exists());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn refuses_to_overwrite_an_existing_target() {
+        let dir = scratch_dir("exists");
+        let from = dir.join("a.txt");
+        let to = dir.join("b.txt");
+        std::fs::write(&from, "a").unwrap();
+        std::fs::write(&to, "b").unwrap();
+        let report = rename(&[json!({
+            "from": from.to_string_lossy(),
+            "to": to.to_string_lossy(),
+        })]);
+        assert_eq!(report["ok"], false, "{report}");
+        assert!(report["items"][0]["error"]
+            .as_str()
+            .unwrap()
+            .contains("already exists"));
+        assert!(from.exists());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn refuses_to_move_across_folders() {
+        let dir = scratch_dir("cross");
+        let other = dir.join("other");
+        std::fs::create_dir_all(&other).unwrap();
+        let from = dir.join("a.txt");
+        let to = other.join("a.txt");
+        std::fs::write(&from, "a").unwrap();
+        let report = rename(&[json!({
+            "from": from.to_string_lossy(),
+            "to": to.to_string_lossy(),
+        })]);
+        assert_eq!(report["ok"], false, "{report}");
+        assert!(report["items"][0]["error"]
+            .as_str()
+            .unwrap()
+            .contains("another folder"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn refuses_an_illegal_windows_name() {
+        let dir = scratch_dir("illegal");
+        let from = dir.join("a.txt");
+        let to = dir.join("bad:name.txt");
+        std::fs::write(&from, "a").unwrap();
+        let report = rename(&[json!({
+            "from": from.to_string_lossy(),
+            "to": to.to_string_lossy(),
+        })]);
+        assert_eq!(report["ok"], false, "{report}");
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
