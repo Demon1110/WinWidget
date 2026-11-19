@@ -650,6 +650,22 @@
       pick: (key) => call("files.pick", { key }),
     }),
 
+    /**
+     * Paired Bluetooth devices; needs the "bluetooth" permission.
+     * list({ battery, refresh }) → { supported, adapter, devices, updated, error }.
+     * Each device: { id, name, address, kind, connected, paired, le, battery, major, minor }.
+     * `kind` is one of audio, phone, computer, keyboard, mouse, peripheral, wearable, network,
+     * imaging, toy, health, other; `battery` is 0–100 or null when the device does not expose
+     * the standard GATT battery service.
+     */
+    bluetooth: Object.freeze({
+      list: (options) =>
+        call("bluetooth.list", {
+          battery: !options || options.battery !== false,
+          refresh: !!(options && options.refresh),
+        }),
+    }),
+
     /** Built-in widgets only. */
     recycleBin: Object.freeze({
       query: () => call("recycle.query"),

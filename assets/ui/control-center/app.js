@@ -511,6 +511,7 @@ function permName(p) {
   if (p === "shell.open") return t("打開網址");
   if (p === "notify") return t("通知");
   if (p === "audio") return t("音量");
+  if (p === "bluetooth") return t("藍牙裝置");
   if (p === "media") return t("媒體播放");
   if (p === "clipboard") return t("剪貼簿");
   if (p === "screen") return t("螢幕擷取");
@@ -526,6 +527,7 @@ function permInfo(p) {
   if (p === "notify") return { icon: "bell", title: t("顯示通知"), desc: t("在螢幕角落彈出 Windows 通知，例如時間到了。") };
   if (p === "shell.launch") return { icon: "open", title: t("打開程式和檔案"), desc: t("打開你電腦上的程式、資料夾和檔案，並讀取它們的名稱和圖標。只在你信任這個組件時允許。"), warn: true };
   if (p === "audio") return { icon: "speaker", title: t("調整音量"), desc: t("讀取和改變系統音量，也可以靜音。") };
+  if (p === "bluetooth") return { icon: "bluetooth", title: t("讀取藍牙裝置"), desc: t("列出已配對的藍牙裝置、連線狀態與電量。") };
   if (p === "media") return { icon: "note", title: t("讀取和控制正在播放的媒體"), desc: t("看到正在播放的歌名、歌手和封面，可以播放、暫停和切換曲目。") };
   if (p === "clipboard") return { icon: "note", title: t("讀寫剪貼簿"), desc: t("讀取你複製的文字，或把文字放進剪貼簿。只在你信任這個組件時允許。"), warn: true };
   if (p === "screen") return { icon: "chip", title: t("擷取螢幕畫面"), desc: t("把整個螢幕截成圖片交給組件處理。只在你信任這個組件時允許。"), warn: true };
@@ -542,6 +544,7 @@ const PERM_ICONS = {
   globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 2.4 3.6 5.2 3.6 8.5s-1 6.1-3.6 8.5c-2.6-2.4-3.6-5.2-3.6-8.5s1-6.1 3.6-8.5z"/>',
   open: '<path d="M13 4.5h6.5V11M19.5 4.5 11 13"/><path d="M10 6.5H4.5v13h13V14"/>',
   note: '<path d="M9.5 17.5V6l9-2v11.5"/><circle cx="7" cy="17.5" r="2.5"/><circle cx="16" cy="15.5" r="2.5"/>',
+  bluetooth: '<path d="M12 3.5v17l5.5-4.2L7 8M12 3.5l5.5 4.2L7 16"/>',
 };
 
 function permList(list, fresh = [], unknown = []) {

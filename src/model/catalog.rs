@@ -108,6 +108,7 @@ fn builtin_order(id: &str) -> usize {
         "winwidget.battery",
         "winwidget.network",
         "winwidget.pcinfo",
+        "winwidget.bluetooth",
         "winwidget.recyclebin",
         "winwidget.volume",
         "winwidget.power",

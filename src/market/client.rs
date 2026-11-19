@@ -233,3 +233,26 @@ pub fn open(app: &App, url: Option<String>) -> Result<(), String> {
     };
     crate::platform::shell::open(&target)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_default_page_is_the_web_market() {
+        assert_eq!(page_of(None), MARKET_SITE);
+        assert_eq!(page_of(Some("   ")), MARKET_SITE);
+        assert_eq!(page_of(Some(MARKET_SITE)), MARKET_SITE);
+    }
+
+    #[test]
+    fn a_json_market_url_opens_the_folder_that_holds_it() {
+        assert_eq!(
+            page_of(Some(
+                "https://demon1110.github.io/WinWidgetHub/widgets.json"
+            )),
+            "https://demon1110.github.io/WinWidgetHub"
+        );
+        assert_eq!(page_of(Some("widgets.json")), MARKET_SITE);
+    }
+}

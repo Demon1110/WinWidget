@@ -3,6 +3,7 @@
 
 pub mod adapters;
 pub mod audio;
+pub mod bluetooth;
 pub mod chinese;
 pub mod files;
 pub mod guides;
