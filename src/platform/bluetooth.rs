@@ -5,12 +5,12 @@
 //! MTA apartment (`co_initialize_mta`), never on the event loop's STA.
 
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use windows::core::{HSTRING, GUID};
 use windows::Devices::Bluetooth::GenericAttributeProfile::GattCommunicationStatus;
-use windows::Devices::Bluetooth::{BluetoothDevice, BluetoothLEDevice};
+use windows::Devices::Bluetooth::{BluetoothConnectionStatus, BluetoothDevice, BluetoothLEDevice};
 use windows::Devices::Enumeration::DeviceInformation;
 use windows::Devices::Radios::{Radio, RadioKind, RadioState};
 use windows::Storage::Streams::DataReader;
@@ -55,13 +55,16 @@ fn build(with_battery: bool) -> Value {
         crate::core::logging::warn("Bluetooth: worker could not enter an MTA apartment");
     }
     let (supported, adapter) = radio_state();
-    let mut devices: Vec<Value> = Vec::new();
+    let mut devices: Vec<Device> = Vec::new();
     let mut error: Option<String> = None;
     match enumerate() {
         Ok(found) => {
-            for info in &found {
-                if let Some(device) = describe(info, with_battery) {
-                    devices.push(device);
+            for (info, le) in &found {
+                let incoming = describe(info, *le, with_battery);
+                if let Some(existing) = devices.iter_mut().find(|d| d.same_as(&incoming)) {
+                    existing.absorb(incoming);
+                } else {
+                    devices.push(incoming);
                 }
             }
         }
@@ -70,83 +73,208 @@ fn build(with_battery: bool) -> Value {
             error = Some(message);
         }
     }
+    // Connected first, then by name, so the card's list is stable before its own sort runs.
+    devices.sort_by(|a, b| {
+        b.connected
+            .cmp(&a.connected)
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+    let list: Vec<Value> = devices.iter().map(Device::json).collect();
     json!({
         "supported": supported,
         "adapter": adapter,
-        "devices": devices,
+        "devices": list,
         "updated": now(),
         "error": error,
     })
 }
 
-fn enumerate() -> Result<Vec<DeviceInformation>, String> {
-    let selector = BluetoothDevice::GetDeviceSelectorFromPairingState(true)
-        .map_err(|e| format!("bluetooth selector: {e}"))?;
-    let operation =
-        DeviceInformation::FindAllAsyncAqsFilter(&selector).map_err(|e| format!("bluetooth query: {e}"))?;
-    let found = operation.get().map_err(|e| format!("bluetooth query: {e}"))?;
-    let size = found.Size().map_err(|e| format!("bluetooth query: {e}"))?;
+/// Windows keeps classic Bluetooth and Bluetooth LE in separate AEP protocols, each with its own
+/// pairing selector. Querying only the classic one (the old behaviour) silently drops LE mice,
+/// keyboards and earbuds that Windows Settings still lists as connected.
+fn enumerate() -> Result<Vec<(DeviceInformation, bool)>, String> {
+    let queries = [
+        (BluetoothDevice::GetDeviceSelectorFromPairingState(true), false),
+        (BluetoothLEDevice::GetDeviceSelectorFromPairingState(true), true),
+    ];
     let mut out = Vec::new();
-    for i in 0..size {
-        if let Ok(info) = found.GetAt(i) {
-            out.push(info);
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut failures: Vec<String> = Vec::new();
+    for (selector, le) in queries {
+        let selector = match selector {
+            Ok(selector) => selector,
+            Err(e) => {
+                failures.push(format!("bluetooth selector: {e}"));
+                continue;
+            }
+        };
+        let operation = match DeviceInformation::FindAllAsyncAqsFilter(&selector) {
+            Ok(operation) => operation,
+            Err(e) => {
+                failures.push(format!("bluetooth query: {e}"));
+                continue;
+            }
+        };
+        let found = match operation.get() {
+            Ok(found) => found,
+            Err(e) => {
+                failures.push(format!("bluetooth query: {e}"));
+                continue;
+            }
+        };
+        let size = match found.Size() {
+            Ok(size) => size,
+            Err(e) => {
+                failures.push(format!("bluetooth query: {e}"));
+                continue;
+            }
+        };
+        for i in 0..size {
+            let Ok(info) = found.GetAt(i) else { continue };
+            let key = info.Id().map(|id| id.to_string()).unwrap_or_default();
+            if key.is_empty() || !seen.insert(key) {
+                continue;
+            }
+            out.push((info, le));
         }
+    }
+    if out.is_empty() && !failures.is_empty() {
+        return Err(failures.join(" · "));
+    }
+    for failure in &failures {
+        crate::core::logging::warn(&format!("Bluetooth: {failure}"));
     }
     Ok(out)
 }
 
-fn describe(info: &DeviceInformation, with_battery: bool) -> Option<Value> {
-    let id = info.Id().ok()?;
-    let id_text = id.to_string();
+#[derive(Clone, Debug)]
+struct Device {
+    id: String,
+    name: String,
+    address: Option<String>,
+    kind: &'static str,
+    connected: bool,
+    le: bool,
+    major: i32,
+    minor: i32,
+    battery: Option<u8>,
+}
+
+impl Device {
+    /// Classic and LE endpoints of one physical device share a Bluetooth address; keep one row.
+    fn same_as(&self, other: &Device) -> bool {
+        match (&self.address, &other.address) {
+            (Some(a), Some(b)) => a == b,
+            _ => self.id == other.id,
+        }
+    }
+
+    fn absorb(&mut self, other: Device) {
+        if self.name.is_empty() {
+            self.name = other.name;
+        }
+        if self.address.is_none() {
+            self.address = other.address;
+        }
+        if other.connected && !self.connected {
+            self.connected = true;
+            self.id = other.id;
+        }
+        self.le |= other.le;
+        if self.kind == "other" && other.kind != "other" {
+            self.kind = other.kind;
+        }
+        if self.major == 0 && other.major != 0 {
+            self.major = other.major;
+            self.minor = other.minor;
+        }
+        if self.battery.is_none() {
+            self.battery = other.battery;
+        }
+    }
+
+    fn json(&self) -> Value {
+        json!({
+            "id": self.id,
+            "name": self.name,
+            "address": self.address,
+            "kind": self.kind,
+            "connected": self.connected,
+            "paired": true,
+            "le": self.le,
+            "major": self.major,
+            "minor": self.minor,
+            "battery": self.battery,
+        })
+    }
+}
+
+fn describe(info: &DeviceInformation, le: bool, with_battery: bool) -> Device {
+    let id_text = info.Id().map(|id| id.to_string()).unwrap_or_default();
     let name = info
         .Name()
         .map(|n| n.to_string())
         .unwrap_or_default()
         .trim()
         .to_string();
-    let le = id_text.to_ascii_lowercase().starts_with("bluetoothle#");
-    // The id is the only thing DeviceInformation guarantees; the class and the link state come
-    // from the device object, which may refuse for a device that is out of range.
-    let device = BluetoothDevice::FromIdAsync(&id)
-        .ok()
-        .and_then(|operation| operation.get().ok());
-    let connected = device
-        .as_ref()
-        .and_then(|d| d.ConnectionStatus().ok())
-        .map(|s| s.0 == 1)
-        .unwrap_or(false);
-    let (major, minor) = device
-        .as_ref()
-        .and_then(|d| d.ClassOfDevice().ok())
-        .map(|class| {
-            (
-                class.MajorClass().map(|m| m.0).unwrap_or(0),
-                class.MinorClass().map(|m| m.0).unwrap_or(0),
-            )
-        })
-        .unwrap_or((0, 0));
-    let address = device
-        .as_ref()
-        .and_then(|d| d.BluetoothAddress().ok())
-        .map(format_address);
+    let id = HSTRING::from(id_text.as_str());
+    let (connected, address, major, minor) = if le {
+        let device = BluetoothLEDevice::FromIdAsync(&id)
+            .ok()
+            .and_then(|operation| operation.get().ok());
+        let connected = device
+            .as_ref()
+            .and_then(|d| d.ConnectionStatus().ok())
+            .map(|s| s.0 == BluetoothConnectionStatus::Connected.0)
+            .unwrap_or(false);
+        let address = device
+            .as_ref()
+            .and_then(|d| d.BluetoothAddress().ok())
+            .map(format_address);
+        (connected, address, 0, 0)
+    } else {
+        let device = BluetoothDevice::FromIdAsync(&id)
+            .ok()
+            .and_then(|operation| operation.get().ok());
+        let connected = device
+            .as_ref()
+            .and_then(|d| d.ConnectionStatus().ok())
+            .map(|s| s.0 == BluetoothConnectionStatus::Connected.0)
+            .unwrap_or(false);
+        let (major, minor) = device
+            .as_ref()
+            .and_then(|d| d.ClassOfDevice().ok())
+            .map(|class| {
+                (
+                    class.MajorClass().map(|m| m.0).unwrap_or(0),
+                    class.MinorClass().map(|m| m.0).unwrap_or(0),
+                )
+            })
+            .unwrap_or((0, 0));
+        let address = device
+            .as_ref()
+            .and_then(|d| d.BluetoothAddress().ok())
+            .map(format_address);
+        (connected, address, major, minor)
+    };
+    let address = address.or_else(|| address_from_id(&id_text).map(format_address));
     let kind = kind_of(major, minor, &name);
     let battery = if with_battery && connected && le {
         battery_level(&id_text)
     } else {
         None
     };
-    Some(json!({
-        "id": id_text,
-        "name": name,
-        "address": address,
-        "kind": kind,
-        "connected": connected,
-        "paired": true,
-        "le": le,
-        "major": major,
-        "minor": minor,
-        "battery": battery,
-    }))
+    Device {
+        id: id_text,
+        name,
+        address,
+        kind,
+        connected,
+        le,
+        major,
+        minor,
+        battery,
+    }
 }
 
 /// AA:BB:CC:DD:EE:FF from the 48-bit address Windows reports.
@@ -157,6 +285,17 @@ fn format_address(address: u64) -> String {
         .map(|pair| String::from_utf8_lossy(pair).to_string())
         .collect::<Vec<_>>()
         .join(":")
+}
+
+/// The AEP id ends in the device's address (`…-13:08:AC:00:04:53`), which still identifies the
+/// device when `FromIdAsync` refuses because it is out of range.
+fn address_from_id(id: &str) -> Option<u64> {
+    let tail = id.rsplit('-').next()?;
+    let hex: String = tail.chars().filter(|c| c.is_ascii_hexdigit()).collect();
+    if hex.len() != 12 {
+        return None;
+    }
+    u64::from_str_radix(&hex, 16).ok()
 }
 
 fn kind_of(major: i32, minor: i32, name: &str) -> &'static str {
@@ -321,5 +460,50 @@ mod tests {
         assert_eq!(guess_kind("Logitech mouse"), "mouse");
         assert_eq!(guess_kind("Watch"), "wearable");
         assert_eq!(guess_kind("Mystery"), "other");
+    }
+
+    #[test]
+    fn the_id_carries_the_address() {
+        assert_eq!(
+            address_from_id("BluetoothLE#BluetoothLEdc:97:ba:9b:51:2b-13:08:AC:00:04:53"),
+            Some(0x1308_ac00_0453)
+        );
+        assert_eq!(
+            address_from_id("Bluetooth#Bluetoothdc:97:ba:9b:51:2b-20:ff:36:ec:49:cf"),
+            Some(0x20ff_36ec_49cf)
+        );
+        assert_eq!(address_from_id("not-a-device"), None);
+    }
+
+    #[test]
+    fn classic_and_le_endpoints_collapse_into_one_row() {
+        let mut classic = Device {
+            id: "Bluetooth#classic".into(),
+            name: "BT5.2 Mouse".into(),
+            address: Some("13:08:AC:00:04:53".into()),
+            kind: "other",
+            connected: false,
+            le: false,
+            major: 0,
+            minor: 0,
+            battery: None,
+        };
+        let le = Device {
+            id: "BluetoothLE#le".into(),
+            name: "BT5.2 Mouse".into(),
+            address: Some("13:08:AC:00:04:53".into()),
+            kind: "mouse",
+            connected: true,
+            le: true,
+            major: 0,
+            minor: 0,
+            battery: Some(100),
+        };
+        assert!(classic.same_as(&le));
+        classic.absorb(le);
+        assert!(classic.connected);
+        assert!(classic.le);
+        assert_eq!(classic.kind, "mouse");
+        assert_eq!(classic.battery, Some(100));
     }
 }
