@@ -108,7 +108,16 @@ impl SystemPort for NullPorts {
 
 impl BluetoothPort for NullPorts {
     fn list(&self, _with_battery: bool, _refresh: bool) -> serde_json::Value {
-        serde_json::json!([])
+        // Keep the same object shape as the real adapter. Widget code reads `result.supported`
+        // and `result.devices`; returning `[]` would leave both undefined and look like a
+        // supported adapter with no fields instead of an unsupported host.
+        serde_json::json!({
+            "supported": false,
+            "adapter": "missing",
+            "devices": [],
+            "updated": 0,
+            "error": null,
+        })
     }
 }
 
@@ -140,8 +149,17 @@ mod tests {
     }
 
     #[test]
-    fn null_bluetooth_port_returns_empty_list() {
+    fn null_bluetooth_port_returns_unsupported_snapshot() {
         let value = NullPorts.list(false, true);
-        assert_eq!(value, serde_json::json!([]));
+        assert_eq!(
+            value,
+            serde_json::json!({
+                "supported": false,
+                "adapter": "missing",
+                "devices": [],
+                "updated": 0,
+                "error": null,
+            })
+        );
     }
 }
