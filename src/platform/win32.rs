@@ -76,6 +76,7 @@ pub const GCLP_HBRBACKGROUND: i32 = -10;
 pub const WM_SIZE: u32 = 0x0005;
 pub const WM_ACTIVATE: u32 = 0x0006;
 pub const WM_SHOWWINDOW: u32 = 0x0018;
+pub const WM_WINDOWPOSCHANGING: u32 = 0x0046;
 pub const WM_NCCALCSIZE: u32 = 0x0083;
 pub const WM_NCPAINT: u32 = 0x0085;
 pub const WM_NCACTIVATE: u32 = 0x0086;
@@ -157,6 +158,18 @@ pub struct RECT {
     pub top: i32,
     pub right: i32,
     pub bottom: i32,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct WINDOWPOS {
+    pub hwnd: HWND,
+    pub hwnd_insert_after: HWND,
+    pub x: i32,
+    pub y: i32,
+    pub cx: i32,
+    pub cy: i32,
+    pub flags: u32,
 }
 
 impl RECT {
@@ -866,31 +879,6 @@ pub fn place_above_desktop(hwnd: HWND) {
         // Restacking re-composites the window, which is one of the moments DWM is happy to paint
         // its caption again: re-state the policy every time the card goes back to the desktop.
         disable_nc_rendering(hwnd);
-    }
-}
-
-/// Puts a desktop card back below ordinary windows after Windows activates it, without changing its
-/// owner or style. This is the activation path; the full `place_above_desktop` also re-parents and
-/// resizes, which is the wrong thing to do while the user is clicking inside a card.
-pub fn restack_above_desktop(hwnd: HWND) {
-    let prog = progman();
-    if prog == 0 {
-        return;
-    }
-    unsafe {
-        let above = GetWindow(prog, GW_HWNDPREV);
-        if above == 0 || above == hwnd {
-            return;
-        }
-        SetWindowPos(
-            hwnd,
-            above,
-            0,
-            0,
-            0,
-            0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-        );
     }
 }
 

@@ -752,13 +752,28 @@ unsafe extern "system" fn card_proc(hwnd: w::HWND, msg: u32, wp: usize, lp: isiz
             w::extend_frame(hwnd);
             w::disable_nc_rendering(hwnd);
         }
-        // Windows raises the activated window to the top of the non-topmost band. A desktop card
-        // must stay directly above the desktop instead, so put it back without activating it again.
+        // Windows raises the activated window to the top of the non-topmost band. Blocking that
+        // raise where it is requested is what keeps the card from flashing above an overlapping
+        // window for one frame. `WM_ACTIVATE` only keeps the frame policy in place; the z-order
+        // never moves, so there is nothing to put back.
+        w::WM_WINDOWPOSCHANGING => {
+            if is_desktop_layer(hwnd) && lp != 0 {
+                let pos = unsafe { &mut *(lp as *mut w::WINDOWPOS) };
+                // The activation raise is a no-move/no-size restack into the ordinary band. Our own
+                // desktop placement passes an explicit rectangle, and `HWND_TOPMOST`/`HWND_NOTOPMOST`
+                // band changes use a negative anchor; both must still be allowed through.
+                if pos.flags & w::SWP_NOZORDER == 0
+                    && pos.flags & (w::SWP_NOMOVE | w::SWP_NOSIZE)
+                        == (w::SWP_NOMOVE | w::SWP_NOSIZE)
+                    && pos.hwnd_insert_after >= 0
+                {
+                    pos.flags |= w::SWP_NOZORDER;
+                    return 0;
+                }
+            }
+        }
         w::WM_ACTIVATE => {
             w::disable_nc_rendering(hwnd);
-            if wp != 0 && is_desktop_layer(hwnd) {
-                w::restack_above_desktop(hwnd);
-            }
         }
         // Activating a card — a click — is the moment the frame would be painted: the caption strip
         // across the top and the 1px border around the card. The card has no non-client area at all,
