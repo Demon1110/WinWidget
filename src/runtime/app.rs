@@ -1297,6 +1297,10 @@ impl App {
         if let Some(inst) = self.instance_mut(instance_id) {
             inst.click_through = on;
         }
+        crate::core::logging::info(&format!(
+            "{instance_id}: click-through {}",
+            if on { "on" } else { "off" }
+        ));
         let payload = self
             .instance(instance_id)
             .cloned()

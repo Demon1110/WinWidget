@@ -57,6 +57,11 @@ pub const SWP_NOOWNERZORDER: u32 = 0x0200;
 pub const SWP_SHOWWINDOW: u32 = 0x0040;
 pub const SWP_HIDEWINDOW: u32 = 0x0080;
 
+pub const RDW_INVALIDATE: u32 = 0x0001;
+pub const RDW_FRAME: u32 = 0x0400;
+pub const RDW_ALLCHILDREN: u32 = 0x0080;
+pub const RDW_UPDATENOW: u32 = 0x0100;
+
 pub const GW_HWNDNEXT: u32 = 2;
 pub const GW_HWNDPREV: u32 = 3;
 pub const LWA_ALPHA: u32 = 0x0000_0002;
@@ -295,6 +300,7 @@ extern "system" {
     pub fn GetClassLongPtrW(hwnd: HWND, index: i32) -> isize;
     pub fn SetClassLongPtrW(hwnd: HWND, index: i32, value: isize) -> isize;
     pub fn InvalidateRect(hwnd: HWND, rect: *const RECT, erase: i32) -> i32;
+    pub fn RedrawWindow(hwnd: HWND, rect: *const RECT, region: isize, flags: u32) -> i32;
     pub fn SetParent(hwnd: HWND, parent: HWND) -> HWND;
     pub fn ScreenToClient(hwnd: HWND, point: *mut POINT) -> i32;
     pub fn ClientToScreen(hwnd: HWND, point: *mut POINT) -> i32;
@@ -1163,6 +1169,34 @@ pub fn set_click_through(hwnd: HWND, on: bool) {
     unsafe {
         set_transparent_ex(hwnd, on);
         EnumChildWindows(hwnd, Some(subtree_transparent), on as isize);
+    }
+}
+
+/// Repaint a card and its WebView after `WS_EX_TRANSPARENT` was flipped.
+///
+/// The style change only affects hit-testing, but it still makes DWM rebuild the window's frame
+/// and can leave the WebView's composition surface stale. The card then stays alive while looking
+/// blank or vanished. A frame-change and a full-tree redraw make the next composite use the live
+/// surface; the caller reasserts the layer afterwards.
+pub fn repaint_after_click_through(hwnd: HWND) {
+    unsafe {
+        SetWindowPos(
+            hwnd,
+            0,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+        );
+        RedrawWindow(
+            hwnd,
+            std::ptr::null(),
+            0,
+            RDW_INVALIDATE | RDW_FRAME | RDW_ALLCHILDREN | RDW_UPDATENOW,
+        );
+        // The frame change above is one of the moments DWM likes to paint the caption again.
+        disable_nc_rendering(hwnd);
     }
 }
 

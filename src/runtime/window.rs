@@ -244,6 +244,19 @@ impl WidgetWin {
         if click_through != self.click_through {
             self.click_through = click_through;
             w::set_click_through(hwnd, click_through);
+            // Flipping WS_EX_TRANSPARENT on the WebView subtree changes the composition surface
+            // without moving the window. DWM can then keep showing the old (or an empty) frame,
+            // and the card looks like it vanished until something else repaints it. Ask the whole
+            // subtree to repaint, and put the card back in its band in case the style flip let the
+            // desktop or the control center stack above it.
+            w::repaint_after_click_through(hwnd);
+            if layer == self.layer {
+                match layer {
+                    "desktop" => w::place_above_desktop(hwnd),
+                    "top" => w::set_topmost(hwnd, true),
+                    _ => w::set_topmost(hwnd, false),
+                }
+            }
         }
         if layer != self.layer {
             self.layer = layer.to_string();
