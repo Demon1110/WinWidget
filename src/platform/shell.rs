@@ -90,7 +90,9 @@ fn shell_execute_with(app: &str, params: &str) -> Result<(), String> {
     if result as usize > 32 {
         Ok(())
     } else {
-        Err(format!("Windows could not open \"{params}\" with \"{app}\""))
+        Err(format!(
+            "Windows could not open \"{params}\" with \"{app}\""
+        ))
     }
 }
 
@@ -192,12 +194,20 @@ fn same_path(a: &Path, b: &Path) -> bool {
 }
 
 fn is_reserved_name(name: &str) -> bool {
-    let stem = name.split('.').next().unwrap_or("").trim().to_ascii_uppercase();
+    let stem = name
+        .split('.')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_uppercase();
     if ["CON", "PRN", "AUX", "NUL"].contains(&stem.as_str()) {
         return true;
     }
     if stem.len() == 4 {
-        if let Some(n) = stem.strip_prefix("COM").or_else(|| stem.strip_prefix("LPT")) {
+        if let Some(n) = stem
+            .strip_prefix("COM")
+            .or_else(|| stem.strip_prefix("LPT"))
+        {
             return n.chars().all(|c| c.is_ascii_digit()) && !n.starts_with('0');
         }
     }

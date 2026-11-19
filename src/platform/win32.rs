@@ -1024,13 +1024,22 @@ pub fn set_desktop_icons_visible(visible: bool) -> Result<(), String> {
         return Err("未找到桌面图标窗口，请回到桌面后重试。".into());
     }
     unsafe {
-        ShowWindow(view, if visible { SW_SHOWNOACTIVATE_ALT } else { SW_HIDE });
+        ShowWindow(
+            view,
+            if visible {
+                SW_SHOWNOACTIVATE_ALT
+            } else {
+                SW_HIDE
+            },
+        );
     }
 
     use winreg::enums::HKEY_CURRENT_USER;
     use winreg::RegKey;
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    if let Ok((key, _)) = hkcu.create_subkey(r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced") {
+    if let Ok((key, _)) =
+        hkcu.create_subkey(r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced")
+    {
         let _ = key.set_value("HideIcons", &u32::from(!visible));
     }
     Ok(())
