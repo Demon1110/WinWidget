@@ -66,13 +66,22 @@ fn main() {
     paths::clean_stray_profile();
 
     text::set_locale("auto");
+    // WebView2 reads this when it starts its browser process, so it has to be set before the
+    // first web view exists, and it has to be process-wide: the browser process is created once
+    // per user-data folder and every later web view shares it, so per-window arguments would be
+    // silently ignored. Wallpaper windows sit BELOW the full-screen icon layer (SHELLDLL_DefView),
+    // and Chromium's native occlusion tracker then marks them fully occluded — the page goes
+    // document.hidden and requestAnimationFrame stops, so the effect "flashes" and never plays.
+    // The wry defaults are repeated here because a second --disable-features switch would
+    // override the first instead of merging with it.
+    let mut browser_args = String::from(
+        "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion",
+    );
+    browser_args.push_str(" --disable-backgrounding-occluded-windows");
     if config_low_resource() {
-        // WebView2 reads this when it starts its browser process, so it has to be set first.
-        std::env::set_var(
-            "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
-            "--disable-gpu --disable-gpu-compositing --js-flags=--lite-mode",
-        );
+        browser_args.push_str(" --disable-gpu --disable-gpu-compositing --js-flags=--lite-mode");
     }
+    std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", &browser_args);
 
     let event_loop: tao::event_loop::EventLoop<Ev> =
         EventLoopBuilder::<Ev>::with_user_event().build();
