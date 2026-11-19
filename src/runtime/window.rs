@@ -243,12 +243,10 @@ impl WidgetWin {
         }
         if click_through != self.click_through {
             self.click_through = click_through;
+            // Top-level only: Windows then skips this card and all of its children, while the
+            // WebView keeps its per-pixel-alpha surface intact. Toggling the style on the
+            // WebView's own children is what used to leave the card alive but invisible.
             w::set_click_through(hwnd, click_through);
-            // Flipping WS_EX_TRANSPARENT on the WebView subtree changes the composition surface
-            // without moving the window. DWM can then keep showing the old (or an empty) frame,
-            // and the card looks like it vanished until something else repaints it. Ask the whole
-            // subtree to repaint; the layer itself did not change, so leave its z-order alone.
-            w::repaint_after_click_through(hwnd);
         }
         if layer != self.layer {
             self.layer = layer.to_string();
