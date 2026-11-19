@@ -335,6 +335,21 @@ const net = await widget.system.adapters();
 const r = await widget.system.ping("1.1.1.1");   // { ok, ms, status }; at most once a second per widget
 ```
 
+### Bluetooth: `widget.bluetooth` (needs `bluetooth`)
+
+Lists the Bluetooth devices Windows has paired, connected ones first; BLE devices also report the
+standard battery service:
+
+```js
+const bt = await widget.bluetooth.list();
+// bt.supported (is there a radio), bt.adapter ("on" / "off" / "disabled" / "missing"),
+// bt.devices[i]: name, address ("20:FF:36:EC:49:CF"), kind ("audio" / "keyboard" / "mouse" /
+//   "phone" / "computer" / "wearable" …), connected, paired, le, battery (0–100 or null)
+// bt.error (why the read failed, null on success)
+await widget.bluetooth.list({ battery: false });   // skip the slow battery reads
+await widget.bluetooth.list({ refresh: true });    // ignore the 12-second list cache
+```
+
 ### Volume: `widget.audio` (needs `audio`)
 
 ```js

@@ -1,0 +1,108 @@
+/* Paired Bluetooth devices: a compact list, the connected ones first, their class and battery. */
+
+body { container-type: size; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 0.5rem; }
+[hidden] { display: none !important; }
+
+/* ── header: mark, count, refresh ─────────────────────────────────────────────────────────── */
+
+header { display: flex; align-items: center; gap: 0.55rem; min-width: 0; }
+.mark {
+  flex: none; width: 26px; height: 26px; display: grid; place-items: center;
+  border-radius: calc(var(--w-radius) * 0.4);
+  background: color-mix(in srgb, var(--w-accent) 14%, transparent);
+  color: var(--w-accent);
+}
+.mark svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.45; stroke-linejoin: miter; stroke-linecap: square; }
+.titles { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.15; }
+.titles b { font-size: 0.92rem; font-weight: 600; font-family: var(--w-font-title); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.titles em { font-style: normal; font-size: 0.7rem; color: var(--w-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.icon {
+  flex: none; width: 26px; height: 26px; display: grid; place-items: center; padding: 0;
+  border: 0; border-radius: 50%; background: transparent; color: var(--w-fg-muted); cursor: pointer;
+}
+.icon:hover { background: var(--w-hover); color: var(--w-fg); }
+.icon svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.icon.busy svg { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── the list ─────────────────────────────────────────────────────────────────────────────── */
+
+#list { list-style: none; margin: 0; padding: 0 2px 0 0; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; scrollbar-width: thin; }
+#list::-webkit-scrollbar { width: 5px; }
+#list::-webkit-scrollbar-thumb { background: var(--w-fg-faint); border-radius: 3px; }
+/* more rows below: fade the last one instead of cutting it in half */
+#list.more { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); }
+
+.dev {
+  display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; gap: 0.55rem;
+  padding: 0.38rem 0.45rem; border-radius: calc(var(--w-radius) * 0.42);
+  background: var(--w-control-bg);
+}
+.dev:hover { background: var(--w-hover); }
+.dev.off { opacity: 0.62; }
+
+.ico {
+  width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px;
+  background: color-mix(in srgb, var(--w-accent) 12%, transparent); color: var(--w-accent);
+}
+.dev.off .ico { background: var(--w-track); color: var(--w-fg-muted); }
+.ico svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+.meta { min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+.meta b { font-size: 0.82rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta em { font-style: normal; font-size: 0.68rem; color: var(--w-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta em .dot { color: var(--w-accent); }
+
+/* battery: the number over a thin meter, or a link mark when the device does not report it */
+.batt { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; min-width: 40px; }
+.pct { font-size: 0.72rem; font-family: var(--w-font-num); font-variant-numeric: tabular-nums; color: var(--w-fg-muted); }
+.pct.low { color: var(--w-danger); }
+.pct.mid { color: var(--w-warn); }
+.meter { width: 40px; height: 3px; border-radius: 2px; background: var(--w-track); overflow: hidden; }
+.meter i { display: block; height: 100%; border-radius: inherit; background: var(--w-accent); }
+.meter i.mid { background: var(--w-warn); }
+.meter i.low { background: var(--w-danger); }
+.linked { font-size: 0.66rem; color: var(--w-fg-faint); white-space: nowrap; }
+
+/* ── empty / error states ─────────────────────────────────────────────────────────────────── */
+
+.empty { grid-row: 2; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.55rem; text-align: center; }
+.empty-art { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--w-accent) 10%, transparent); color: var(--w-fg-muted); }
+.empty-art svg { width: 23px; height: 23px; fill: none; stroke: currentColor; stroke-width: 1.45; stroke-linejoin: miter; stroke-linecap: square; }
+.empty p { margin: 0; font-size: 0.8rem; color: var(--w-fg-muted); max-width: 20em; line-height: 1.5; }
+.empty-actions { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: center; }
+.link {
+  border: 0; padding: 0.28rem 0.7rem; border-radius: 999px; cursor: pointer;
+  background: var(--w-accent); color: var(--w-on-accent); font-size: 0.74rem; font-weight: 600;
+}
+.link.ghost { background: transparent; color: var(--w-fg-muted); box-shadow: inset 0 0 0 1px var(--w-rule); font-weight: 500; }
+.link.ghost:hover { background: var(--w-hover); color: var(--w-fg); }
+
+/* a loaded list that failed once keeps its rows; the reason sits under them */
+.tip { position: absolute; left: var(--w-padding); right: var(--w-padding); bottom: calc(var(--w-padding) - 2px); font-size: 0.66rem; color: var(--w-warn); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+
+/* ── small cards ──────────────────────────────────────────────────────────────────────────── */
+
+@container (max-width: 280px) { .titles b { font-size: 0.85rem; } .meter { width: 30px; } }
+@container (max-height: 108px) { .titles em { display: none; } .dev { padding-block: 0.22rem; } .ico { width: 26px; height: 26px; } }
+@container (max-height: 72px) { header { display: none; } }
+@container (max-height: 128px) { .empty-art { display: none; } }
+
+/* ── 玻璃上的字: rows are outlines on the wallpaper ───────────────────────────────────────── */
+
+html[data-theme="type"] .dev { background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+html[data-theme="type"] .dev:hover { background: rgba(255, 255, 255, 0.12); }
+html[data-theme="type"] .ico { background: rgba(255, 255, 255, 0.08); color: var(--w-fg); }
+html[data-theme="type"] .titles b, html[data-theme="type"] .meta b { font-weight: 600; }
+html[data-theme="type"] .mark { background: rgba(255, 255, 255, 0.08); color: var(--w-fg); }
+html[data-theme="type"] .link { background: #fff; color: #12141a; }
+
+/* ── 書桌上的紙: printed rows, hairlines instead of fills ─────────────────────────────────── */
+
+html[data-theme="paper"] .dev { background: transparent; border-radius: 3px; box-shadow: inset 0 0 0 1px var(--w-rule); }
+html[data-theme="paper"] .dev:hover { background: var(--w-hover); }
+html[data-theme="paper"] .ico { border-radius: 3px; background: transparent; box-shadow: inset 0 0 0 1px var(--w-rule); color: var(--w-fg); }
+html[data-theme="paper"] .mark { border-radius: 3px; background: transparent; box-shadow: inset 0 0 0 1px var(--w-rule); color: var(--w-fg); }
+html[data-theme="paper"] .titles b, html[data-theme="paper"] .meta b { font-family: var(--w-font-title); }
+html[data-theme="paper"] .meter { background: var(--w-rule); }
+html[data-theme="paper"] .link { background: var(--w-accent); color: var(--w-bg-solid); }

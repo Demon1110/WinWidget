@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <span class="mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><path d="M12 3.2 18 7.3 13.2 11.5 18 15.7 12 19.8V3.2Z"/><path d="M6.6 8.6 16.8 16.1M6.6 16.1 16.8 8.6"/></svg>
+    </span>
+    <span class="titles">
+      <b id="title"></b>
+      <em id="sub"></em>
+    </span>
+    <button id="refresh" class="icon" data-no-drag aria-label="Refresh">
+      <svg viewBox="0 0 24 24"><path d="M19.4 12a7.4 7.4 0 1 1-2.2-5.2"/><path d="M19.6 3.9v4.2h-4.2"/></svg>
+    </button>
+  </header>
+  <ul id="list"></ul>
+  <div id="empty" class="empty" hidden>
+    <span class="empty-art" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.2 18 7.3l-4.8 4.2L18 15.7 12 19.8V3.2Z"/><path d="M6.6 8.6 16.8 16.1M6.6 16.1 16.8 8.6"/></svg></span>
+    <p id="empty-text"></p>
+    <div class="empty-actions">
+      <button id="retry" class="link" data-no-drag hidden></button>
+      <button id="settings" class="link" data-no-drag></button>
+    </div>
+  </div>
+  <div id="tip" class="tip" hidden></div>
+  <script src="main.js"></script>
+</body>
+</html>

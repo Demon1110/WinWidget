@@ -39,6 +39,10 @@ windows = { version = "0.61", features = [
   "Foundation",
   "Foundation_Collections",
   "Storage_Streams",
+  "Devices_Bluetooth",
+  "Devices_Bluetooth_GenericAttributeProfile",
+  "Devices_Enumeration",
+  "Devices_Radios",
 ] }
 sysinfo = "0.40.1"
 winreg = "0.56.0"
@@ -57,3 +61,4 @@ lto = true
 strip = true
 codegen-units = 1
 panic = "abort"
+

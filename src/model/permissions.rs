@@ -5,8 +5,9 @@
 use crate::core::config::AppConfig;
 use crate::model::manifest::Manifest;
 
-pub const KNOWN: [&str; 13] = [
+pub const KNOWN: [&str; 14] = [
     "system",
+    "bluetooth",
     "notify",
     "audio",
     "media",

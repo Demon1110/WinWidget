@@ -95,19 +95,35 @@ if ($Upx) {
 
 # 自检：把 exe 放到一个没有 assets\ 的临时目录里跑 `list`。能列出内置组件，才说明
 # assets 真的在 exe 里，而不是从仓库的 assets\ 捡到的。
+# 数量不写死：仓库里 assets\widgets 留了几个，exe 里就该有几个。
+$widgetDir = Join-Path $assets "widgets"
+if (-not (Test-Path -LiteralPath $widgetDir)) {
+    throw "缺少内置组件目录：$widgetDir"
+}
+$expected = @(Get-ChildItem -LiteralPath $widgetDir -Directory |
+    Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName "widget.json") }).Count
+if ($expected -lt 1) {
+    throw "assets\widgets 里没有可用的组件（每个组件目录要有 widget.json）"
+}
+
 $probe = Join-Path ([System.IO.Path]::GetTempPath()) ("ww-single-" + [guid]::NewGuid().ToString("N").Substring(0, 8))
 New-Item -ItemType Directory -Path $probe -Force | Out-Null
+$oldAppData = $env:APPDATA
 try {
     $probeExe = Join-Path $probe "winwidget.exe"
     Copy-Item -LiteralPath $out -Destination $probeExe
+    # 用空的 %APPDATA% 跑，免得把本机已安装的市场组件算成内置组件
+    $env:APPDATA = Join-Path $probe "appdata"
+    New-Item -ItemType Directory -Path $env:APPDATA -Force | Out-Null
     $listing = & $probeExe list 2>&1 | Out-String
     $count = ([regex]::Matches($listing, '(?m)^widget\s{2}')).Count
-    if ($count -lt 30) {
-        throw "单文件自检失败：脱离 assets\ 只列出 $count 个内置组件（应为 30+）。构建产物没把 assets 编进去。`n$listing"
+    if ($count -ne $expected) {
+        throw "单文件自检失败：脱离 assets\ 只列出 $count 个内置组件，assets\widgets 里有 $expected 个。构建产物没把 assets 编进去。`n$listing"
     }
     Write-Host ("==> 单文件自检：脱离 assets\ 仍列出 {0} 个内置组件" -f $count)
 }
 finally {
+    $env:APPDATA = $oldAppData
     Remove-Item -LiteralPath $probe -Recurse -Force -ErrorAction SilentlyContinue
 }
 

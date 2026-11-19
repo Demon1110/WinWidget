@@ -30,6 +30,7 @@ const OWNS: &[&str] = &[
     "recycle.empty",
     "recycle.open",
     "power.do",
+    "bluetooth.list",
     "net.fetch",
 ];
 
@@ -204,6 +205,16 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
             crate::platform::power::do_power(&action)
                 .map(Reply::Now)
                 .map_err(BridgeError::new)
+        }
+
+        // ── bluetooth devices ────────────────────────────────────────────────────────────────
+        // Enumeration and the GATT battery reads both block, so they run on a worker.
+        "bluetooth.list" => {
+            ctx.require("bluetooth")?;
+            let battery = jbool(p, "battery").unwrap_or(true);
+            let refresh = jbool(p, "refresh").unwrap_or(false);
+            ctx.spawn_value(move || crate::platform::bluetooth::list(battery, refresh));
+            Ok(Reply::Later)
         }
 
         // ── network, restricted to the hosts the widget declared ──────────────────────────────

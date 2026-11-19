@@ -1,0 +1,38 @@
+{
+  "id": "winwidget.bluetooth",
+  "name": { "zh-TW": "藍牙裝置", "zh-CN": "蓝牙设备", "en": "Bluetooth" },
+  "description": {
+    "zh-TW": "已配對的藍牙裝置、類型與電量；連線中的排在前面",
+    "zh-CN": "已配对的蓝牙设备、类型与电量；连接中的排在前面",
+    "en": "Paired Bluetooth devices with their type and battery; connected ones come first"
+  },
+  "version": "1.0.0",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "system",
+  "size": {
+    "width": 340,
+    "height": 230,
+    "minWidth": 252,
+    "minHeight": 168,
+    "maxWidth": 660,
+    "maxHeight": 520,
+    "grow": 0.15
+  },
+  "permissions": ["bluetooth", "shell.open"],
+  "settings": [
+    {
+      "key": "showDisconnected",
+      "type": "toggle",
+      "label": { "zh-TW": "顯示未連線的裝置", "zh-CN": "显示未连接的设备", "en": "Show disconnected devices" },
+      "default": true
+    },
+    {
+      "key": "showAddress",
+      "type": "toggle",
+      "label": { "zh-TW": "顯示藍牙位址", "zh-CN": "显示蓝牙地址", "en": "Show Bluetooth address" },
+      "default": false
+    }
+  ]
+}
