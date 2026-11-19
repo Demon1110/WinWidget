@@ -516,6 +516,14 @@ impl App {
         self.event_to(instance_id, ev, json!({ "from": from, "visible": visible }));
     }
 
+    /// The cards belong to the virtual desktop they were opened on. Windows paints tool windows
+    /// and `Progman`-owned desktop cards on every desktop, so the host does the filtering itself.
+    pub fn sync_desktop(&mut self, current: &str) {
+        for win in self.windows.values_mut() {
+            win.sync_desktop(current);
+        }
+    }
+
     /// Shows or hides every card at once, with one reason for all of them.
     pub fn set_all_visible(&mut self, visible: bool, from: &str) {
         let ids: Vec<String> = self.windows.keys().cloned().collect();
@@ -1210,6 +1218,11 @@ impl App {
     }
 
     pub fn tick(&mut self) {
+        // The desktop watcher posts a dedicated event on a switch; this is the slower safety net
+        // for a missed one (and for the first tick after startup).
+        if let Some(current) = crate::platform::win32::current_virtual_desktop_id() {
+            self.sync_desktop(&current);
+        }
         // Widget-requested schedules (`utools.requestSchedule`) ride the same one-second clock.
         let host: &dyn ScheduleHost = &*self;
         crate::core::schedule::tick(host);

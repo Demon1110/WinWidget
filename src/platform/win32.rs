@@ -1459,6 +1459,27 @@ pub fn foreground_window() -> HWND {
     unsafe { GetForegroundWindow() }
 }
 
+/// Which Windows virtual desktop is showing right now, as a stable string.
+///
+/// Windows offers `IVirtualDesktopManager` for a window's own desktop, but a card is deliberately
+/// pinned across desktops (it is a tool window and the desktop layer is owned by `Progman`), so
+/// that API reports no desktop at all for it. The current desktop is published in the Explorer
+/// registry instead; the bytes are the same GUID layout Explorer itself uses. Reading it costs a
+/// few microseconds and every caller compares the result, so no Win32 event is needed.
+pub fn current_virtual_desktop_id() -> Option<String> {
+    use winreg::enums::HKEY_CURRENT_USER;
+    use winreg::RegKey;
+
+    let key = RegKey::predef(HKEY_CURRENT_USER)
+        .open_subkey(r"Software\Microsoft\Windows\CurrentVersion\Explorer\VirtualDesktops")
+        .ok()?;
+    let raw = key.get_raw_value("CurrentVirtualDesktop").ok()?.bytes;
+    if raw.len() != 16 {
+        return None;
+    }
+    Some(raw.iter().map(|b| format!("{b:02x}")).collect())
+}
+
 /// "class|title" of the foreground window — for log lines that must say where a keystroke went.
 pub fn foreground_label() -> String {
     let hwnd = foreground_window();

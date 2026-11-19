@@ -46,6 +46,14 @@ pub struct WidgetWin {
     /// every frame, so it only happens when the size really changed.
     view: (i32, i32),
     pub visible: bool,
+    /// The virtual desktop this card was opened on. Windows exposes no desktop id for a tool
+    /// window or for a `Progman`-owned card, so it is captured from Explorer when the card is
+    /// built, and the card is hidden whenever another desktop is active.
+    pub desktop: String,
+    /// Whether the window is actually on screen right now. `visible` is the user's intent and
+    /// survives a desktop switch; this flag tracks the native window.
+    desktop_visible: bool,
+    first_show: bool,
     pub frosted: bool,
     pub click_through: bool,
     pub layer: String,
@@ -146,10 +154,23 @@ impl WidgetWin {
     }
 
     pub fn show(&mut self) {
-        if self.visible {
+        self.visible = true;
+        self.show_here();
+    }
+
+    fn show_here(&mut self) {
+        if self.desktop_visible {
             return;
         }
-        self.visible = true;
+        if let Some(current) = w::current_virtual_desktop_id() {
+            if self.desktop.is_empty() {
+                self.desktop = current.clone();
+            }
+            if self.desktop != current {
+                return;
+            }
+        }
+        self.desktop_visible = true;
         w::show_no_activate(self.hwnd());
         let _ = self.webview.set_visible(true);
         if self.layer == "desktop" {
@@ -160,13 +181,48 @@ impl WidgetWin {
         // frame, and that frame's caption — the window text on a pale strip — lands across the top of
         // the card. One more hide/show before the first present has DWM build the frame from the
         // card's own non-client calculation instead. Both calls happen before any paint, so nothing
-        // flickers.
-        let hwnd = self.hwnd();
-        w::hide(hwnd);
-        w::show_no_activate(hwnd);
-        if self.layer == "desktop" {
-            w::place_above_desktop(hwnd);
+        // flickers. A later show after a virtual desktop switch already has that frame.
+        if self.first_show {
+            self.first_show = false;
+            let hwnd = self.hwnd();
+            w::hide(hwnd);
+            w::show_no_activate(hwnd);
+            if self.layer == "desktop" {
+                w::place_above_desktop(hwnd);
+            }
         }
+    }
+
+    /// Shows the card only while its virtual desktop is the active one. The logical `visible`
+    /// state is left untouched, so switching desktops never looks like the user hid the card.
+    pub fn sync_desktop(&mut self, current: &str) {
+        if current.is_empty() {
+            return;
+        }
+        if self.desktop.is_empty() {
+            self.desktop = current.to_string();
+        }
+        if self.visible && self.desktop == current {
+            if !self.desktop_visible {
+                crate::core::logging::info(&format!("{}: desktop show ({current})", self.id));
+            }
+            self.show_here();
+        } else if self.desktop_visible {
+            crate::core::logging::info(&format!(
+                "{}: desktop hide (belongs {}, now {current})",
+                self.id, self.desktop
+            ));
+            self.hide_here();
+        }
+    }
+
+    fn hide_here(&mut self) {
+        if !self.desktop_visible {
+            return;
+        }
+        self.desktop_visible = false;
+        let _ = self.webview.set_visible(false);
+        w::hide(self.hwnd());
     }
 
     /// Re-applies the borderless frame and asks Windows to recompute the non-client area.
@@ -199,12 +255,11 @@ impl WidgetWin {
     }
 
     pub fn hide(&mut self) {
-        if !self.visible {
+        if !self.visible && !self.desktop_visible {
             return;
         }
         self.visible = false;
-        let _ = self.webview.set_visible(false);
-        w::hide(self.hwnd());
+        self.hide_here();
     }
 
     /// Applies frosted glass / click-through / top-most to match the instance's settings.
@@ -454,6 +509,8 @@ pub fn build(
             .map_err(|e| format!("WebView2 could not be created: {e}"))?
     };
 
+    let desktop = w::current_virtual_desktop_id().unwrap_or_default();
+    crate::core::logging::info(&format!("{id}: virtual desktop {desktop}"));
     Ok(WidgetWin {
         window,
         webview,
@@ -464,6 +521,9 @@ pub fn build(
         outer,
         view: (outer.width().max(1), outer.height().max(1)),
         visible: false,
+        desktop,
+        desktop_visible: false,
+        first_show: true,
         frosted: false,
         click_through: false,
         layer: inst.layer.clone(),

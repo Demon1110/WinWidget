@@ -104,6 +104,28 @@ fn main() {
             }
         });
     }
+    {
+        // Windows sends no WinEvent for a virtual desktop switch, but the active desktop id in
+        // Explorer changes. Polling it 8 times a second keeps the wrong cards off screen without
+        // turning the normal one-second heartbeat into a busy loop.
+        let proxy = app.proxy.clone();
+        std::thread::spawn(move || {
+            let mut last = platform::win32::current_virtual_desktop_id();
+            loop {
+                std::thread::sleep(Duration::from_millis(120));
+                let now = platform::win32::current_virtual_desktop_id();
+                if now == last {
+                    continue;
+                }
+                last = now.clone();
+                if let Some(id) = now {
+                    if !app::post(&proxy, Ev::Desktop(id)) {
+                        return;
+                    }
+                }
+            }
+        });
+    }
     if app.cfg().instances.is_empty() {
         // First run: nothing on the desktop yet, so open the control center to explain itself.
         app.show_control(None);
@@ -169,6 +191,10 @@ fn main() {
             Event::UserEvent(Ev::Wake) => {
                 // The window is built by the `flush_windows` at the top of the next iteration; this
                 // event exists only to make that iteration happen now.
+                *control = ControlFlow::Wait;
+            }
+            Event::UserEvent(Ev::Desktop(desktop)) => {
+                app.sync_desktop(&desktop);
                 *control = ControlFlow::Wait;
             }
             Event::UserEvent(Ev::Tick) => {

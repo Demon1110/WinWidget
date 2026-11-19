@@ -71,6 +71,8 @@ pub enum Ev {
         at: (i32, i32),
     },
     Tick,
+    /// The active Windows virtual desktop changed; cards assigned to other desktops are hidden.
+    Desktop(String),
     /// A page queued something that has to be built on the loop (a custom window, today).
     Wake,
 }
