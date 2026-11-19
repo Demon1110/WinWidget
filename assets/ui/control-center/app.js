@@ -936,17 +936,8 @@ document.addEventListener("click", (e) => {
   if (a) onAction(a);
 });
 
-/** Clicking the hit-test toggle twice inside a double-click must not bounce the card in and out
- *  of click-through; the second click would otherwise race the host's style/repaint work. */
-let lastClickThrough = 0;
-
 function onControl(el) {
   if (el.dataset.act === "toggle") {
-    if (el.dataset.k === "clickThrough") {
-      const now = performance.now();
-      if (now - lastClickThrough < 400) return;
-      lastClickThrough = now;
-    }
     const on = el.getAttribute("aria-checked") !== "true";
     el.setAttribute("aria-checked", String(on)); // answer at once; the host's state confirms
     if (el.id === "edit-switch") return api("app.editMode", { on });
