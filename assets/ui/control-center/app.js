@@ -241,7 +241,7 @@ function pageMine() {
   const nm = names();
   const inst = list.find((i) => i.id === ui.sel);
   const items = list.map((i) => {
-    const flags = [i.locked ? `<span class="flag">${t("鎖定")}</span>` : "", i.clickThrough ? `<span class="flag warn">${t("穿透")}</span>` : ""].join("");
+    const flags = i.locked ? `<span class="flag">${t("鎖定")}</span>` : "";
     return `<button class="item${i.id === ui.sel ? " on" : ""}" data-action="select" data-id="${i.id}" data-key="${i.id}">
       ${tile(i)}
       <span style="min-width:0"><div class="name">${esc(nm[i.id])}${flags ? `<span class="flags">${flags}</span>` : ""}</div>
@@ -314,8 +314,7 @@ function tabBehavior(i) {
   const s = i.size || {};
   return `<div class="form">
     ${row("層級", layer[2], seg(LAYERS.map((x) => [x[0], x[1]]), i.layer, at("inst", "layer")), { key: "layer" })}
-    ${row("鎖定位置", "鎖定後不能拖動或縮放。排列模式下會暫時解鎖。", control({ key: "locked", type: "toggle", label: "鎖定位置" }, i.locked, "inst"), { key: "locked" })}
-    ${row("滑鼠穿透", "點擊會穿過組件落到後面。要關閉，回到這裏或用托盤選單。", control({ key: "clickThrough", type: "toggle", label: "滑鼠穿透" }, i.clickThrough, "inst"), { key: "ct" })}
+    ${row("鎖定位置", "鎖定後不能拖動或縮放，滑鼠點擊會穿過組件落到後面；解鎖即恢復互動。排列模式下會暫時解鎖。", control({ key: "locked", type: "toggle", label: "鎖定位置" }, i.locked, "inst"), { key: "locked" })}
     ${row("尺寸", t("寬 {w1}–{w2}，高 {h1}–{h2}。也可以在桌面上拖右下角。", { w1: round(s.minWidth), w2: round(s.maxWidth), h1: round(s.minHeight), h2: round(s.maxHeight) }),
       `${control({ key: "width", type: "number", min: s.minWidth, max: s.maxWidth, step: 1 }, round(i.width), "size")}<span class="num" style="color:var(--faint)">×</span>
        ${control({ key: "height", type: "number", min: s.minHeight, max: s.maxHeight, step: 1 }, round(i.height), "size")}`, { key: "size" })}
@@ -913,7 +912,6 @@ function commit(scope, key, value, id = ui.sel) {
     case "inst":
       if (key === "layer") return api("instance.layer", { id, layer: value });
       if (key === "locked") return api("instance.locked", { id, on: value });
-      if (key === "clickThrough") return api("instance.clickThrough", { id, on: value });
       if (key === "theme") return api("instance.theme", { id, theme: value });
       return;
     case "app":

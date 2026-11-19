@@ -357,7 +357,6 @@ fn registry() -> &'static HashMap<&'static str, Method> {
         // instances
         m.insert("instance.appearance", instance_appearance);
         m.insert("instance.css", instance_css);
-        m.insert("instance.clickThrough", instance_click_through);
         m.insert("instance.locked", instance_locked);
         m.insert("instance.layer", instance_layer);
         m.insert("instance.theme", instance_theme);
@@ -408,8 +407,7 @@ fn call(app: &mut App, method: &str, p: &Value, id: i64) -> BridgeResult<Reply> 
 // ── app ────────────────────────────────────────────────────────────────────
 
 fn app_edit_mode(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
-    app.edit_mode = jbool(p, "on").unwrap_or(false);
-    app.publish_states();
+    app.set_edit_mode(jbool(p, "on").unwrap_or(false));
     refresh(app, None);
     Ok(Reply::Now(Value::Null))
 }
@@ -475,12 +473,7 @@ fn app_ui_theme(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
 
 fn app_lock_all(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
     let on = jbool(p, "on").unwrap_or(false);
-    for inst in app.cfg_mut().instances.iter_mut() {
-        inst.locked = on;
-    }
-    app.save();
-    app.publish_states();
-    app.refresh_tray_menu();
+    app.set_all_locked(on);
     refresh(app, None);
     Ok(Reply::Now(Value::Null))
 }
@@ -684,22 +677,10 @@ fn instance_css(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
     Ok(Reply::Now(Value::Null))
 }
 
-fn instance_click_through(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
-    let inst = instance_of(app, p)?;
-    let on = jbool(p, "on").unwrap_or(false);
-    app.set_click_through(&inst.id, on);
-    app.refresh_tray_menu();
-    Ok(Reply::Now(Value::Null))
-}
-
 fn instance_locked(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
     let inst = instance_of(app, p)?;
     let on = jbool(p, "on").unwrap_or(false);
-    if let Some(target) = app.instance_mut(&inst.id) {
-        target.locked = on;
-    }
-    app.save();
-    app.publish_states();
+    app.set_locked(&inst.id, on);
     refresh(app, None);
     Ok(Reply::Now(Value::Null))
 }
@@ -1136,8 +1117,8 @@ mod tests {
     #[test]
     fn registry_covers_every_method() {
         let r = registry();
-        // 57 methods + 1 legacy alias.
-        assert_eq!(r.len(), 58);
+        // 56 methods + 1 legacy alias.
+        assert_eq!(r.len(), 57);
         // The old and new spellings of the auto-update toggle share one handler.
         assert_eq!(r["app.updateAuto"] as usize, r["app.autoUpdate"] as usize);
         for name in [
@@ -1170,7 +1151,6 @@ mod tests {
             "fonts.list",
             "instance.appearance",
             "instance.css",
-            "instance.clickThrough",
             "instance.locked",
             "instance.layer",
             "instance.theme",

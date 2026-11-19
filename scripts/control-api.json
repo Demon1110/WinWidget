@@ -119,10 +119,6 @@
       "handler": "instance_clear_all"
     },
     {
-      "name": "instance.clickThrough",
-      "handler": "instance_click_through"
-    },
-    {
       "name": "instance.css",
       "handler": "instance_css"
     },

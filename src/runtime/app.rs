@@ -119,7 +119,12 @@ fn same_area(
 /// Same monitor rect on both sides, including "neither has one".
 impl App {
     pub fn new(proxy: EventLoopProxy<Ev>) -> App {
-        let store = ConfigStore::load();
+        let mut store = ConfigStore::load();
+        // Older configs had a separate click-through switch. Locking is the only source now,
+        // so bring the persisted style in line before any window is built.
+        for inst in store.data.instances.iter_mut() {
+            inst.click_through = inst.locked;
+        }
         let mut catalog = crate::model::catalog::Catalog::default();
         catalog.scan();
         let themes = crate::model::themes::Themes::load();
@@ -1306,14 +1311,67 @@ impl App {
         }
     }
 
-    pub fn set_click_through(&mut self, instance_id: &str, on: bool) {
+    /// Locking is what makes a card transparent to the mouse; there is no separate click-through
+    /// switch. Arrange mode unlocks cards temporarily so they can still be dragged.
+    pub fn set_locked(&mut self, instance_id: &str, on: bool) {
+        let click = on && !self.edit_mode;
         if let Some(inst) = self.instance_mut(instance_id) {
-            inst.click_through = on;
+            inst.locked = on;
+            inst.click_through = click;
         }
-        crate::core::logging::info(&format!(
-            "{instance_id}: click-through {}",
-            if on { "on" } else { "off" }
-        ));
+        self.apply_click_through(instance_id);
+        self.save();
+        self.publish_states();
+        self.refresh_tray_menu();
+        self.push_state_to_control(None);
+    }
+
+    pub fn set_all_locked(&mut self, on: bool) {
+        let click = on && !self.edit_mode;
+        let ids: Vec<String> = self
+            .cfg()
+            .instances
+            .iter()
+            .map(|inst| inst.id.clone())
+            .collect();
+        for inst in self.cfg_mut().instances.iter_mut() {
+            inst.locked = on;
+            inst.click_through = click;
+        }
+        for id in &ids {
+            self.apply_click_through(id);
+        }
+        self.save();
+        self.publish_states();
+        self.refresh_tray_menu();
+        self.push_state_to_control(None);
+    }
+
+    /// Arrange mode has to make locked cards interactive, otherwise they can neither be dragged
+    /// nor resized. Leaving it restores the click-through style that locking implies.
+    pub fn set_edit_mode(&mut self, on: bool) {
+        if self.edit_mode == on {
+            return;
+        }
+        self.edit_mode = on;
+        let ids: Vec<String> = self
+            .cfg()
+            .instances
+            .iter()
+            .map(|inst| inst.id.clone())
+            .collect();
+        for inst in self.cfg_mut().instances.iter_mut() {
+            inst.click_through = inst.locked && !on;
+        }
+        for id in &ids {
+            self.apply_click_through(id);
+        }
+        self.publish_states();
+        self.refresh_tray_menu();
+        self.push_state_to_control(None);
+    }
+
+    fn apply_click_through(&mut self, instance_id: &str) {
         let payload = self
             .instance(instance_id)
             .cloned()
@@ -1323,12 +1381,18 @@ impl App {
             .instance(instance_id)
             .map(|i| i.layer.clone())
             .unwrap_or_else(|| "desktop".into());
+        let click = self
+            .instance(instance_id)
+            .map(|i| i.click_through)
+            .unwrap_or(false);
+        crate::core::logging::info(&format!(
+            "{instance_id}: click-through {}",
+            if click { "on" } else { "off" }
+        ));
         if let Some(win) = self.windows.get_mut(instance_id) {
-            win.apply_effects(&payload, on, &layer);
+            win.apply_effects(&payload, click, &layer);
         }
-        self.save();
         self.push_state(instance_id);
-        self.push_state_to_control(None);
     }
 
     pub fn set_layer(&mut self, instance_id: &str, layer: &str) {

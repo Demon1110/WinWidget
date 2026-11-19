@@ -84,6 +84,8 @@ pub struct InstanceConfig {
     /// "desktop" | "normal" | "top"
     pub layer: String,
     pub locked: bool,
+    /// Derived from `locked`, not a switch of its own: a locked card passes the mouse through.
+    /// The field is persisted so a window can restore its style before the app is fully built.
     pub click_through: bool,
     /// Overrides the global theme for this instance only.
     pub theme_id: Option<String>,

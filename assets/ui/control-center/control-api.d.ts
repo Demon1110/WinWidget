@@ -34,7 +34,6 @@ type ControlMethod =
   | "fonts.list"
   | "instance.appearance"
   | "instance.clearAll"
-  | "instance.clickThrough"
   | "instance.css"
   | "instance.devtools"
   | "instance.duplicate"

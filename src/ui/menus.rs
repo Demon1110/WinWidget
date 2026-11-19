@@ -136,13 +136,6 @@ pub fn widget_menu(app: &mut App, instance: &str) {
         format!("menu.lock:{instance}"),
         inst.locked,
     );
-    push(
-        &mut items,
-        &mut ids,
-        t("滑鼠穿透", "鼠标穿透", "Click-through"),
-        format!("menu.passthrough:{instance}"),
-        inst.click_through,
-    );
     for (layer, label) in [
         ("desktop", t("貼在桌面", "贴在桌面", "On the desktop")),
         ("normal", t("一般", "普通", "Normal")),
@@ -232,19 +225,10 @@ pub fn run(app: &mut App, action: &str) {
         }
         "lockAll.toggle" => {
             let next = !app.cfg().instances.iter().all(|i| i.locked);
-            for inst in app.cfg_mut().instances.iter_mut() {
-                inst.locked = next;
-            }
-            app.save();
-            app.publish_states();
-            app.refresh_tray_menu();
-            app.push_state_to_control(None);
+            app.set_all_locked(next);
         }
         "editMode.toggle" => {
-            app.edit_mode = !app.edit_mode;
-            app.publish_states();
-            app.refresh_tray_menu();
-            app.push_state_to_control(None);
+            app.set_edit_mode(!app.edit_mode);
         }
         "hotkeysPause.toggle" => {
             app.hotkeys_paused = !app.hotkeys_paused;
@@ -277,18 +261,7 @@ pub fn run(app: &mut App, action: &str) {
         "menu.lock" => {
             if let Some(id) = arg {
                 let next = !app.instance(id).map(|i| i.locked).unwrap_or(false);
-                if let Some(inst) = app.instance_mut(id) {
-                    inst.locked = next;
-                }
-                app.save();
-                app.publish_states();
-                app.push_state_to_control(None);
-            }
-        }
-        "menu.passthrough" => {
-            if let Some(id) = arg {
-                let next = !app.instance(id).map(|i| i.click_through).unwrap_or(false);
-                app.set_click_through(id, next);
+                app.set_locked(id, next);
             }
         }
         "menu.layer" => {
