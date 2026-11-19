@@ -316,6 +316,8 @@ async function openOverlay(display, effectId) {
     closable: true,
     focusable: false,
     show: false,
+    // 从建窗这一刻就请求穿透；WebView2 的子窗口稍后才建好，宿主会在页面 ready 时再补一次。
+    ignoreMouseEvents: true,
     backgroundColor: "#00000000",
   };
   const reply = await widget.call("win.create", {

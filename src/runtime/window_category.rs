@@ -352,6 +352,13 @@ pub fn build_custom(
             .map_err(|e| format!("WebView2 could not be created: {e}"))?
     };
 
+    // Click-through asked for at creation time: apply it to the top-level window straight away.
+    // WebView2's child HWNDs come later, so `mark_custom_loaded` re-applies once the page is ready.
+    let ignore_mouse = jbool(&o, "ignoreMouseEvents").unwrap_or(false);
+    if ignore_mouse {
+        w::set_click_through(hwnd, true);
+    }
+
     if show {
         window.set_visible(true);
     }
@@ -378,7 +385,7 @@ pub fn build_custom(
         shown: show,
         loaded: false,
         destroyed: false,
-        ignore_mouse: jbool(&o, "ignoreMouseEvents").unwrap_or(false),
+        ignore_mouse,
     })
 }
 

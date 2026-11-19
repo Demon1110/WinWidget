@@ -24,10 +24,12 @@ window.bloomRegister('retroGrid',
     var sunY = horizon - sunR * 0.45;
 
     // ── 天空 ──
+    // 这一页是叠在桌面上的透明画布：所有铺底都要带 alpha，否则会把桌面和图标整块盖住。
+    // 保留霓虹紫的色相层次，但压低不透明度，让壁纸与图标从底色里透出来。
     var sky = ctx.createLinearGradient(0, 0, 0, horizon);
-    sky.addColorStop(0, '#07020f');
-    sky.addColorStop(0.55, '#1d0733');
-    sky.addColorStop(1, '#4a0f4d');
+    sky.addColorStop(0, 'rgba(7,2,15,0.28)');
+    sky.addColorStop(0.55, 'rgba(29,7,51,0.24)');
+    sky.addColorStop(1, 'rgba(74,15,77,0.20)');
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, w, horizon);
 
@@ -66,8 +68,8 @@ window.bloomRegister('retroGrid',
 
     // ── 地面 ──
     var ground = ctx.createLinearGradient(0, horizon, 0, h);
-    ground.addColorStop(0, '#2a0338');
-    ground.addColorStop(1, '#08010d');
+    ground.addColorStop(0, 'rgba(42,3,56,0.24)');
+    ground.addColorStop(1, 'rgba(8,1,13,0.18)');
     ctx.fillStyle = ground;
     ctx.fillRect(0, horizon, w, h - horizon);
 
