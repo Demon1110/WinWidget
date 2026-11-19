@@ -21,6 +21,7 @@ pub struct Manifest {
     pub layer: Option<String>,
     pub permissions: Vec<String>,
     pub settings: Vec<SettingSpec>,
+    pub tools: Vec<ToolSpec>,
 
     #[serde(skip)]
     pub dir: PathBuf,
@@ -94,6 +95,38 @@ impl Default for SettingSpec {
 pub struct OptionSpec {
     pub value: Value,
     pub label: Option<Value>,
+}
+
+/// A command-line program the widget downloads and runs. The host verifies the SHA-256 before
+/// anything is executed, and stores the file under the widget's `bin\` folder.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct ToolSpec {
+    /// The name the widget uses in `widget.tool.run()`, e.g. "ffmpeg".
+    pub name: String,
+    /// An https URL. Redirects are checked against the widget's `network:` permissions too.
+    pub url: String,
+    /// 64 hex characters; the downloaded file is rejected when it does not match.
+    pub sha256: String,
+    /// The file name under `bin\`. Defaults to the last segment of `url`; must end with `.exe`.
+    pub filename: Option<String>,
+    /// Optional expected size in bytes; the download must match exactly. The hard limit is 512 MB.
+    pub size: Option<u64>,
+    /// Default run timeout in milliseconds (1 s – 300 s).
+    pub timeout: Option<u64>,
+}
+
+impl Default for ToolSpec {
+    fn default() -> Self {
+        ToolSpec {
+            name: String::new(),
+            url: String::new(),
+            sha256: String::new(),
+            filename: None,
+            size: None,
+            timeout: Some(30_000),
+        }
+    }
 }
 
 impl Manifest {
@@ -173,6 +206,61 @@ impl Manifest {
                 return Err(format!("two settings use the key \"{}\"", setting.key));
             }
         }
+        if !self.tools.is_empty() {
+            if !self.declares("tool.exec") {
+                return Err(
+                    "widget.json declares tools but not the \"tool.exec\" permission".into(),
+                );
+            }
+            let mut tool_names = std::collections::HashSet::new();
+            for tool in &self.tools {
+                if !valid_tool_name(&tool.name) {
+                    return Err(format!(
+                        "tool name \"{}\" is invalid: use lowercase letters, digits, dots, dashes and underscores (1–32 characters)",
+                        tool.name
+                    ));
+                }
+                if !tool_names.insert(tool.name.to_lowercase()) {
+                    return Err(format!("two tools use the name \"{}\"", tool.name));
+                }
+                if !tool.url.starts_with("https://") {
+                    return Err(format!(
+                        "tool \"{}\" must be downloaded over https",
+                        tool.name
+                    ));
+                }
+                let host = https_host(&tool.url)
+                    .ok_or_else(|| format!("tool \"{}\" has an invalid download URL", tool.name))?;
+                if !crate::model::permissions::allows_host(&self.permissions, &host) {
+                    return Err(format!(
+                        "tool \"{}\" downloads from {host}: add \"network:{host}\" to permissions",
+                        tool.name
+                    ));
+                }
+                if !valid_sha256(&tool.sha256) {
+                    return Err(format!(
+                        "tool \"{}\" needs a 64-character hex sha256",
+                        tool.name
+                    ));
+                }
+                tool.file_name()?;
+                if let Some(size) = tool.size {
+                    if size == 0 || size > 512 * 1024 * 1024 {
+                        return Err(format!(
+                            "tool \"{}\" size must be between 1 byte and 512 MB",
+                            tool.name
+                        ));
+                    }
+                }
+                let timeout = tool.timeout.unwrap_or(30_000);
+                if !(1_000..=300_000).contains(&timeout) {
+                    return Err(format!(
+                        "tool \"{}\" timeout must be between 1000 and 300000 ms",
+                        tool.name
+                    ));
+                }
+            }
+        }
         Ok(())
     }
 
@@ -225,4 +313,191 @@ fn valid_id(id: &str) -> bool {
     }
     id.chars()
         .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_' | '-'))
+}
+
+impl ToolSpec {
+    /// The file name under the widget's `bin\` folder. A declared name wins; otherwise the last
+    /// path segment of the URL is used. Paths are never accepted here.
+    pub fn file_name(&self) -> Result<String, String> {
+        let raw = match self.filename.as_deref() {
+            Some(name) if !name.trim().is_empty() => name.trim().to_string(),
+            Some(_) => return Err(format!("tool \"{}\" has an empty filename", self.name)),
+            None => {
+                let path = self.url.split(['?', '#']).next().unwrap_or("");
+                path.rsplit('/').next().unwrap_or("").to_string()
+            }
+        };
+        if !tool_file_name_ok(&raw) {
+            return Err(format!(
+                "tool \"{}\" filename \"{}\" is invalid: use letters, digits, dots, dashes or underscores and end with .exe",
+                self.name, raw
+            ));
+        }
+        Ok(raw)
+    }
+
+    pub fn timeout_ms(&self) -> u64 {
+        self.timeout.unwrap_or(30_000).clamp(1_000, 300_000)
+    }
+}
+
+fn valid_tool_name(name: &str) -> bool {
+    let bytes = name.as_bytes();
+    if bytes.is_empty() || bytes.len() > 32 {
+        return false;
+    }
+    if !(bytes[0].is_ascii_lowercase() || bytes[0].is_ascii_digit()) {
+        return false;
+    }
+    name.chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_' | '-'))
+}
+
+fn tool_file_name_ok(name: &str) -> bool {
+    if name.len() > 128 || !name.to_ascii_lowercase().ends_with(".exe") {
+        return false;
+    }
+    if !name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+    {
+        return false;
+    }
+    // Windows resolves these names to devices even with an extension, so a tool must never be
+    // allowed to write or execute `CON.exe`, `NUL.exe`, `COM1.exe` and the like.
+    let base = name.split('.').next().unwrap_or("").to_ascii_lowercase();
+    !matches!(
+        base.as_str(),
+        "con"
+            | "prn"
+            | "aux"
+            | "nul"
+            | "com1"
+            | "com2"
+            | "com3"
+            | "com4"
+            | "com5"
+            | "com6"
+            | "com7"
+            | "com8"
+            | "com9"
+            | "lpt1"
+            | "lpt2"
+            | "lpt3"
+            | "lpt4"
+            | "lpt5"
+            | "lpt6"
+            | "lpt7"
+            | "lpt8"
+            | "lpt9"
+    )
+}
+
+fn valid_sha256(hash: &str) -> bool {
+    hash.len() == 64 && hash.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+fn https_host(url: &str) -> Option<String> {
+    let rest = url.strip_prefix("https://")?;
+    let host = rest
+        .split(['/', '?', '#'])
+        .next()?
+        .rsplit('@')
+        .next()?
+        .split(':')
+        .next()?
+        .trim()
+        .to_lowercase();
+    if host.is_empty()
+        || !host
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '.')
+    {
+        return None;
+    }
+    Some(host)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Manifest;
+    use std::path::PathBuf;
+
+    fn manifest_with_tools(label: &str, tools: &str, permissions: &str) -> (Manifest, PathBuf) {
+        let dir =
+            std::env::temp_dir().join(format!("winwidget-manifest-{}-{label}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("index.html"), "<!doctype html>").unwrap();
+        let json = format!(
+            r#"{{
+                "id": "test.tools",
+                "version": "1.0.0",
+                "size": {{ "width": 320, "height": 200 }},
+                "permissions": {permissions},
+                "tools": {tools}
+            }}"#
+        );
+        let mut manifest: Manifest = serde_json::from_str(&json).unwrap();
+        manifest.dir = dir.clone();
+        (manifest, dir)
+    }
+
+    #[test]
+    fn accepts_a_declared_tool() {
+        let (mut manifest, dir) = manifest_with_tools(
+            "ok",
+            r#"[{
+                "name": "ocr",
+                "url": "https://example.com/tools/ocr.exe",
+                "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            }]"#,
+            r#"["tool.exec", "network:example.com"]"#,
+        );
+        assert!(manifest.validate().is_ok());
+        assert_eq!(manifest.tools[0].file_name().unwrap(), "ocr.exe");
+        assert_eq!(manifest.tools[0].timeout_ms(), 30_000);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn rejects_a_tool_without_permission_or_hash() {
+        let (mut manifest, dir) = manifest_with_tools(
+            "no-permission",
+            r#"[{
+                "name": "ocr",
+                "url": "https://example.com/tools/ocr.exe",
+                "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            }]"#,
+            r#"["network:example.com"]"#,
+        );
+        assert!(manifest.validate().is_err());
+        let _ = std::fs::remove_dir_all(dir);
+
+        let (mut manifest, dir) = manifest_with_tools(
+            "bad-hash",
+            r#"[{
+                "name": "ocr",
+                "url": "https://example.com/tools/ocr.exe",
+                "sha256": "not-a-hash"
+            }]"#,
+            r#"["tool.exec", "network:example.com"]"#,
+        );
+        assert!(manifest.validate().is_err());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn rejects_a_device_filename() {
+        let (mut manifest, dir) = manifest_with_tools(
+            "device-name",
+            r#"[{
+                "name": "ocr",
+                "url": "https://example.com/tools/CON.exe",
+                "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            }]"#,
+            r#"["tool.exec", "network:example.com"]"#,
+        );
+        assert!(manifest.validate().is_err());
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }

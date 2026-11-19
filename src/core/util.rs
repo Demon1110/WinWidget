@@ -13,6 +13,12 @@ impl BridgeError {
     }
 }
 
+impl From<String> for BridgeError {
+    fn from(message: String) -> Self {
+        BridgeError(message)
+    }
+}
+
 impl std::fmt::Display for BridgeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.0)

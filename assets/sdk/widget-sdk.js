@@ -703,6 +703,31 @@
       desktopIcons: (action) => call("shell.desktopIcons", { action: String(action || "query") }),
     }),
 
+    /**
+     * Third-party CLI tools declared in widget.json "tools". The host downloads the https URL
+     * into the widget's bin folder, checks the SHA-256 and runs it without a shell.
+     * Needs "tool.exec" and the matching "network:<host>" permission.
+     */
+    tool: Object.freeze({
+      /** Every declared tool with its cache state: { name, path, cached, downloaded, bytes, … }. */
+      list: () => call("tool.list"),
+      /** One tool's cache state; rejects when the name is not declared. */
+      status: (name) => call("tool.status", { name }),
+      /** Downloads and verifies the tool now. run() does this automatically. */
+      ensure: (name, options) => call("tool.ensure", { name, force: !!(options && options.force) }),
+      /** Runs it: run(name, { args, stdin, timeout, cwd }) → { code, ok, timedOut, stdout, stderr, … }. */
+      run: (name, options) =>
+        call("tool.run", {
+          name,
+          args: options && Array.isArray(options.args) ? [...options.args] : [],
+          stdin: options && options.stdin,
+          timeout: options && options.timeout,
+          cwd: options && options.cwd,
+        }),
+      /** Deletes the cached program; the next run downloads it again. */
+      remove: (name) => call("tool.remove", { name }),
+    }),
+
     /** The Windows clipboard; needs the "clipboard" permission. */
     clipboard: Object.freeze({
       /** The copied text, or null when the clipboard holds no text. */

@@ -49,6 +49,7 @@ pub mod simulate;
 pub mod storage;
 pub mod system;
 pub mod text;
+pub mod tool;
 pub mod ubrowser;
 pub mod util;
 pub mod widget;

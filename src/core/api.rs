@@ -78,7 +78,11 @@ impl<'a> Ctx<'a> {
                 "permission denied: add \"{permission}\" to permissions in widget.json"
             )));
         }
-        if !crate::model::permissions::has(&self.allowed, permission) {
+        if !self
+            .allowed
+            .iter()
+            .any(|p| p.eq_ignore_ascii_case(permission))
+        {
             return Err(BridgeError::new(format!(
                 "permission denied: \"{permission}\" is not allowed yet — open the control center, choose \"{}\" and allow it",
                 self.manifest.display_name()
@@ -152,6 +156,7 @@ pub const CHAIN: &[(&str, Handler)] = &[
     ("ai", crate::core::ai::call),
     ("ffmpeg", crate::core::ffmpeg::call),
     ("payment", crate::core::payment::call),
+    ("tool", crate::core::tool::call),
     ("widget", crate::core::widget::call),
 ];
 

@@ -16,7 +16,7 @@ declare namespace WinWidget {
   type Layer = "desktop" | "normal" | "top";
 
   /** Declared in widget.json "permissions"; third-party widgets also need the user's OK. */
-  type Permission = "system" | "notify" | "audio" | "media" | "shell.open" | "shell.launch" | `network:${string}`;
+  type Permission = "system" | "notify" | "audio" | "media" | "shell.open" | "shell.launch" | "tool.exec" | `network:${string}`;
 
   interface PathInfo {
     path: string;
@@ -40,6 +40,51 @@ declare namespace WinWidget {
     /** True only when every item was renamed. */
     ok: boolean;
     items: RenameResult[];
+  }
+
+  /** A third-party CLI program declared in widget.json "tools". Needs "tool.exec". */
+  interface ToolInfo {
+    name: string;
+    filename: string;
+    url: string;
+    sha256: string;
+    /** The expected size from widget.json, if the widget declared one. */
+    size: number | null;
+    /** Full path under the widget's bin folder (or the data folder for built-in widgets). */
+    path: string;
+    /** True when the sidecar still matches the file, so no hash was needed. */
+    cached: boolean;
+    downloaded: boolean;
+    bytes: number;
+  }
+
+  interface ToolRunOptions {
+    /** Each argument is passed as one argv entry; there is no shell string to quote. */
+    args?: string[];
+    /** Written to the child's stdin, then the pipe is closed. */
+    stdin?: string;
+    /** Milliseconds, 1 000–300 000. Default: the tool's timeout, or 30 000. */
+    timeout?: number;
+    /** A folder inside the widget; the widget folder by default. */
+    cwd?: string;
+  }
+
+  interface ToolRunResult {
+    name: string;
+    path: string;
+    /** True when this call had to download the program before running it. */
+    downloaded: boolean;
+    /** The exit code, or -1 when the timeout killed the process. */
+    code: number;
+    /** True only when the process exited normally with code 0. */
+    ok: boolean;
+    timedOut: boolean;
+    durationMs: number;
+    stdout: string;
+    stderr: string;
+    /** True when output was longer than 1 MB and cut off. */
+    stdoutTruncated: boolean;
+    stderrTruncated: boolean;
   }
 
   /** Where the widget is listed in the widget library. */
@@ -462,6 +507,21 @@ declare namespace WinWidget {
        *   document.addEventListener("drop", async e => { e.preventDefault(); add(await widget.shell.paths(e.dataTransfer.files)); });
        */
       paths(files: FileList | File[]): Promise<string[]>;
+    };
+
+    /**
+     * Third-party CLI programs declared in widget.json "tools". The host downloads each https URL
+     * into the widget's bin folder, checks its SHA-256, then runs it. Needs "tool.exec" and the
+     * matching "network:<host>" permission.
+     */
+    tool: {
+      list(): Promise<ToolInfo[]>;
+      status(name: string): Promise<ToolInfo>;
+      /** Downloads and verifies the tool now; run() does this automatically. */
+      ensure(name: string, options?: { force?: boolean }): Promise<{ name: string; path: string; downloaded: boolean; size: number }>;
+      run(name: string, options?: ToolRunOptions): Promise<ToolRunResult>;
+      /** Deletes the cached program and its sidecar. It is downloaded again on the next run. */
+      remove(name: string): Promise<{ name: string; removed: boolean }>;
     };
 
     /** The Windows clipboard. Needs the "clipboard" permission. */

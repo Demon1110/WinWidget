@@ -9,6 +9,7 @@ A widget is a folder: a `widget.json` file plus ordinary HTML, CSS and JavaScrip
 - [Windows of your own: createBrowserWindow](#windows-of-your-own-createbrowserwindow)
 - [Looks: follow the theme](#looks-follow-the-theme)
 - [Dragging, menus and clicks](#dragging-menus-and-clicks)
+- [Third-party CLI tools](#third-party-cli-tools)
 - [Permissions](#permissions)
 - [Debugging](#debugging)
 - [Packaging and sharing](#packaging-and-sharing)
@@ -210,6 +211,7 @@ Save files as **UTF-8**.
 | `size` | | Card size in pixels (without the shadow). `width`/`height` is the size when first added; `min*`/`max*` limit resizing; `resizable: false` turns resizing off; `grow` (0–1) says whether the content grows when the card is made bigger than its default size, see [Content that grows with the card](#content-that-grows-with-the-card). |
 | `layer` | | Layer when first added: `desktop` (default: under all windows, still visible after Win+D), `normal`, or `top` (always on top). Users can change it. |
 | `permissions` | | What it needs to do; see [Permissions](#permissions). |
+| `tools` | | Third-party CLI programs the host downloads and runs; see [Third-party CLI tools](#third-party-cli-tools). Requires `tool.exec` and the download host's `network:` permission. |
 | `settings` | | Its settings. The Control Center builds a form from them. |
 
 ### settings
@@ -832,6 +834,67 @@ WinWidget handles these for you:
 
 ---
 
+## Third-party CLI tools
+
+A widget can hand a command-line program to the host instead of shipping it in the `.fwz`. The host downloads it once, verifies the SHA-256, keeps it under the widget's `bin\` folder and runs it without a shell. This is how a small widget can do screenshots, OCR, translation or conversion with a well-known CLI.
+
+Declare the program in `widget.json`:
+
+```json
+{
+  "tools": [
+    {
+      "name": "ocr",
+      "url": "https://example.com/tools/ocr.exe",
+      "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "filename": "ocr.exe",
+      "size": 12345678,
+      "timeout": 30000
+    }
+  ],
+  "permissions": ["tool.exec", "network:example.com"]
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `name` | The name used by `widget.tool.run()`; lowercase letters, digits, dots, dashes and underscores, 1–32 characters |
+| `url` | An `https://` address. Redirects are followed, but every hop must also be allowed |
+| `sha256` | **Required.** 64 hex characters; a download that does not match is deleted |
+| `filename` | The file under `bin\`; defaults to the last segment of `url`. Must end with `.exe` |
+| `size` | Optional expected size in bytes; also caps the download at 512 MB |
+| `timeout` | Optional default run timeout in ms, 1 000–300 000; default 30 000 |
+
+The download host must be declared as `network:<host>`, and `tool.exec` must be in `permissions`. A third-party widget asks the user to allow both. The cache is `<widget folder>\bin\<filename>`; built-in widgets fall back to `%AppData%\WinWidget\db\tools\<widget-id>`.
+
+```js
+// First run downloads and verifies; later runs reuse the cached file.
+const result = await widget.tool.run("ocr", {
+  args: ["--lang", "chi_sim", "shot.png"],
+  timeout: 60000,
+});
+
+if (result.ok) {
+  console.log(result.stdout);
+} else {
+  console.error(result.timedOut ? "OCR timed out" : result.stderr);
+}
+```
+
+| Call | Returns |
+|---|---|
+| `widget.tool.list()` | Every declared tool with `path`, `cached`, `downloaded` and `bytes` |
+| `widget.tool.status(name)` | The same object for one tool |
+| `widget.tool.ensure(name, { force })` | `{ name, path, downloaded, size }`; downloads now |
+| `widget.tool.run(name, { args, stdin, timeout, cwd })` | `{ code, ok, timedOut, durationMs, stdout, stderr, stdoutTruncated, stderrTruncated, … }` |
+| `widget.tool.remove(name)` | `{ name, removed }`; `removed` is true only when the file is gone. The next run downloads it again |
+
+**Limits:** arguments are an array, never a shell string (64 arguments, 8 192 bytes each); stdin is 1 MB; stdout and stderr are 1 MB each and the overflow flag is set; `cwd` must be a folder inside the widget. A timeout kills the process and returns `timedOut: true` with `code: -1`.
+
+Only programs listed in `tools` can be run — the page cannot execute an arbitrary path. Executables are fetched from outside the package, so a widget package still cannot contain `.exe`, `.dll` or scripts.
+
+---
+
 ## Permissions
 
 By default a widget can only show its own content: it can't go online, can't read system figures and can't touch files on the PC. To do more, list what it needs under `permissions` in `widget.json`:
@@ -853,6 +916,7 @@ By default a widget can only show its own content: it can't go online, can't rea
 | `sharp` | `utools.sharp`: processing pictures in the host (users see a clear warning when allowing it) |
 | `ubrowser` | `utools.ubrowser`: fetching pages (users see a clear warning when allowing it) |
 | `shell.launch` | `widget.shell.launch`, `openWith`, `rename`, `pick`, `save`, `reveal`, `trash`, `info`, `paths`, `fileIcon`: opening programs and files, opening a link with a chosen program, renaming files in place, choosing files, choosing where to save, showing a file in Explorer, moving it to the recycle bin, reading names and icons (users see a clear warning when allowing it) |
+| `tool.exec` | `widget.tool.*`: downloading the CLI programs declared in `tools`, checking their SHA-256 and running them (users see a clear warning when allowing it; the download hosts need `network:` too) |
 
 Reading a folder needs no permission: the widget can read only the pictures in the folder the user chose in its settings. See [`widget.files`](#a-folder-the-user-chose-widgetfiles).
 
@@ -1399,6 +1463,10 @@ Anything returning a Promise can be awaited; "sync" means it returns immediately
 | `widget.shell.info(path, {size})` | `shell.launch` | Promise | name, kind, icon |
 | `widget.shell.pick({type, filter, title})` | `shell.launch` | Promise | file or folder dialog |
 | `widget.shell.paths(files)` | `shell.launch` | Promise | paths of dropped files |
+| `widget.tool.list()` / `status(name)` | `tool.exec` | Promise | cache state of declared CLI tools |
+| `widget.tool.ensure(name, {force})` | `tool.exec` + `network:` | Promise | download and verify now |
+| `widget.tool.run(name, {args, stdin, timeout, cwd})` | `tool.exec` | Promise | exit code, stdout, stderr, timeout |
+| `widget.tool.remove(name)` | `tool.exec` | Promise | delete the cached program |
 | `widget.convertChinese(text, to)` | — | Promise | simplified ↔ traditional |
 | `widget.notify(o)` / `widget.notify.cancel(tag?)` | `notify` | Promise | Windows notifications, bookable |
 | `widget.window.getSize()` | — | Promise | current card size |

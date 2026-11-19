@@ -5,7 +5,7 @@
 use crate::core::config::AppConfig;
 use crate::model::manifest::Manifest;
 
-pub const KNOWN: [&str; 14] = [
+pub const KNOWN: [&str; 15] = [
     "system",
     "bluetooth",
     "notify",
@@ -21,6 +21,8 @@ pub const KNOWN: [&str; 14] = [
     "shell.launch",
     // Handing the paths of files dropped on a card to its page (the "drop" event).
     "shell.drop",
+    // Downloading a declared CLI tool into the widget's bin folder and running it.
+    "tool.exec",
 ];
 
 pub fn is_known(p: &str) -> bool {
@@ -94,30 +96,7 @@ pub fn has(allowed: &[String], permission: &str) -> bool {
     allowed.iter().any(|p| p.eq_ignore_ascii_case(permission))
 }
 
-/// Network hosts from the allowed permissions: "api.example.com", "*.example.com" or "*".
-pub fn hosts(allowed: &[String]) -> Vec<String> {
-    allowed
-        .iter()
-        .filter(|p| p.to_lowercase().starts_with("network:"))
-        .map(|p| p["network:".len()..].trim().to_lowercase())
-        .filter(|h| !h.is_empty())
-        .collect()
-}
-
-pub fn allows_host(allowed: &[String], host: &str) -> bool {
-    let host = host.to_lowercase();
-    for pattern in hosts(allowed) {
-        if pattern == "*" || pattern == host {
-            return true;
-        }
-        if let Some(rest) = pattern.strip_prefix("*.") {
-            if host == rest || host.ends_with(&format!(".{rest}")) {
-                return true;
-            }
-        }
-    }
-    false
-}
+pub use crate::core::net::{allows_host, hosts};
 
 /// Content-Security-Policy for a widget page: its own origin, plus only the hosts it may reach.
 /// Inline scripts and eval stay allowed so any framework works.

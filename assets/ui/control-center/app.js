@@ -516,6 +516,7 @@ function permName(p) {
   if (p === "clipboard") return t("剪貼簿");
   if (p === "screen") return t("螢幕擷取");
   if (p === "shell.launch") return t("打開程式");
+  if (p === "tool.exec") return t("執行第三方工具");
   if (p.startsWith("network:")) return p.slice(8) === "*" ? t("連到任何網站") : t("連網 {host}", { host: p.slice(8) });
   return p;
 }
@@ -531,6 +532,7 @@ function permInfo(p) {
   if (p === "media") return { icon: "note", title: t("讀取和控制正在播放的媒體"), desc: t("看到正在播放的歌名、歌手和封面，可以播放、暫停和切換曲目。") };
   if (p === "clipboard") return { icon: "note", title: t("讀寫剪貼簿"), desc: t("讀取你複製的文字，或把文字放進剪貼簿。只在你信任這個組件時允許。"), warn: true };
   if (p === "screen") return { icon: "chip", title: t("擷取螢幕畫面"), desc: t("把整個螢幕截成圖片交給組件處理。只在你信任這個組件時允許。"), warn: true };
+  if (p === "tool.exec") return { icon: "tool", title: t("執行第三方工具"), desc: t("下載並執行組件宣告的命令列工具，會先核對 SHA-256。只在你信任這個組件時允許。"), warn: true };
   const h = p.slice(8);
   if (h === "*") return { icon: "globe", title: t("連到任何網站"), desc: t("可以和任何網站收發資料。"), warn: true };
   if (h.startsWith("*.")) return { icon: "globe", title: t("連到 {host} 和它的子網域", { host: h.slice(2) }), desc: t("和這些網站收發資料。") };
@@ -545,6 +547,7 @@ const PERM_ICONS = {
   open: '<path d="M13 4.5h6.5V11M19.5 4.5 11 13"/><path d="M10 6.5H4.5v13h13V14"/>',
   note: '<path d="M9.5 17.5V6l9-2v11.5"/><circle cx="7" cy="17.5" r="2.5"/><circle cx="16" cy="15.5" r="2.5"/>',
   bluetooth: '<path d="M12 3.5v17l5.5-4.2L7 8M12 3.5l5.5 4.2L7 16"/>',
+  tool: '<path d="M5 7.5 7.5 5l4 4-2.5 2.5z"/><path d="M9.5 11.5 4 17v3h3l5.5-5.5"/><path d="M15 4.5h5v5"/><path d="M20 4.5 14 10.5"/>',
 };
 
 function permList(list, fresh = [], unknown = []) {

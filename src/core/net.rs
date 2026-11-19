@@ -42,7 +42,7 @@ pub fn fetch(allowed: &[String], req: FetchRequest) -> Result<Value, String> {
         if scheme != "http" && scheme != "https" {
             return Err("only http and https addresses can be fetched".into());
         }
-        if !crate::model::permissions::allows_host(allowed, &host) {
+        if !allows_host(allowed, &host) {
             return Err(format!(
                 "\"{host}\" is not allowed: add \"network:{host}\" to permissions in widget.json and allow it in the control center"
             ));
@@ -171,7 +171,32 @@ fn with_scheme(address: &str) -> String {
     }
 }
 
-fn split_url(url: &str) -> Result<(String, String), String> {
+/// Network hosts from the allowed permissions: "api.example.com", "*.example.com" or "*".
+pub fn hosts(allowed: &[String]) -> Vec<String> {
+    allowed
+        .iter()
+        .filter(|p| p.to_lowercase().starts_with("network:"))
+        .map(|p| p["network:".len()..].trim().to_lowercase())
+        .filter(|h| !h.is_empty())
+        .collect()
+}
+
+pub fn allows_host(allowed: &[String], host: &str) -> bool {
+    let host = host.to_lowercase();
+    for pattern in hosts(allowed) {
+        if pattern == "*" || pattern == host {
+            return true;
+        }
+        if let Some(rest) = pattern.strip_prefix("*.") {
+            if host == rest || host.ends_with(&format!(".{rest}")) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+pub(crate) fn split_url(url: &str) -> Result<(String, String), String> {
     let (scheme, rest) = url
         .split_once("://")
         .ok_or_else(|| format!("\"{url}\" is not a full address"))?;
@@ -190,7 +215,7 @@ fn split_url(url: &str) -> Result<(String, String), String> {
     Ok((scheme.to_lowercase(), host))
 }
 
-fn join_url(base: &str, next: &str) -> String {
+pub(crate) fn join_url(base: &str, next: &str) -> String {
     if next.starts_with("http://") || next.starts_with("https://") {
         return next.to_string();
     }
