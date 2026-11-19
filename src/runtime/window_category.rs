@@ -249,9 +249,6 @@ pub fn build_custom(
     if transparent {
         w::clear_background_brush(hwnd);
     }
-    if transparent && jbool(&o, "seeThrough").unwrap_or(false) {
-        w::set_see_through(hwnd, true);
-    }
 
     if always_on_top {
         w::set_topmost(hwnd, true);
@@ -296,6 +293,12 @@ pub fn build_custom(
         // stated *after* the frame is dropped, because a frame change clears them.
         w::extend_frame(hwnd);
         w::per_pixel_alpha(hwnd);
+        // Turn off any DWM backdrop last, after every restack/recomposite above. A `seeThrough`
+        // window must let the page's alpha land on the desktop with no tinted layer in between —
+        // an accent drawn before those frame changes came back as a white sheet on light themes.
+        if jbool(&o, "seeThrough").unwrap_or(false) {
+            w::set_see_through(hwnd, true);
+        }
     }
     // `focusable: false` is the uTools option for overlay windows: they show up on top of the
     // user's work without ever becoming the active window. The style stops a click from doing it,

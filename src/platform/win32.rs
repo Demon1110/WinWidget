@@ -946,20 +946,20 @@ pub fn clear_background_brush(hwnd: HWND) {
     }
 }
 
-/// A see-through window with no blur behind it.
+/// Turns off every DWM backdrop so the page's own alpha is all that is composited.
 ///
-/// DWM's accent replaces whatever the window would otherwise paint behind its page. The transient
-/// gradient state paints no tint of its own, so the page's alpha lands on the desktop as it is —
-/// sharp wallpaper, sharp windows, only the page's own pixels on top.
-pub fn set_see_through(hwnd: HWND, on: bool) {
+/// This used to set `ACCENT_ENABLE_TRANSPARENTGRADIENT` on the theory that a gradient with a
+/// zero alpha paints nothing. It does not: that state asks DWM to draw a tinted backdrop, and on
+/// light themes the tint comes out white — a full-screen effect then shows up as a white sheet
+/// with the desktop showing faintly through it. Per-pixel alpha is already supplied by tao's
+/// `DwmEnableBlurBehindWindow` (empty region) plus `extend_frame` / `per_pixel_alpha`, so the
+/// correct "see through" state is simply no accent at all. Both `on` and `off` disable it;
+/// keeping the argument makes the call site read naturally.
+pub fn set_see_through(hwnd: HWND, _on: bool) {
     let Some(f) = composition_fn() else { return };
     let mut policy = ACCENT_POLICY {
-        accent_state: if on {
-            ACCENT_ENABLE_TRANSPARENTGRADIENT
-        } else {
-            ACCENT_DISABLED
-        },
-        accent_flags: 2,
+        accent_state: ACCENT_DISABLED,
+        accent_flags: 0,
         gradient_color: 0,
         animation_id: 0,
     };
