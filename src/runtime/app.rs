@@ -2,6 +2,7 @@
 
 use crate::core::config::{AppConfig, ConfigStore, InstanceConfig};
 use crate::core::ports::{EventsHost, ScheduleHost};
+use crate::model::appearance::SHADOW_MARGIN_DIP;
 use crate::model::manifest::Manifest;
 use crate::platform::tray::TrayHandle;
 use crate::runtime::window::WidgetWin;
@@ -224,19 +225,21 @@ impl App {
         if self.store.data.first_run_done {
             return;
         }
-        let (left, right, bottom) = self.primary_work_area();
-        let _ = (left, bottom);
-        let scale = 1.0;
-        for (index, widget) in ["winwidget.clock", "winwidget.sysinfo"].iter().enumerate() {
+        for widget in ["winwidget.clock", "winwidget.sysinfo"] {
             let Some(manifest) = self.catalog.find(widget).cloned() else {
                 continue;
             };
-            let mut inst = InstanceConfig::default();
-            inst.widget = widget.to_string();
-            inst.width = manifest.size.width;
-            inst.height = manifest.size.height;
-            inst.x = right - ((inst.width + 40.0) * scale) as i32;
-            inst.y = ((40.0 + index as f64 * (inst.height + 60.0)) * scale) as i32;
+            let width = manifest.size.width;
+            let height = manifest.size.height;
+            let (slot_x, slot_y) = self.free_slot(width, height);
+            let inst = InstanceConfig {
+                widget: widget.to_string(),
+                width,
+                height,
+                x: slot_x,
+                y: slot_y,
+                ..InstanceConfig::default()
+            };
             self.store.data.instances.push(inst);
         }
         self.store.data.first_run_done = true;
@@ -971,7 +974,10 @@ impl App {
         {
             inst.layer = layer;
         }
-        let (slot_x, slot_y) = at.unwrap_or_else(|| self.free_slot());
+        let (slot_x, slot_y) = match at {
+            Some(pos) => pos,
+            None => self.free_slot(inst.width, inst.height),
+        };
         inst.x = slot_x;
         inst.y = slot_y;
         let id = inst.id.clone();
@@ -982,24 +988,45 @@ impl App {
         Ok(id)
     }
 
-    /// A free spot near the middle-right of the primary screen.
-    fn free_slot(&self) -> (i32, i32) {
+    /// A free spot against the right edge of the primary work area. `width_dip` and `height_dip`
+    /// are the card's logical size: the returned x/y is the card's top-left, so the shadow margin
+    /// is added on the outside and the whole card stays inside the work area.
+    fn free_slot(&self, width_dip: f64, height_dip: f64) -> (i32, i32) {
         let scale = self.scale_factor();
         let (left, right, bottom) = self.primary_work_area();
-        let width = (260.0 * scale) as i32;
-        let height = (160.0 * scale) as i32;
-        let mut x = right - width - (24.0 * scale) as i32;
-        let mut y = self.store.data.instances.len() as i32 * height + (40.0 * scale) as i32;
-        while y + height > bottom {
-            y -= height;
-            x -= width;
-            if x < left + width {
-                x = right - width - (24.0 * scale) as i32;
-                y = (40.0 * scale) as i32;
+        let shadow = (SHADOW_MARGIN_DIP * scale).round() as i32;
+        let gap = (8.0 * scale).round() as i32;
+        let width = (width_dip * scale).round() as i32;
+        let height = (height_dip * scale).round() as i32;
+        let top = (40.0 * scale).round() as i32;
+        let start_x = (right - width - shadow - gap).max(left + shadow);
+
+        let overlaps = |x: i32, y: i32| {
+            self.store.data.instances.iter().any(|inst| {
+                let other_width = (inst.width * scale).round() as i32;
+                let other_height = (inst.height * scale).round() as i32;
+                x - shadow < inst.x + other_width + shadow
+                    && x + width + shadow > inst.x - shadow
+                    && y - shadow < inst.y + other_height + shadow
+                    && y + height + shadow > inst.y - shadow
+            })
+        };
+
+        let mut column_x = start_x;
+        for _ in 0..6 {
+            let mut y = top;
+            while y + height + shadow <= bottom {
+                if !overlaps(column_x, y) {
+                    return (column_x, y);
+                }
+                y += height + gap;
+            }
+            column_x -= width + gap;
+            if column_x < left + shadow {
                 break;
             }
         }
-        (x, y)
+        (start_x, top)
     }
 
     pub fn remove_instance(&mut self, id: &str) {
@@ -1041,7 +1068,7 @@ impl App {
         let source = self.instance(id)?.clone();
         let mut copy = source.clone();
         copy.id = crate::core::config::new_id();
-        let (x, y) = self.free_slot();
+        let (x, y) = self.free_slot(copy.width, copy.height);
         copy.x = x;
         copy.y = y;
         let new_id = copy.id.clone();
