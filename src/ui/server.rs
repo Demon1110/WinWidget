@@ -135,7 +135,13 @@ fn handle(state: &ServeState, request: Request, port: u16) {
     } else if let Some(rest) = path.strip_prefix("/__ui/") {
         serve_file(&paths.ui_dir(), rest, None, None)
     } else if let Some(rest) = path.strip_prefix("/__docs/") {
-        serve_file(&paths.docs_dir(), rest, None, None)
+        // The guide is one file. `/__docs/` and the old `/__docs/index.html` both map to it, so
+        // the binary carries a single copy instead of a byte-identical index.html as well.
+        if rest.is_empty() || rest == "index.html" {
+            serve_file(&paths.docs_dir(), "developer-guide.html", None, None)
+        } else {
+            serve_file(&paths.docs_dir(), rest, None, None)
+        }
     } else if let Some(rest) = path.strip_prefix("/__templates/") {
         serve_file(&paths.templates_dir(), rest, None, None)
     } else if let Some(rest) = path.strip_prefix("/__preview/") {

@@ -10,14 +10,15 @@ material that never ships, so it stays out of `assets/` (everything under
 
 This script converts the Traditional text to Simplified Chinese (zhconv plus a
 term table, because a character-by-character conversion turns 資料夾 into 资料夹),
-renders all three languages to HTML, and writes
+renders all three languages to HTML, and writes one self-contained file:
 
-    assets/docs/developer-guide.html   the guide you double-click
-    assets/docs/index.html             the same file, so /__docs/ works in the app
+    assets/docs/developer-guide.html   opened from disk and served at /__docs/
 
-The two generated files stay under `assets/` because the app serves them; the
-Markdown sources and milestone screenshots do not, so the binary keeps only what
-it actually shows.
+It used to also write a byte-identical `index.html` just so `/__docs/` had a
+default page; the server now maps that path to developer-guide.html instead, so
+the binary no longer carries two copies of a 400 KB document. The generated file
+stays under `assets/` because the app serves it; the Markdown sources and
+milestone screenshots do not, so the binary keeps only what it actually shows.
 
 Everything is inlined: no images to fetch, no CSS to load, no markdown parser at
 runtime, so it opens with a plain file:// double-click and with no network.
@@ -44,7 +45,6 @@ ZH_TW = SRC / "組件開發指南.md"
 EN = SRC / "widget-guide.en.md"
 ZH_CN = SRC / "組件開發指南.zh-CN.md"
 OUT_HTML = DOCS / "developer-guide.html"
-OUT_INDEX = DOCS / "index.html"
 
 # Character-level conversion leaves Taiwanese vocabulary behind; these are the
 # words this guide actually uses, mapped to what a Simplified reader expects.
@@ -610,9 +610,8 @@ def build() -> int:
         "lang_buttons": "\n    ".join(buttons),
     }
     OUT_HTML.write_text(page, encoding="utf-8", newline="")
-    OUT_INDEX.write_text(page, encoding="utf-8", newline="")
     size = OUT_HTML.stat().st_size
-    print("wrote %s (%d KB) and %s" % (OUT_HTML.name, size // 1024, OUT_INDEX.name))
+    print("wrote %s (%d KB)" % (OUT_HTML.name, size // 1024))
     print("zh-TW %d chars, zh-CN %d chars, en %d chars" % (len(zh_tw_md), len(zh_cn_md), len(en_md)))
     return 0
 

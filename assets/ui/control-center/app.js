@@ -562,7 +562,7 @@ function permList(list, fresh = [], unknown = []) {
 
 function pageThemes() {
   const cards = S.themes.map((th, n) => `<button class="theme${th.id === S.themeId ? " on" : ""}" data-action="theme" data-id="${th.id}" data-key="t-${th.id}" style="--i:${n}">
-      <img src="img/theme-${th.id}.png" alt="">
+      <img src="img/theme-${th.id}.webp" alt="">
       <div class="t-name">${esc(th.name)}${th.id === S.themeId ? `<span class="tag">${t("使用中")}</span>` : ""}</div>
       <div class="t-desc">${esc(th.description || "")}</div>
     </button>`).join("");
