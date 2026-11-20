@@ -5,6 +5,13 @@ let animationTimerId = null;
 let effectState = {};
 let glRenderer = null;
 
+// URL 查询参数（overlay.html?fx=<id>&d=<display>&wop=<壁纸透明度>&txt=<自定义文字>）
+function param(key) {
+  var m = new RegExp('[?&]' + key + '=([^&]*)').exec(location.search);
+  return m ? decodeURIComponent(m[1]) : '';
+}
+window.__bloomParam = param;
+
 const renderers = {};
 const renderers3D = {};
 const initFns = {};
@@ -161,7 +168,8 @@ window.startEffect = function(effectId, options) {
 
   canvas = document.createElement('canvas');
   canvas.id = 'bloom-canvas';
-  canvas.style.cssText = 'display:block;width:100vw;height:100vh';
+  // fixed 定位 + z-index:1：画布要盖在壁纸垫底层（z-index:0）之上
+  canvas.style.cssText = 'position:fixed;left:0;top:0;z-index:1;display:block;width:100vw;height:100vh';
   document.body.appendChild(canvas);
   width = window.innerWidth;
   height = window.innerHeight;
@@ -170,6 +178,7 @@ window.startEffect = function(effectId, options) {
 
   currentEffect = effectId;
   effectState = options ? { ...options } : {};
+  if (effectState.wallpaperOpacity !== undefined) applyWallpaperOpacity(effectState.wallpaperOpacity);
   // 光标类特效才开启 preload 的原生轮询，其余特效完全跳过
   if (window.__bloomCursorService && window.__bloomCursorService.setActive) {
     try { window.__bloomCursorService.setActive(!!CURSOR_EFFECTS[effectId]); } catch (e) {}
@@ -302,15 +311,32 @@ window.startEffect = async function(effectId, options) {
 
 // ── 壁纸层背景：把用户的真实桌面壁纸垫在特效底下 ──
 // 宿主在 /__wallpaper 上返回当前壁纸图片；404（纯色壁纸/取不到）时保持深色兜底。
-// 时间戳避免 WebView2 缓存旧壁纸；overlay.html 的深色底继续作为图片加载前的底色。
+// 透明度（设置里的「壁纸透明度」，0-100）用独立垫底层实现：画布 fixed 在其上，
+// 调透明度/换文字不用重建窗口。时间戳避免 WebView2 缓存旧壁纸；
+// overlay.html 的深色底继续作为图片加载前的底色。
+var wallpaperLayer = null;
+function applyWallpaperOpacity(v) {
+  if (!wallpaperLayer) return;
+  var n = Number(v);
+  if (!Number.isFinite(n)) n = 100;
+  n = Math.min(100, Math.max(0, n));
+  wallpaperLayer.style.opacity = String(n / 100);
+}
+window.__bloomSetWallpaperOpacity = applyWallpaperOpacity;
 (function () {
   function paintWallpaper() {
     var body = document.body;
     if (!body) return;
-    body.style.backgroundImage = 'url("/__wallpaper?ts=' + Date.now() + '")';
-    body.style.backgroundSize = 'cover';
-    body.style.backgroundPosition = 'center';
-    body.style.backgroundRepeat = 'no-repeat';
+    if (!wallpaperLayer) {
+      wallpaperLayer = document.createElement('div');
+      wallpaperLayer.id = 'bloom-wallpaper';
+      wallpaperLayer.style.cssText = 'position:fixed;left:0;top:0;width:100vw;height:100vh;' +
+        'background:url("/__wallpaper?ts=' + Date.now() + '") center / cover no-repeat;' +
+        'pointer-events:none;z-index:0';
+      body.appendChild(wallpaperLayer);
+    }
+    var wop = param('wop');
+    if (wop !== '') applyWallpaperOpacity(wop);
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', paintWallpaper);
@@ -320,18 +346,18 @@ window.startEffect = async function(effectId, options) {
 })();
 
 // ── 这一页是被卡片用 overlay.html?fx=<id>&d=<display> 打开的：先把 fx 跑起来 ──
-// （卡片之后要换特效就走 executeJavaScript —— 这一条只负责「窗口一出现就有东西在动」）
+// （卡片之后要换特效就走 executeJavaScript —— 这一条只负责「窗口一出现就有东西在动」，
+//   壁纸透明度与自定义文字也从 URL 上带初始值，等卡片那边补发的 startEffect 再正式对齐）
 (function () {
-  function param(key) {
-    var m = new RegExp('[?&]' + key + '=([^&]*)').exec(location.search);
-    return m ? decodeURIComponent(m[1]) : '';
-  }
-  window.__bloomParam = param;
-
   var fx = param('fx');
   if (fx) {
     var go = function () {
-      try { window.startEffect(fx); } catch (e) { console.error('特效启动失败: ' + fx, e); }
+      var opt = {};
+      var wop = param('wop');
+      if (wop !== '' && Number.isFinite(Number(wop))) opt.wallpaperOpacity = Number(wop);
+      var txt = param('txt');
+      if (txt) opt.text = txt;
+      try { window.startEffect(fx, opt); } catch (e) { console.error('特效启动失败: ' + fx, e); }
     };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go);
     else requestAnimationFrame(go);

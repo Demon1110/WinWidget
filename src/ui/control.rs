@@ -213,6 +213,7 @@ fn schema_json(manifest: &crate::model::manifest::Manifest) -> Value {
             "min": spec.min,
             "max": spec.max,
             "step": spec.step,
+            "unit": spec.unit,
             "placeholder": crate::core::text::pick(spec.placeholder.as_ref(), ""),
             "options": options,
         }));

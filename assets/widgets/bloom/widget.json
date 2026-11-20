@@ -49,6 +49,32 @@
         "en": "Turn off to stop the effect whenever the card page reloads"
       },
       "default": true
+    },
+    {
+      "key": "wallpaperOpacity",
+      "type": "slider",
+      "label": { "zh-TW": "壁紙透明度", "zh-CN": "壁纸透明度", "en": "Wallpaper opacity" },
+      "description": {
+        "zh-TW": "特效底下墊的桌面壁紙有多清楚，0% 就只剩深色底",
+        "zh-CN": "特效底下垫的桌面壁纸有多清楚，0% 就只剩深色底",
+        "en": "How strongly the desktop wallpaper shows beneath the effect; 0% leaves only the dark base"
+      },
+      "default": 100,
+      "min": 0,
+      "max": 100,
+      "step": 5,
+      "unit": "%"
+    },
+    {
+      "key": "glyphText",
+      "type": "text",
+      "label": { "zh-TW": "文字特效文本", "zh-CN": "文字特效文本", "en": "Text for word effects" },
+      "description": {
+        "zh-TW": "星塵成字、鐵畫銀鉤、字火煙花顯示的文字，2-10 個字，留空用各特效默認",
+        "zh-CN": "星尘成字、铁画银钩、字火烟花显示的文字，2-10 个字，留空用各特效默认",
+        "en": "Text shown by Glyph dust, Iron glyph and Glyph fireworks (2-10 chars; empty = each effect's default)"
+      },
+      "default": ""
     }
   ]
 }

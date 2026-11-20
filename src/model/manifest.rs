@@ -74,6 +74,8 @@ pub struct SettingSpec {
     pub min: Option<f64>,
     pub max: Option<f64>,
     pub step: Option<f64>,
+    /// slider 数值的单位后缀（如 "%"），仅用于控制中心展示
+    pub unit: Option<String>,
     pub placeholder: Option<Value>,
     pub options: Option<Vec<OptionSpec>>,
 }
@@ -89,6 +91,7 @@ impl Default for SettingSpec {
             min: None,
             max: None,
             step: None,
+            unit: None,
             placeholder: None,
             options: None,
         }

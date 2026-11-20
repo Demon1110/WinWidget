@@ -118,13 +118,13 @@ const CATALOG = [
   { id: "mouseFollow", cat: "relax", icon: "✨", color: "#00e5ff",
     name: { "zh-CN": "星尘光标", "zh-TW": "星塵游標", en: "Stardust cursor" },
     desc: { "zh-CN": "鼠标移动时涌出飘散的星尘", "zh-TW": "滑鼠移動時湧出飄散的星塵", en: "Stardust trailing the pointer" } },
-  { id: "glyphDust", cat: "relax", icon: "🔤", color: "#7fd4ff",
+  { id: "glyphDust", cat: "relax", icon: "🔤", color: "#7fd4ff", customText: true,
     name: { "zh-CN": "星尘成字", "zh-TW": "星塵成字", en: "Glyph dust" },
     desc: { "zh-CN": "文字凝成粒子星阵，鼠标划过掀浪", "zh-TW": "文字凝成粒子星陣，滑鼠劃過掀浪", en: "Words made of dust, stirred by the pointer" } },
-  { id: "ironGlyph", cat: "relax", icon: "🧲", color: "#9fb6cc",
+  { id: "ironGlyph", cat: "relax", icon: "🧲", color: "#9fb6cc", customText: true,
     name: { "zh-CN": "铁画银钩", "zh-TW": "鐵畫銀鉤", en: "Iron glyph" },
     desc: { "zh-CN": "万枚铁屑凝成书法", "zh-TW": "萬枚鐵屑凝成書法", en: "Ten thousand filings forming calligraphy" } },
-  { id: "glyphFireworks", cat: "relax", icon: "🧨", color: "#ffc46b",
+  { id: "glyphFireworks", cat: "relax", icon: "🧨", color: "#ffc46b", customText: true,
     name: { "zh-CN": "字火烟花", "zh-TW": "字火煙花", en: "Glyph fireworks" },
     desc: { "zh-CN": "每隔几秒有一个字炸成烟花", "zh-TW": "每隔幾秒有一個字炸成煙花", en: "A character bursts into fireworks, then returns" } },
 ];
@@ -159,6 +159,30 @@ const setting = (key, fallback) => {
 const fxOf = (id) => CATALOG.find((f) => f.id === id) || null;
 const latest = () => (running ? fxOf(running) : null);
 
+// 文字特效（星尘成字/铁画银钩/字火烟花）的自定义文本：按码点数校验 2-10，
+// 不合法就回落空串（各特效用自己的默认文案）。
+function glyphTextOf(effectId) {
+  const fx = fxOf(effectId);
+  if (!fx || !fx.customText) return "";
+  const raw = String(setting("glyphText", "") || "").trim();
+  const len = [...raw].length;
+  return len >= 2 && len <= 10 ? raw : "";
+}
+
+// 壁纸透明度：0-100，垫在特效底下的桌面壁纸显示多清楚
+const wallpaperOpacity = () => {
+  const v = Number(setting("wallpaperOpacity", 100));
+  return Number.isFinite(v) ? Math.min(100, Math.max(0, Math.round(v))) : 100;
+};
+
+// 传给特效页 startEffect 的启动参数：壁纸透明度 + 自定义文字
+const effectOptions = (effectId) => {
+  const opt = { wallpaperOpacity: wallpaperOpacity() };
+  const txt = glyphTextOf(effectId);
+  if (txt) opt.text = txt;
+  return opt;
+};
+
 // ── 文字 ──
 const S = {
   name: t({ "zh-CN": "玩出花", "zh-TW": "玩出花", en: "Bloom" }),
@@ -181,6 +205,11 @@ const S = {
   }),
   started: (name) => t({ "zh-CN": `已开启「${name}」`, "zh-TW": `已開啟「${name}」`, en: `Started: ${name}` }),
   stopped: t({ "zh-CN": "已停止运行", "zh-TW": "已停止運行", en: "Effect stopped" }),
+  badGlyphText: t({
+    "zh-CN": "自定义文字需 2-10 个字，先用各特效默认文案",
+    "zh-TW": "自訂文字需 2-10 個字，先用各特效默認文案",
+    en: "Custom text takes 2-10 characters; using each effect's default for now",
+  }),
 };
 
 $("name").textContent = S.name;
@@ -321,8 +350,11 @@ async function openOverlay(display, effectId) {
     // 深色底，与各款霓虹/星空特效的调性一致；壁纸层不透明，这个颜色就是桌面底色。
     backgroundColor: "#0a0e1a",
   };
+  let url = "overlay.html?fx=" + encodeURIComponent(effectId) + "&d=" + encodeURIComponent(String(display.id)) + "&wop=" + wallpaperOpacity();
+  const txt = glyphTextOf(effectId);
+  if (txt) url += "&txt=" + encodeURIComponent(txt);
   const reply = await widget.call("win.create", {
-    file: "overlay.html?fx=" + encodeURIComponent(effectId) + "&d=" + encodeURIComponent(String(display.id)),
+    file: url,
     options,
   });
   const id = reply && reply.id;
@@ -341,7 +373,7 @@ async function sendEffect(win, effectId) {
   try {
     await widget.call("win.executeJavaScript", {
       win: win.id,
-      code: `window.startEffect && window.startEffect(${js(effectId)})`,
+      code: `window.startEffect && window.startEffect(${js(effectId)}, ${JSON.stringify(effectOptions(effectId))})`,
     });
   } catch (e) {
     /* 页面可能还在加载：它自己会照 URL 上的 fx 先跑一支 */
@@ -356,6 +388,12 @@ async function run(effectId) {
   if (busy) return;
   const fx = fxOf(effectId);
   if (!fx) return;
+  // 文字特效带了一份没通过校验的自定义文本时，温和提醒（特效本身照常用默认文案）
+  if (fx.customText) {
+    const raw = String(setting("glyphText", "") || "").trim();
+    const len = [...raw].length;
+    if (raw && (len < 2 || len > 10)) toast(S.badGlyphText, true);
+  }
   busy = true;
   try {
     const displays = await listDisplays();
@@ -428,9 +466,30 @@ function blindBox() {
 $("blind").addEventListener("click", blindBox);
 $("stop").addEventListener("click", () => stopAll(false));
 
+// 设置热更新：只有壁纸透明度变了就轻量同步（拖滑条不重启特效）；
+// 「仅主屏 / 全部屏」或自定义文字变了才就地重排 / 换字重跑。
+let lastDisplays = setting("displays", "all");
+let lastGlyphText = setting("glyphText", "");
+
 widget.settings.onChange(() => {
-  if (running) run(running);   // 「仅主屏 / 全部屏」改了就地重排
-  else paintStatus();
+  if (running) {
+    const displays = setting("displays", "all");
+    const glyphText = setting("glyphText", "");
+    const opacityOnly = displays === lastDisplays && glyphText === lastGlyphText;
+    lastDisplays = displays;
+    lastGlyphText = glyphText;
+    if (opacityOnly) {
+      const op = wallpaperOpacity();
+      for (const w of wins) {
+        widget.call("win.executeJavaScript", {
+          win: w.id,
+          code: `window.__bloomSetWallpaperOpacity && window.__bloomSetWallpaperOpacity(${op})`,
+        }).catch(() => {});
+      }
+    } else {
+      run(running);   // 换屏数或换文字：就地重排
+    }
+  } else paintStatus();
 });
 
 // 卡片被卸载（用户删掉这个组件）时，屏幕上的特效一并收走；换主题之类的重载则保留。
