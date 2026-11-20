@@ -650,6 +650,256 @@
     return api;
   }
 
+  // ── windows：窗口身份、集合、通信 ─────────────────────────────
+  // 一个组件可以开好几个窗口。这里登记 id ↔ key，让「设置窗还开着吗」「把消息发给兄弟窗口」
+  // 这类问题不用页面自己拿变量记；handle 的方法集和 utools 的 BrowserWindow 一致，
+  // 老代码 `win.setSize(...)` 照旧能用。
+  const winHandles = new Map(); // id → handle
+  const winKeys = new Map(); // key → handle
+
+  function makeWinHandle(seed) {
+    const s = seed || {};
+    const opt = s.options || s;
+    const state = {
+      id: Number(s.id) || 0,
+      key: s.key == null ? "" : String(s.key),
+      kind: s.kind || "window",
+      title: s.title == null ? "" : String(s.title),
+      width: Number(s.width) || 0,
+      height: Number(s.height) || 0,
+      x: Number(s.x) || 0,
+      y: Number(s.y) || 0,
+      visible: s.show !== false,
+      destroyed: false,
+      loaded: false,
+    };
+    const hooks = { loaded: [], closed: [], message: [] };
+    let ready = null;
+    let settle = null;
+    const closed = new Promise((resolve) => { settle = resolve; });
+    const fired = { closed: false };
+
+    function mirror(v) {
+      if (!v || typeof v !== "object") return;
+      for (const k of ["id", "key", "kind", "title", "width", "height", "x", "y", "visible", "destroyed", "loaded"]) {
+        if (v[k] !== undefined) state[k] = v[k];
+      }
+    }
+
+    /** 第一次用到才建窗；之后每次调用都等同一次「等它建好」。 */
+    function ensure() {
+      if (ready) return ready;
+      ready = call("win.create", { file: opt.html || opt.file || "", options: opt })
+        .then((reply) => {
+          if (reply && reply.id) {
+            state.id = reply.id;
+            mirror(reply.state);
+            winHandles.set(state.id, api);
+            if (state.key) winKeys.set(state.key, api);
+          }
+          return state.id;
+        });
+      return ready;
+    }
+
+    function invoke(method, params) {
+      return ensure().then(() =>
+        call("win." + method, Object.assign({ win: state.id }, params || {})).then((reply) => {
+          if (reply && reply.unsupported) {
+            if (!opt.quiet) console.warn("window." + method + "：", reply.unsupported);
+            return undefined;
+          }
+          mirror(reply);
+          return reply;
+        })
+      );
+    }
+
+    const api = {
+      get id() { return state.id; },
+      get key() { return state.key; },
+      get kind() { return state.kind; },
+      get title() { return state.title; },
+      /** 窗口关掉时 resolve：{ reason, button, value, result }。 */
+      get closed() { return closed; },
+      /** 页面 ready 的 Promise（`createBrowserWindow` 的 callback 等的是同一件事）。 */
+      get loaded() { return ensure(); },
+      show() { state.visible = true; return invoke("show"); },
+      showInactive() { state.visible = true; return invoke("showInactive"); },
+      hide() { state.visible = false; return invoke("hide"); },
+      focus() { return invoke("focus"); },
+      close(reason) {
+        state.destroyed = true;
+        return invoke("close", reason ? { reason: String(reason) } : {});
+      },
+      destroy() { state.destroyed = true; return invoke("destroy"); },
+      getSize() { return [state.width, state.height]; },
+      setSize(w, h) { return invoke("setSize", { width: Number(w), height: Number(h) }); },
+      getBounds() { return { x: state.x, y: state.y, width: state.width, height: state.height }; },
+      setBounds(b) { return invoke("setBounds", b || {}); },
+      getPosition() { return [state.x, state.y]; },
+      setPosition(x, y) { return invoke("setPosition", { x: Number(x), y: Number(y) }); },
+      setAlwaysOnTop(on) { return invoke("setAlwaysOnTop", { on: on !== false }); },
+      setOpacity(o) { return invoke("setOpacity", { opacity: Number(o) }); },
+      setTitle(t) { return invoke("setTitle", { title: t == null ? "" : String(t) }); },
+      isVisible() { return state.visible; },
+      isDestroyed() { return state.destroyed; },
+      on(hook, fn) {
+        if (hooks[hook] && typeof fn === "function") hooks[hook].push(fn);
+        return api;
+      },
+      off(hook, fn) {
+        const list = hooks[hook];
+        if (list) {
+          const at = list.indexOf(fn);
+          if (at >= 0) list.splice(at, 1);
+        }
+        return api;
+      },
+      webContents: Object.freeze({
+        get id() { return state.id; },
+        send(channel, ...args) { return invoke("send", { channel: String(channel), args }); },
+        executeJavaScript(code) { return invoke("executeJavaScript", { code: String(code == null ? "" : code) }); },
+        reload() { return invoke("reload"); },
+      }),
+    };
+
+    function fire(hook, arg) {
+      for (const fn of hooks[hook].slice()) {
+        try {
+          fn(arg);
+        } catch (e) {
+          console.error("window.on(" + hook + "):", e);
+        }
+      }
+    }
+
+    api.__ensure = ensure;
+    api.__loaded = function (snapshot) {
+      state.loaded = true;
+      mirror(snapshot);
+      fire("loaded", api);
+    };
+    api.__closed = function (detail) {
+      if (fired.closed) return;
+      fired.closed = true;
+      state.destroyed = true;
+      state.visible = false;
+      if (state.id) winHandles.delete(state.id);
+      if (state.key) winKeys.delete(state.key);
+      const result = (detail && detail.result) || {};
+      settle({
+        reason: (detail && detail.reason) || "api",
+        button: result.button,
+        value: result.value,
+        result,
+      });
+      fire("closed", { reason: (detail && detail.reason) || "api", result });
+    };
+    api.__message = function (payload) {
+      fire("message", payload);
+    };
+    return api;
+  }
+
+  /** 给宿主那条 `win.closed` / `win.loaded` / `ipc` 消息找到对应的 handle。 */
+  on("win.loaded", (d) => {
+    const h = d && winHandles.get(d.id);
+    if (h) h.__loaded(d.state);
+  });
+  on("win.closed", (d) => {
+    const h = d && winHandles.get(d.id);
+    if (h) h.__closed(d);
+  });
+  // 谁发来的消息都走同一个出口：`widget.on("message", ({ from, channel, args }) => …)`。
+  on("ipc", (d) => {
+    if (d && d.channel) emit("message", d);
+  });
+
+  const windowsApi = Object.freeze({
+    /**
+     * 开一个窗口，立刻拿到 handle（id 在保证建好后才有值，方法会自己等）。
+     * `{ key, reuse, html, width, height, title, showTitle, frame, draggable, closeOnEsc,
+     *   closeOnBlur, closeOnOutsideClick, autoClose, modal, opacity, transparent,
+     *   backgroundColor, alwaysOnTop, anchor, offset, fitContent, animation, theme }`
+     * 同 key 且 reuse（默认 true）时返回**已有的那个窗口**，把它叫到前面。
+     */
+    open(options) {
+      const opt = Object.assign({}, options || {});
+      const handle = makeWinHandle(opt);
+      if (handle.key) winKeys.set(handle.key, handle);
+      // 调 open 就是「现在开」：不等第一次方法调用才建窗。
+      handle.__ensure();
+      return handle;
+    },
+    /** 已经开着的窗口，按 id 或 key 找；没开过返回 null（同步）。 */
+    get(ref) {
+      if (typeof ref === "number") return winHandles.get(ref) || null;
+      if (ref == null) return null;
+      const text = String(ref);
+      const byKey = winKeys.get(text);
+      if (byKey) return byKey;
+      const num = Number(text);
+      return Number.isFinite(num) ? winHandles.get(num) || null : null;
+    },
+    /** 和 get 一样，但会问宿主一次（页面刷新后也能找回之前开的窗口）。 */
+    find(ref) {
+      return call("win.get", ref == null ? {} : typeof ref === "number" ? { win: ref } : { key: String(ref) })
+        .then((state) => {
+          if (!state || !state.id) return null;
+          const known = winHandles.get(state.id);
+          if (known) {
+            known.__loaded(state);
+            return known;
+          }
+          const handle = makeWinHandle(state);
+          handle.__loaded(state);
+          winHandles.set(state.id, handle);
+          if (state.key) winKeys.set(state.key, handle);
+          return handle;
+        });
+    },
+    has(ref) {
+      if (typeof ref === "string" && this.get(ref)) return Promise.resolve(true);
+      return call("win.has", typeof ref === "number" ? { win: ref } : { key: String(ref) });
+    },
+    /** 本组件还活着的窗口：[{id, key, kind, title, visible, focused, parent, created}]。 */
+    list() {
+      return call("win.list").then((rows) => (Array.isArray(rows) ? rows : []));
+    },
+    /** 定向发消息：目标可以是 id，也可以是 key（兄弟窗口，不限于父子）。 */
+    post(to, channel, ...args) {
+      return call("win.post", {
+        to: typeof to === "number" ? to : String(to),
+        channel: String(channel),
+        args,
+      });
+    },
+    /** 广播给本组件所有窗口（含卡片），但跳过自己。 */
+    broadcast(channel, ...args) {
+      return call("win.broadcast", { channel: String(channel), args });
+    },
+    /** 关一个窗口；reason 会出现在它的 closed 事件里。 */
+    close(ref, reason) {
+      const known = this.get(ref);
+      const target = known && known.id ? known.id : ref;
+      const params = typeof target === "number" ? { win: target } : { win: String(target) };
+      if (reason) params.reason = String(reason);
+      return call("win.close", params);
+    },
+    /** 按 kind / key 批量关；不带参数就把这个组件的窗口全关掉。 */
+    closeAll(filter) {
+      return call("win.closeAll", filter || {});
+    },
+    /** `windows.on("closed", ({id, key, reason, result}) => …)`，以及 "message"。 */
+    on(event, fn) {
+      if (typeof fn === "function" && (event === "message" || event === "closed" || event === "opened")) {
+        return on(event === "closed" ? "win.closed" : event === "message" ? "ipc" : "win.loaded", fn);
+      }
+      return () => {};
+    },
+  });
+
   // ── public API ─────────────────────────────────────────────
   const widget = Object.freeze({
     apiVersion: 1,
@@ -1029,14 +1279,34 @@
     notify,
 
     window: Object.freeze({
+      /** "main"（卡片）或 "custom"（组件自己开的窗口）。 */
+      get type() { return boot.windowType || "main"; },
+      /** 自定义窗口的 id；卡片为 0。 */
+      get id() { return boot.windowId || 0; },
       getSize: () => call("window.getSize"),
       setSize: (width, height) => call("window.setSize", { width, height }),
-      startDrag: () => send("window.drag"),
-      /** Puts the card away; the tray menu and the control center can bring it back. */
+      getBounds: () => call("window.getBounds"),
+      setBounds: (b) => call("window.setBounds", b || {}),
+      getPosition: () => call("window.getPosition"),
+      setPosition: (x, y) => call("window.setPosition", { x, y }),
+      /** 把窗口抬到最前（卡片不会被抢键盘焦点）。 */
+      focus: () => call("window.focus"),
+      setAlwaysOnTop: (on) => call("window.setAlwaysOnTop", { on: on !== false }),
+      isAlwaysOnTop: () => call("window.isAlwaysOnTop"),
+      /** 0–1。卡片是把页面整体调淡（窗口层是逐像素透明的，不能再叠一层 alpha）。 */
+      setOpacity: (o) => call("window.setOpacity", { opacity: Number(o) }),
+      setTitle: (t) => call("window.setTitle", { title: t == null ? "" : String(t) }),
+      /** 无边框窗口的自绘标题条/拖拽区按下时调用；卡片走它自己的拖动。 */
+      startDrag: () => ((boot.windowType || "main") === "custom" ? call("win.startDrag") : send("window.drag")),
+      /** 关掉自己：卡片等于收起（托盘还能叫回来）。 */
+      close: () => call("window.close"),
       hide: () => call("window.hide"),
-      /** Brings a hidden card back. */
       show: () => call("window.show"),
+      isVisible: () => state.visible,
     }),
+
+    /** 多窗口：开窗、查找、通信、批量关闭。旧写法 `utools.createBrowserWindow` 照旧可用。 */
+    windows: windowsApi,
 
     appearance: Object.freeze({
       get: () => ({ ...state.appearance }),

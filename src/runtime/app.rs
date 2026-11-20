@@ -70,6 +70,8 @@ pub struct App {
     /// window may be created.
     pub pending_customs: Vec<(u32, crate::runtime::window_category::CustomSpec)>,
     next_custom: u32,
+    /// 模态弹框：弹框 id → 被禁用的父窗口句柄。弹框关掉时按这张表恢复父窗口的输入。
+    pub modal_parents: std::collections::HashMap<u32, isize>,
     pub control: Option<ControlWin>,
     pub control_pending: bool,
     pub want_control: bool,
@@ -182,6 +184,7 @@ impl App {
             customs: HashMap::new(),
             pending_customs: Vec::new(),
             next_custom: 1,
+            modal_parents: std::collections::HashMap::new(),
             control: None,
             control_pending: false,
             want_control: true,
@@ -795,6 +798,46 @@ impl App {
         if self.customs.len() >= 24 {
             return Err(BridgeError::new("too many windows are already open"));
         }
+        // `key` + `reuse`：同一个名字只开一个窗口。连点五次「设置」不该开出五个设置窗，
+        // 已有窗口就把它叫到前面、原样返回它的 id（页面拿到的 handle 指向同一个窗口）。
+        let key = spec
+            .options
+            .get("key")
+            .and_then(|v| v.as_str())
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+        if let Some(key) = key {
+            let reuse = spec
+                .options
+                .get("reuse")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true);
+            if reuse {
+                if let Some(existing) = self
+                    .customs
+                    .iter()
+                    .find(|(_, w)| w.instance == spec.instance && w.key == key)
+                    .map(|(id, w)| (*id, w.hwnd()))
+                {
+                    let (id, hwnd) = existing;
+                    crate::platform::win32::force_foreground(hwnd);
+                    crate::core::logging::info(&format!("win {id}: reused by key '{key}'"));
+                    return Ok(id);
+                }
+                // 已经排进队列、还没建出来的同一个 key：直接复用那条记录，别再排一个。
+                if let Some(id) = self
+                    .pending_customs
+                    .iter()
+                    .find(|(_, s)| {
+                        s.instance == spec.instance
+                            && s.options.get("key").and_then(|v| v.as_str()) == Some(key.as_str())
+                    })
+                    .map(|(id, _)| *id)
+                {
+                    return Ok(id);
+                }
+            }
+        }
         let id = self.next_custom;
         self.next_custom += 1;
         self.pending_customs.push((
@@ -872,7 +915,7 @@ impl App {
         }
     }
 
-    pub fn close_custom(&mut self, id: u32) {
+    pub fn close_custom(&mut self, id: u32, reason: &str) {
         // Children first: a chain of windows closes from the outside in, so a page never sees its
         // parent disappear before it does.
         let kids: Vec<u32> = self
@@ -882,25 +925,51 @@ impl App {
             .map(|(key, _)| *key)
             .collect();
         for kid in kids {
-            self.close_custom(kid);
+            self.close_custom(kid, "parent");
         }
-        let parent = self.customs.get(&id).map(|win| win.parent.clone());
-        if self.customs.remove(&id).is_some() {
-            crate::core::logging::info(&format!("win {id}: closed"));
-            // Electron's `closed` event: the page that opened this window hears about it, so a
-            // plugin that keeps a registry of windows can drop the entry.
-            if let Some(parent) = parent {
-                let payload = json!({ "id": id });
-                if let Some(pid) = parent
-                    .strip_prefix("win:")
-                    .and_then(|v| v.parse::<u32>().ok())
-                {
-                    if let Some(win) = self.customs.get(&pid) {
-                        win.send_ipc("win.closed", payload);
-                    }
-                } else if let Some(instance) = parent.strip_prefix("card:") {
-                    self.event_to(instance, "win.closed", payload);
-                }
+        let info = self.customs.get(&id).map(|win| {
+            (
+                win.parent.clone(),
+                win.instance.clone(),
+                win.key.clone(),
+                win.kind.clone(),
+                win.result.clone(),
+            )
+        });
+        let Some((parent, instance, key, kind, result)) = info else {
+            return;
+        };
+        if self.customs.remove(&id).is_none() {
+            return;
+        }
+        // 模态窗关了，父窗口要立刻能点，不能等下一轮。
+        if let Some(modal_parent) = self.modal_parents.remove(&id) {
+            crate::platform::win32::enable_window(modal_parent, true);
+        }
+        crate::core::logging::info(&format!("win {id}: closed ({reason})"));
+        // Electron's `closed` event, now with the reason and whatever the page handed back. The
+        // creator hears it, and so does every other window of this widget — a settings window
+        // closing is news the whole widget may act on.
+        let payload = json!({
+            "id": id,
+            "key": key,
+            "kind": kind,
+            "reason": reason,
+            "result": result,
+        });
+        if let Some(pid) = parent
+            .strip_prefix("win:")
+            .and_then(|v| v.parse::<u32>().ok())
+        {
+            if let Some(win) = self.customs.get(&pid) {
+                win.send_ipc("win.closed", payload.clone());
+            }
+        } else if let Some(owner) = parent.strip_prefix("card:") {
+            self.event_to(owner, "win.closed", payload.clone());
+        }
+        for (other, win) in self.customs.iter() {
+            if *other != id && win.instance == instance {
+                win.send_ipc("win.closed", payload.clone());
             }
         }
     }
@@ -971,14 +1040,14 @@ impl App {
             .map(|(key, _)| *key)
             .collect();
         for id in ids {
-            self.close_custom(id);
+            self.close_custom(id, "owner");
         }
     }
 
     pub fn close_all_customs(&mut self) {
         let ids: Vec<u32> = self.customs.keys().copied().collect();
         for id in ids {
-            self.close_custom(id);
+            self.close_custom(id, "owner");
         }
     }
 

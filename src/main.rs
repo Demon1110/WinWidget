@@ -263,7 +263,7 @@ fn main() {
                     // like Electron's `closable: false`.
                     let closable = app.customs.get(&id).map(|win| win.closable).unwrap_or(true);
                     if closable {
-                        app.close_custom(id);
+                        app.close_custom(id, "user");
                     }
                 }
                 *control = ControlFlow::Wait;

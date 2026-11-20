@@ -91,6 +91,8 @@ pub const WM_ENTERSIZEMOVE: u32 = 0x0231;
 pub const WM_EXITSIZEMOVE: u32 = 0x0232;
 
 pub const HTCAPTION: usize = 2;
+/// 置顶窗口带这个扩展样式位（`SetWindowPos(HWND_TOPMOST)` 之后由系统加上）。
+pub const WS_EX_TOPMOST: isize = 0x0000_0008;
 pub const HTBOTTOMRIGHT: usize = 17;
 
 pub const ULW_ALPHA: u32 = 0x0000_0002;
@@ -405,6 +407,8 @@ extern "system" {
     pub fn SetCursorPos(x: i32, y: i32) -> i32;
     pub fn ReleaseCapture() -> i32;
     pub fn SetCapture(hwnd: HWND) -> HWND;
+    /// 模态弹框打开期间禁用父窗口（关闭后恢复）；不改变窗口外观，只挡输入。
+    pub fn EnableWindow(hwnd: HWND, enable: i32) -> i32;
     pub fn GetClientRect(hwnd: HWND, rect: LPRECT) -> i32;
     pub fn CreateCompatibleDC(dc: isize) -> isize;
     pub fn DeleteDC(dc: isize) -> i32;
@@ -1357,6 +1361,50 @@ pub fn set_topmost(hwnd: HWND, on: bool) {
             0,
             SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
         );
+    }
+}
+
+/// 让系统接管一次窗口拖动：页面在自绘标题条/拖拽区按下时调用。
+///
+/// `WM_NCLBUTTONDOWN` + `HTCAPTION` 是最省事也最跟手的做法——系统自己处理捕捉、贴边、多显示器
+/// 和多 DPI，不必像卡片那样手写 `WM_MOUSEMOVE` 循环。无边框窗口也能用，因为拖动走的是
+/// `SC_MOVE` 系统菜单，不依赖真的存在 title 栏像素。
+pub fn drag_by_caption(hwnd: HWND) {
+    unsafe {
+        ReleaseCapture();
+        SendMessageW(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
+    }
+}
+
+/// 模态：打开期间父窗口不接受任何输入，关闭后恢复。
+pub fn enable_window(hwnd: HWND, on: bool) {
+    unsafe {
+        EnableWindow(hwnd, if on { 0 } else { 1 });
+    }
+}
+
+/// 鼠标是否落在这个窗口的矩形里（`closeOnOutsideClick` 判断用）。
+///
+/// 不用 `WindowFromPoint`：WebView2 的页面是子窗口，返回的永远是它，跟顶层窗口比永远不相等。
+pub fn cursor_inside(hwnd: HWND) -> bool {
+    unsafe {
+        let mut point = POINT { x: 0, y: 0 };
+        if GetCursorPos(&mut point) == 0 {
+            return false;
+        }
+        let mut rect = RECT {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        };
+        if GetWindowRect(hwnd, &mut rect) == 0 {
+            return false;
+        }
+        point.x >= rect.left
+            && point.x < rect.right
+            && point.y >= rect.top
+            && point.y < rect.bottom
     }
 }
 

@@ -89,9 +89,54 @@ pub struct CustomSpec {
     pub options: Value,
 }
 
+/// 一个窗口的行为开关。全部来自 `options`，默认值都是「什么都不做」，旧代码不受影响。
+#[derive(Clone, Copy, Debug)]
+pub struct WinFlags {
+    /// Esc 关闭（内置弹框默认开）。
+    pub close_on_esc: bool,
+    /// 失去焦点就关（选色器、命令面板这类）。
+    pub close_on_blur: bool,
+    /// 点到窗口外面就关。
+    pub close_on_outside: bool,
+    /// 自动关闭的毫秒数，`None` 表示不自动关（toast 默认 3000）。
+    pub auto_close_ms: Option<i64>,
+    /// 无边框窗口也能拖：页面在拖拽区按下时上报，宿主交 `WM_NCLBUTTONDOWN/HTCAPTION` 给系统。
+    pub draggable: bool,
+    /// 模态：打开期间父窗口禁用交互，关闭后恢复。
+    pub modal: bool,
+    /// 内容变了高度跟着变（内置弹框默认开）。
+    pub fit_content: bool,
+}
+
+impl Default for WinFlags {
+    fn default() -> Self {
+        WinFlags {
+            close_on_esc: false,
+            close_on_blur: false,
+            close_on_outside: false,
+            auto_close_ms: None,
+            draggable: true,
+            modal: false,
+            fit_content: false,
+        }
+    }
+}
+
 /// One `BrowserWindow`: the window, its page, and the state its getters answer from.
 pub struct CustomWin {
     pub id: u32,
+    /// 组件给这个窗口起的名字（`options.key`），空字符串表示匿名。同一组件内唯一，
+    /// `win.get` / `win.closeAll` / `windows.get("settings")` 都靠它定位窗口。
+    pub key: String,
+    /// 窗口的用途：`"window"`（普通自定义窗口）、`"alert"` / `"confirm"` / `"prompt"` /
+    /// `"toast"`（宿主渲染的弹框，见 `dialog.rs`）。
+    pub kind: String,
+    /// 创建时刻（毫秒），`windows.list()` 里让页面按开窗顺序排。
+    pub created_ms: i64,
+    /// 弹框页面回传的结果（`{ button, value }`），窗口关闭时随 `closed` 事件交给创建者。
+    pub result: Option<Value>,
+    /// 行为开关（关闭条件、自动关闭、拖拽、模态、跟随内容高度），见 `WinFlags`。
+    pub flags: WinFlags,
     pub parent: String,
     pub instance: String,
     pub file: String,
@@ -433,6 +478,21 @@ pub fn build_custom(
     Ok(CustomWin {
         wallpaper,
         id,
+        key: jstr(&o, "key").unwrap_or_default(),
+        kind: jstr(&o, "kind").unwrap_or_else(|| "window".into()),
+        created_ms: crate::core::util::now_ms(),
+        result: None,
+        flags: WinFlags {
+            close_on_esc: jbool(&o, "closeOnEsc").unwrap_or(false),
+            close_on_blur: jbool(&o, "closeOnBlur").unwrap_or(false),
+            close_on_outside: jbool(&o, "closeOnOutsideClick").unwrap_or(false),
+            auto_close_ms: jnum(&o, "autoClose")
+                .filter(|v| *v > 0.0)
+                .map(|v| v.round() as i64),
+            draggable: jbool(&o, "draggable").unwrap_or(true),
+            modal: jbool(&o, "modal").unwrap_or(false),
+            fit_content: jbool(&o, "fitContent").unwrap_or(false),
+        },
         parent: spec.parent.clone(),
         instance: spec.instance.clone(),
         file: spec.file.clone(),
@@ -661,6 +721,108 @@ pub fn card_call(
                 eval(app, instance, "window.getSelection().removeAllRanges()");
             }
             Reply::Now(Value::Null)
+        }
+        // ── 卡片自己也补上自操作（focus / 置顶 / 透明度 / 几何 / 关闭） ──
+        "window.getBounds" | "window.getPosition" => {
+            let inst = app
+                .instance(instance)
+                .ok_or_else(|| BridgeError::new("no such instance"))?;
+            if method == "window.getPosition" {
+                Reply::Now(json!([inst.x, inst.y]))
+            } else {
+                Reply::Now(json!({
+                    "x": inst.x, "y": inst.y, "width": inst.width, "height": inst.height
+                }))
+            }
+        }
+        "window.setPosition" => {
+            let x = jnum(p, "x").unwrap_or(0.0);
+            let y = jnum(p, "y").unwrap_or(0.0);
+            if let Some(inst) = app.instance_mut(instance) {
+                inst.x = x.round() as i32;
+                inst.y = y.round() as i32;
+            }
+            app.place_window(instance);
+            app.save();
+            app.push_state(instance);
+            app.push_state_to_control(None);
+            Reply::Now(Value::Bool(true))
+        }
+        "window.setBounds" => {
+            let manifest = app
+                .manifest_for(instance)
+                .ok_or_else(|| BridgeError::new("this widget is no longer installed"))?;
+            let s = &manifest.size;
+            let (old_w, old_h) = app
+                .instance(instance)
+                .map(|i| (i.width, i.height))
+                .unwrap_or((s.width, s.height));
+            let w = jnum(p, "width").unwrap_or(old_w).clamp(s.min_width, s.max_width);
+            let h = jnum(p, "height").unwrap_or(old_h).clamp(s.min_height, s.max_height);
+            let x = jnum(p, "x");
+            let y = jnum(p, "y");
+            if let Some(inst) = app.instance_mut(instance) {
+                inst.width = w;
+                inst.height = h;
+                if let Some(x) = x {
+                    inst.x = x.round() as i32;
+                }
+                if let Some(y) = y {
+                    inst.y = y.round() as i32;
+                }
+            }
+            app.place_window(instance);
+            app.save();
+            app.push_state(instance);
+            app.push_state_to_control(None);
+            Reply::Now(json!({ "x": x.unwrap_or(0.0), "y": y.unwrap_or(0.0), "width": w, "height": h }))
+        }
+        "window.focus" => {
+            if let Some(win) = app.windows.get(instance) {
+                // 卡片的 `focus` 只把窗口抬到同层最前并从最小化回来，不抢键盘焦点：
+                // 卡片本身就不该抢用户正在打字的焦点。
+                w::force_foreground(win.hwnd());
+            }
+            Reply::Now(Value::Bool(true))
+        }
+        "window.setAlwaysOnTop" => {
+            let on = jbool(p, "on").unwrap_or(true);
+            if let Some(win) = app.windows.get(instance) {
+                w::set_topmost(win.hwnd(), on);
+            }
+            Reply::Now(Value::Bool(true))
+        }
+        "window.isAlwaysOnTop" => {
+            let on = app
+                .windows
+                .get(instance)
+                .map(|win| unsafe {
+                    w::GetWindowLongPtrW(win.hwnd(), w::GWL_EXSTYLE) & w::WS_EX_TOPMOST != 0
+                })
+                .unwrap_or(false);
+            Reply::Now(Value::Bool(on))
+        }
+        "window.setOpacity" => {
+            let opacity = jnum(p, "opacity").unwrap_or(1.0).clamp(0.0, 1.0);
+            // 卡片整窗是逐像素透明画出来的，再叠 `SetLayeredWindowAttributes` 会把玻璃帧顶掉；
+            // 改用页面整体的 `opacity`，视觉上等价，也不会碰窗口层的合成。
+            let script = format!("document.body.style.opacity = {};", opacity);
+            eval(app, instance, &script);
+            Reply::Now(Value::Bool(true))
+        }
+        "window.setTitle" => {
+            let title = jstr(p, "title").unwrap_or_default();
+            let script = format!(
+                "document.title = {};",
+                serde_json::to_string(&title).unwrap_or_else(|_| "\"\"".into())
+            );
+            eval(app, instance, &script);
+            Reply::Now(Value::Bool(true))
+        }
+        "window.close" => {
+            app.set_visible(instance, false, "api");
+            app.refresh_tray_menu();
+            Reply::Now(Value::Bool(true))
         }
         _ => return Ok(None),
     };
@@ -918,13 +1080,119 @@ pub fn custom_call(
             "state": state_json(app, id),
         })));
     }
+    // ── 多窗口：身份、集合、通信、批量关闭（这些不需要先知道「我是谁」） ──
+    if method == "win.list" {
+        let mut list: Vec<Value> = Vec::new();
+        for (id, win) in app.customs.iter() {
+            if win.instance != instance {
+                continue;
+            }
+            list.push(json!({
+                "id": id,
+                "key": win.key,
+                "kind": win.kind,
+                "title": win.title,
+                "file": win.file,
+                "parent": win.parent,
+                "created": win.created_ms,
+                "visible": win.window.is_visible(),
+                "focused": win.window.is_focused(),
+                "loaded": win.loaded,
+            }));
+        }
+        list.sort_by_key(|v| v.get("id").and_then(|i| i.as_u64()).unwrap_or(0));
+        return Ok(Reply::Now(Value::Array(list)));
+    }
+    if method == "win.get" || method == "win.has" {
+        let found = p
+            .get("win")
+            .or_else(|| p.get("id"))
+            .or_else(|| p.get("key"))
+            .and_then(|v| resolve_ref(app, instance, v));
+        if method == "win.has" {
+            return Ok(Reply::Now(Value::Bool(found.is_some())));
+        }
+        return Ok(Reply::Now(
+            found
+                .map(|id| state_json(app, id))
+                .unwrap_or(Value::Null),
+        ));
+    }
+    if method == "win.post" || method == "win.broadcast" {
+        let channel = jstr(p, "channel").unwrap_or_default();
+        let args = p.get("args").cloned().unwrap_or_else(|| json!([]));
+        let sender = match ctx {
+            Some(from) => json!({
+                "id": from,
+                "key": app.customs.get(&from).map(|w| w.key.clone()).unwrap_or_default(),
+                "kind": app.customs.get(&from).map(|w| w.kind.clone()).unwrap_or_default(),
+            }),
+            None => json!({ "id": 0, "key": "", "kind": "card" }),
+        };
+        let payload = json!({ "channel": channel, "args": args, "from": sender });
+        if method == "win.post" {
+            let to = p.get("to").or_else(|| p.get("win"));
+            if let Some(target) = to.and_then(|v| resolve_ref(app, instance, v)) {
+                if let Some(win) = app.customs.get(&target) {
+                    win.send_ipc("ipc", payload);
+                }
+            }
+        } else {
+            // 广播 = 本组件的每个窗口 + 卡片，但跳过发送者自己（否则组件要自己过滤回声）。
+            if ctx.is_none() {
+                app.event_to(instance, "ipc", payload.clone());
+            }
+            for (id, win) in app.customs.iter() {
+                if win.instance == instance && Some(*id) != ctx {
+                    win.send_ipc("ipc", payload.clone());
+                }
+            }
+        }
+        return Ok(Reply::Now(Value::Null));
+    }
+    if method == "win.closeAll" {
+        let kind = jstr(p, "kind");
+        let key = jstr(p, "key");
+        let ids: Vec<u32> = app
+            .customs
+            .iter()
+            .filter(|(_, w)| {
+                w.instance == instance
+                    && kind.as_deref().map(|k| w.kind == k).unwrap_or(true)
+                    && key.as_deref().map(|k| w.key == k).unwrap_or(true)
+            })
+            .map(|(id, _)| *id)
+            .collect();
+        for id in ids {
+            app.close_custom(id, "api");
+        }
+        return Ok(Reply::Now(Value::Bool(true)));
+    }
     let id = ctx
-        .or_else(|| p.get("win").and_then(|v| v.as_u64()).map(|v| v as u32))
+        .or_else(|| p.get("win").and_then(|v| resolve_ref(app, instance, v)))
         .ok_or_else(|| BridgeError::new("this window is not a custom window"))?;
     if method == "win.parent" {
         let channel = jstr(p, "channel").unwrap_or_default();
         let args = p.get("args").cloned().unwrap_or_else(|| json!([]));
         send_to_parent(app, Some(id), &channel, args);
+        return Ok(Reply::Now(Value::Null));
+    }
+    if method == "win.startDrag" {
+        // 无边框窗口的自绘标题条：页面按下时上报，交给系统的 SC_MOVE 拖动。
+        if let Some(win) = app.customs.get(&id) {
+            if win.flags.draggable && !win.wallpaper {
+                w::drag_by_caption(win.hwnd());
+            }
+        }
+        return Ok(Reply::Now(Value::Null));
+    }
+    if method == "win.result" {
+        // 内置弹框页交卷：先记下结果，再按原因关窗，创建者在 `closed` 里拿到它。
+        if let Some(win) = app.customs.get_mut(&id) {
+            win.result = Some(p.clone());
+        }
+        let reason = jstr(p, "reason").unwrap_or_else(|| "button".into());
+        app.close_custom(id, &reason);
         return Ok(Reply::Now(Value::Null));
     }
     let name = method.trim_start_matches("win.");
@@ -1054,7 +1322,8 @@ fn invoke(app: &mut App, id: u32, m: &str, p: &Value) -> BridgeResult<Reply> {
             Value::Null
         }
         "close" | "destroy" => {
-            app.close_custom(id);
+            let reason = jstr(p, "reason").unwrap_or_else(|| "api".into());
+            app.close_custom(id, &reason);
             Value::Bool(true)
         }
         "isVisible" => Value::Bool(
@@ -1396,6 +1665,32 @@ pub fn unsupported_reason(method: &str) -> Option<&'static str> {
         .map(|(_, why)| *why)
 }
 
+/// 把一个「窗口引用」解析成本组件的窗口 id：数字是 id，字符串是 key（也接受纯数字字符串）。
+/// 只在本组件内查，跨组件引用的 id 一律当作不存在。
+fn resolve_ref(app: &App, instance: &str, value: &Value) -> Option<u32> {
+    match value {
+        Value::Number(n) => n
+            .as_u64()
+            .map(|v| v as u32)
+            .filter(|id| app.customs.get(id).is_some_and(|w| w.instance == instance)),
+        Value::String(text) => {
+            let owned = text.trim();
+            if let Ok(num) = owned.parse::<u32>() {
+                return app
+                    .customs
+                    .get(&num)
+                    .filter(|w| w.instance == instance)
+                    .map(|_| num);
+            }
+            app.customs
+                .iter()
+                .find(|(_, w)| w.instance == instance && !w.key.is_empty() && w.key == owned)
+                .map(|(id, _)| *id)
+        }
+        _ => None,
+    }
+}
+
 /// Sends a message to whichever window created `ctx` (`utools.sendToParent`).
 pub fn send_to_parent(app: &App, ctx: Option<u32>, channel: &str, args: Value) {
     let parent = match ctx {
@@ -1441,6 +1736,10 @@ pub fn state_json(app: &App, id: u32) -> Value {
     json!({
         "id": id,
         "type": "custom",
+        "key": win.key,
+        "kind": win.kind,
+        "created": win.created_ms,
+        "result": win.result,
         "title": win.title,
         "x": x,
         "y": y,
