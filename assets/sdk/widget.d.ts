@@ -367,6 +367,12 @@ declare namespace WinWidget {
     throttle<T extends (...args: any[]) => void>(fn: T, wait?: number): T;
     /** Three-language shortcut: L("預設", "默认", "Default"). */
     L(tw: string, cn: string, en: string): string;
+    /** The user's locale is any Chinese variant. */
+    readonly zh: boolean;
+    /** The user's locale is Simplified Chinese. */
+    readonly hans: boolean;
+    /** Show a one-shot toast on `el` (typically #toast), hidden after `ms` (default 1600). */
+    toast(el: Element | null, message: string, ms?: number): void;
   }
 
   interface Widget {

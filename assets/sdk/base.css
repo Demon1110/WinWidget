@@ -114,6 +114,10 @@ button { font: inherit; color: inherit; }
 .w-input::placeholder { color: var(--w-fg-muted); }
 .w-input:focus { border-color: color-mix(in srgb, var(--w-accent) 70%, transparent); }
 
+/* A scrolling box with no visible scrollbar: keep the wheel/touch scroll, hide the chrome. */
+.w-scroll-none { scrollbar-width: none; }
+.w-scroll-none::-webkit-scrollbar { display: none; }
+
 /* A <select> popup is drawn by the engine, not by CSS: without explicit colours the
    options inherit the card's light text and land on the popup's own white sheet —
    white on white. Pin both to the theme instead. */

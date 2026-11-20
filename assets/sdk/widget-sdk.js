@@ -549,6 +549,22 @@
     };
   }
   const L = (tw, cn, en) => t({ "zh-TW": tw, "zh-CN": cn, en });
+  const zh = locale.toLowerCase().startsWith("zh");
+  const hans = /^zh-(cn|sg|hans|mo)/i.test(locale);
+  const toastTimers = new Map();
+  function toast(el, message, ms) {
+    if (!el) return;
+    el.textContent = message;
+    el.hidden = false;
+    clearTimeout(toastTimers.get(el));
+    toastTimers.set(
+      el,
+      setTimeout(() => {
+        el.hidden = true;
+        toastTimers.delete(el);
+      }, Number(ms) || 1600),
+    );
+  }
 
   // ── sharp: the chain stays in the page, the pixels are processed by the host ─────────
   const SHARP_REFUSED = ["tint", "median", "composite", "trim", "normalize"];
@@ -680,6 +696,9 @@
       debounce,
       throttle,
       L,
+      zh,
+      hans,
+      toast,
     }),
 
     /**
