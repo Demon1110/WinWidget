@@ -56,6 +56,7 @@ const KNOWN: &[&str] = &[
     "draggable",
     "modal",
     "anchor",
+    "offset",
     "ignoreMouseEvents",
 ];
 

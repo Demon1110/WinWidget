@@ -919,12 +919,132 @@ impl App {
                         spec.file, spec.instance
                     ));
                     self.customs.insert(id, win);
+                    self.apply_modal(&spec, id);
+                    self.place_custom(&spec, id);
                 }
                 Err(e) => {
                     self.serve.lock().dialogs.remove(&id);
                     crate::core::logging::error(&format!("win {id}: {e}"))
                 }
             }
+        }
+    }
+
+    /// 焦点离开一个自建窗口时按它的配置决定要不要收起来。
+    /// `closeOnBlur` 是「点了别处就消失」，`closeOnOutsideClick` 只在鼠标真的落在窗口外时才关，
+    /// 这样弹框内的输入框、下拉换焦点都不会误关。
+    pub fn custom_blurred(&mut self, id: u32) {
+        let Some(win) = self.customs.get(&id) else {
+            return;
+        };
+        if !win.flags.close_on_blur && !win.flags.close_on_outside {
+            return;
+        }
+        if win.flags.close_on_blur {
+            self.close_custom(id, "blur");
+            return;
+        }
+        let hwnd = win.hwnd();
+        if !crate::platform::win32::cursor_inside(hwnd) {
+            self.close_custom(id, "outside");
+        }
+    }
+
+    /// `modal: true`：弹框期间父窗口不接受输入，关掉时恢复。父可以是卡片，也可以是窗口。
+    fn apply_modal(&mut self, spec: &crate::runtime::window_category::CustomSpec, id: u32) {
+        let modal = spec
+            .options
+            .get("modal")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if !modal {
+            return;
+        }
+        let parent = match spec
+            .parent
+            .strip_prefix("win:")
+            .and_then(|v| v.parse::<u32>().ok())
+        {
+            Some(pid) => self.customs.get(&pid).map(|win| win.hwnd()),
+            None => spec
+                .parent
+                .strip_prefix("card:")
+                .and_then(|owner| self.windows.get(owner))
+                .map(|win| win.window.hwnd()),
+        };
+        if let Some(hwnd) = parent {
+            crate::platform::win32::enable_window(hwnd, false);
+            self.modal_parents.insert(id, hwnd);
+        }
+    }
+
+    /// `anchor`: 贴哪儿开。`"card"` 贴在卡片下方（下面放不下就翻到上面），`"cursor"` 贴在鼠标
+    /// 位置，`"screen"` 居中；`offset: [dx, dy]` 做微调，最后都夹在工作区内。
+    fn place_custom(&mut self, spec: &crate::runtime::window_category::CustomSpec, id: u32) {
+        let anchor = spec
+            .options
+            .get("anchor")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if anchor.is_empty() || anchor == "none" || anchor == "auto" {
+            return;
+        }
+        let offset = spec
+            .options
+            .get("offset")
+            .and_then(|v| v.as_array())
+            .map(|pair| {
+                (
+                    pair.first().and_then(|v| v.as_i64()).unwrap_or(0) as i32,
+                    pair.get(1).and_then(|v| v.as_i64()).unwrap_or(0) as i32,
+                )
+            })
+            .unwrap_or((0, 0));
+        let Some(win) = self.customs.get(&id) else {
+            return;
+        };
+        let size = win.window.outer_size();
+        let (dw, dh) = (size.width as i32, size.height as i32);
+        let card = spec
+            .parent
+            .strip_prefix("card:")
+            .and_then(|owner| self.windows.get(owner))
+            .map(|win| win.card);
+        let cursor = crate::platform::win32::cursor_pos();
+        let probe = card.unwrap_or(crate::platform::win32::RECT {
+            left: cursor.x,
+            top: cursor.y,
+            right: cursor.x + 1,
+            bottom: cursor.y + 1,
+        });
+        let (_, work) = crate::platform::win32::monitor_work_area(&probe);
+        let (mut x, mut y) = match anchor.as_str() {
+            "card" => match card {
+                Some(card) => (card.left, card.bottom + 8),
+                None => (cursor.x, cursor.y + 8),
+            },
+            "cursor" => (cursor.x, cursor.y + 8),
+            _ => (
+                work.left + ((work.right - work.left) - dw) / 2,
+                work.top + ((work.bottom - work.top) - dh) / 2,
+            ),
+        };
+        x += offset.0;
+        y += offset.1;
+        // 卡片下面放不下就翻到卡片上面：贴边弹出不该被屏幕裁掉半截。
+        if anchor == "card" {
+            if let Some(card) = card {
+                if y + dh > work.bottom - 8 {
+                    y = card.top - dh - 8;
+                }
+            }
+        }
+        x = x.clamp(work.left + 8, (work.right - dw - 8).max(work.left + 8));
+        y = y.clamp(work.top + 8, (work.bottom - dh - 8).max(work.top + 8));
+        if let Some(win) = self.customs.get(&id) {
+            win.window
+                .set_outer_position(tao::dpi::PhysicalPosition::new(x, y));
         }
     }
 
@@ -1439,6 +1559,20 @@ impl App {
         self.notes = keep;
         for note in fired {
             self.show_note(&note.title, &note.body);
+        }
+        // autoClose：内置弹框页自己会关，但组件自绘的窗口得靠宿主兜底，页面卡死也不会一直挂着。
+        let due: Vec<u32> = self
+            .customs
+            .iter()
+            .filter(|(_, win)| {
+                win.flags
+                    .auto_close_ms
+                    .is_some_and(|ms| ms > 0 && now.saturating_sub(win.created_ms) >= ms)
+            })
+            .map(|(id, _)| *id)
+            .collect();
+        for id in due {
+            self.close_custom(id, "timeout");
         }
         // "Same as Windows" has no notification to lean on (the theme broadcast does not reach a
         // message-only window), so the registry is re-read on a slow clock: twice a second is

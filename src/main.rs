@@ -289,6 +289,25 @@ fn main() {
                 }
                 *control = ControlFlow::Wait;
             }
+            // 自建窗口的焦点变化是「点了别处」的唯一信号：closeOnBlur 与 closeOnOutsideClick
+            // 都在这里落地，卡片不参与（卡片本来就拿不到键盘焦点）。
+            Event::WindowEvent {
+                window_id,
+                event: WindowEvent::Focused(focused),
+                ..
+            } => {
+                if !focused {
+                    if let Some(id) = app
+                        .customs
+                        .iter()
+                        .find(|(_, win)| win.window.id() == window_id)
+                        .map(|(key, _)| *key)
+                    {
+                        app.custom_blurred(id);
+                    }
+                }
+                *control = ControlFlow::Wait;
+            }
             Event::WindowEvent {
                 window_id,
                 event: WindowEvent::Destroyed,
