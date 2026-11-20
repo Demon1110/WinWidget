@@ -264,6 +264,8 @@ const PHRASES = [
   ["便攜模式：資料存在程式資料夾裏。", "便携模式：数据存在程序文件夹里。", "Portable mode: data stays in the app's folder."],
   ["關於", "关于", "About"],
   ["版本", "版本", "Version"],
+  ["更新來源", "更新来源", "Update source"],
+  ["留空時使用 GitHub Releases；改成你自己的 JSON 位址（內容要含 version 和 url）。", "留空时使用 GitHub Releases；改成你自己的 JSON 地址（内容要含 version 和 url）。", "Leave empty to use GitHub Releases. Point it at your own JSON feed containing version and url."],
   // ── updates ──
   ["自動檢查更新", "自动检查更新", "Check for updates"],
   ["每天看一兩次有沒有新版本，有的話在托盤提示。只連 GitHub，不會自己安裝。", "每天看一两次有没有新版本，有的话在托盘提示。只连 GitHub，不会自己安装。", "Looks for a new version once or twice a day and says so from the tray. Only asks GitHub; never installs by itself."],

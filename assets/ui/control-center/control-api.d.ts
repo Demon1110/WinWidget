@@ -31,6 +31,7 @@ type ControlMethod =
   | "app.updateCheck"
   | "app.updateInstall"
   | "app.updatePage"
+  | "app.updateUrl"
   | "fonts.list"
   | "instance.appearance"
   | "instance.clearAll"

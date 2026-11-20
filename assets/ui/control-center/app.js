@@ -612,6 +612,7 @@ function pageSettings() {
         <div class="group-title">${t("關於")}</div>
         ${row("版本", updateNote(), updateCtl(), { key: "ver" })}
         ${row("自動檢查更新", "每天看一兩次有沒有新版本，有的話在托盤提示。只連 GitHub，不會自己安裝。", control({ key: "updateAuto", type: "toggle", label: "自動檢查更新" }, S.update?.auto === true, "app"), { key: "upd-auto" })}
+        ${row("更新來源", "留空時使用 GitHub Releases；改成你自己的 JSON 位址（內容要含 version 和 url）。", control({ key: "updateUrl", type: "text", placeholder: "https://example.com/winwidget.json" }, S.updateUrl || "", "app"), { key: "upd-url", reset: S.updateUrl ? at("app", "updateUrl") : "" })}
       </div></section>
     </div>`;
 }
@@ -917,6 +918,7 @@ function commit(scope, key, value, id = ui.sel) {
     case "app":
       if (key === "language") return api("app.language", { lang: value });
       if (key === "uiTheme") return api("app.uiTheme", { theme: value });
+      if (key === "updateUrl") return api("app.updateUrl", { url: value == null ? null : String(value).trim() || null });
       return api(`app.${key}`, { on: value });
   }
 }

@@ -169,6 +169,7 @@ pub fn state_json(app: &App) -> Value {
         // Goes through `current` so the "auto", "current" and "feed" fields are always there:
         // a background check only reports the release it found.
         "update": crate::market::updater::current(app),
+        "updateUrl": cfg.update_url.clone().unwrap_or_default(),
         "portable": crate::core::paths::get().portable,
         "dataDir": crate::core::paths::get().data_dir.to_string_lossy(),
         // The default folder, so the page can offer "back to default" and show where a custom
@@ -343,6 +344,7 @@ fn registry() -> &'static HashMap<&'static str, Method> {
         m.insert("app.updateCancel", app_update_cancel);
         m.insert("app.updatePage", app_update_page);
         m.insert("app.updateAuto", app_update_auto);
+        m.insert("app.updateUrl", app_update_url);
         // Kept for pages built against the old spelling.
         m.insert("app.autoUpdate", app_update_auto);
         m.insert("app.autostart", app_autostart);
@@ -570,6 +572,18 @@ fn app_update_auto(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
     let on = jbool(p, "on").unwrap_or(false);
     app.cfg_mut().auto_update_check = on;
     app.save();
+    refresh(app, None);
+    Ok(Reply::Now(Value::Null))
+}
+
+fn app_update_url(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let url = jstr(p, "url")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    app.cfg_mut().update_url = url;
+    app.save();
+    // A changed feed makes the release the user last looked at meaningless.
+    crate::market::updater::cancel(app);
     refresh(app, None);
     Ok(Reply::Now(Value::Null))
 }
@@ -1117,8 +1131,8 @@ mod tests {
     #[test]
     fn registry_covers_every_method() {
         let r = registry();
-        // 56 methods + 1 legacy alias.
-        assert_eq!(r.len(), 57);
+        // 57 methods + 1 legacy alias.
+        assert_eq!(r.len(), 58);
         // The old and new spellings of the auto-update toggle share one handler.
         assert_eq!(r["app.updateAuto"] as usize, r["app.autoUpdate"] as usize);
         for name in [
@@ -1140,6 +1154,7 @@ mod tests {
             "app.updateCancel",
             "app.updatePage",
             "app.updateAuto",
+            "app.updateUrl",
             "app.autoUpdate",
             "app.autostart",
             "app.lowResource",

@@ -107,6 +107,10 @@
       "handler": "app_update_page"
     },
     {
+      "name": "app.updateUrl",
+      "handler": "app_update_url"
+    },
+    {
       "name": "fonts.list",
       "handler": "fonts_list"
     },
