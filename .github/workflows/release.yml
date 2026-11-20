@@ -178,6 +178,12 @@ jobs:
         with:
           key: windows
 
+      # windows-latest 镜像没有预装 UPX，而发布脚本带 -Upx 时找不到会直接抛错；
+      # 这里显式装一遍，让加壳压缩在 CI 里也能走通。
+      - name: Install UPX
+        shell: pwsh
+        run: choco install upx -y --no-progress
+
       # 脚本内部：cargo build --release（build.rs 把 assets\ 编进 exe）
       # → dist\WinWidget-<版本>-windows-x64.exe + sha256 → 脱离 assets\ 跑 list 自检
       - name: Package
