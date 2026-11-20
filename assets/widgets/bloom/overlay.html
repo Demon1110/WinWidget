@@ -5,8 +5,9 @@
   <title>玩出花 - 特效渲染</title>
   <style>
     /* 这一页就是新的桌面壁纸（挂在图标层之下），不是盖在桌面上的透明卡片。
-       宿主会给自定义窗口注入 base.css / 主题 CSS / 卡片外观，这里全部用 !important 钉死：
-       body 是不透明深色底，canvas 保持透明，特效粒子画在它上面，空白露出这层底色。 */
+       宿主会给自定义窗口注入 base.css / 主题 CSS / 卡片外观，这里钉死尺寸与交互。
+       背景不能用 !important 简写：它会把 background-image 一并压成 none，
+       overlay.js 设置的壁纸图（/__wallpaper）就再也显示不出来了；深色只是图片加载前的兜底。 */
     html, body {
       margin: 0 !important;
       padding: 0 !important;
@@ -17,8 +18,7 @@
       max-width: 100vw !important;
       max-height: 100vh !important;
       overflow: hidden !important;
-      background: #0a0e1a !important;
-      background-color: #0a0e1a !important;
+      background-color: #0a0e1a;
       opacity: 1 !important;
       border: 0 !important;
       border-radius: 0 !important;

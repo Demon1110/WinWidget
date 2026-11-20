@@ -10,6 +10,7 @@
 #![allow(non_snake_case, dead_code, clippy::upper_case_acronyms)]
 
 use std::ffi::c_void;
+use std::path::PathBuf;
 
 pub type HWND = isize;
 pub type HINSTANCE = isize;
@@ -708,6 +709,31 @@ pub fn left_button_down() -> bool {
 
 pub fn progman() -> HWND {
     unsafe { FindWindowW(wide("Progman").as_ptr(), std::ptr::null()) }
+}
+
+/// The current desktop wallpaper as a file path, for pages that want to paint the user's real
+/// wallpaper behind themselves. `SPI_GETDESKWALLPAPER` answers either the picture the user picked
+/// or the shell's transcoded copy, so the caller still has to handle "no wallpaper" (solid
+/// colours and slideshows the shell keeps internally).
+pub fn wallpaper_path() -> Option<PathBuf> {
+    // MAX_PATH*4 covers the long localised paths Windows happily hands out here.
+    let mut buf = [0u16; 520];
+    // SPI_GETDESKWALLPAPER
+    let ok = unsafe { SystemParametersInfoW(0x0073, buf.len() as u32, buf.as_mut_ptr().cast(), 0) };
+    if ok == 0 {
+        return None;
+    }
+    let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+    if end == 0 {
+        return None;
+    }
+    let path = String::from_utf16_lossy(&buf[..end]);
+    let path = PathBuf::from(path);
+    if path.is_file() {
+        Some(path)
+    } else {
+        None
+    }
 }
 
 /// Makes the window per-pixel transparent: the DWM frame covers the whole client area.

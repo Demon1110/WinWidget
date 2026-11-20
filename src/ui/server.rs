@@ -163,6 +163,13 @@ fn handle(state: &ServeState, request: Request, port: u16) {
         crate::platform::media::cover_path(key)
             .and_then(|p| std::fs::read(p).ok())
             .map(|bytes| response(200, "image/png", bytes))
+    } else if path == "/__wallpaper" {
+        // The current desktop wallpaper, for pages that paint the user's real wallpaper behind
+        // themselves (the bloom effect layer). Served without caching so a wallpaper change is
+        // picked up on the next reload.
+        crate::platform::win32::wallpaper_path()
+            .and_then(|p| std::fs::read(p).ok())
+            .map(|bytes| response(200, wallpaper_mime(&bytes), bytes))
     } else {
         serve_page(state, &host, &path, &query, port)
     };
@@ -174,6 +181,24 @@ fn handle(state: &ServeState, request: Request, port: u16) {
         None => {
             let _ = request.respond(text_response(404, "not found"));
         }
+    }
+}
+
+/// The wallpaper bytes' image type by magic number: the shell's transcoded copy has no extension
+/// to go by, and a wrong mime makes Chromium refuse to render the image.
+fn wallpaper_mime(bytes: &[u8]) -> &'static str {
+    if bytes.len() >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF {
+        "image/jpeg"
+    } else if bytes.len() >= 8 && bytes[..8] == [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A] {
+        "image/png"
+    } else if bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        "image/webp"
+    } else if bytes.len() >= 3 && &bytes[..3] == b"GIF" {
+        "image/gif"
+    } else if bytes.len() >= 2 && &bytes[..2] == b"BM" {
+        "image/bmp"
+    } else {
+        "application/octet-stream"
     }
 }
 

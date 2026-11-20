@@ -300,6 +300,25 @@ window.startEffect = async function(effectId, options) {
   }
 };
 
+// ── 壁纸层背景：把用户的真实桌面壁纸垫在特效底下 ──
+// 宿主在 /__wallpaper 上返回当前壁纸图片；404（纯色壁纸/取不到）时保持深色兜底。
+// 时间戳避免 WebView2 缓存旧壁纸；overlay.html 的深色底继续作为图片加载前的底色。
+(function () {
+  function paintWallpaper() {
+    var body = document.body;
+    if (!body) return;
+    body.style.backgroundImage = 'url("/__wallpaper?ts=' + Date.now() + '")';
+    body.style.backgroundSize = 'cover';
+    body.style.backgroundPosition = 'center';
+    body.style.backgroundRepeat = 'no-repeat';
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', paintWallpaper);
+  } else {
+    paintWallpaper();
+  }
+})();
+
 // ── 这一页是被卡片用 overlay.html?fx=<id>&d=<display> 打开的：先把 fx 跑起来 ──
 // （卡片之后要换特效就走 executeJavaScript —— 这一条只负责「窗口一出现就有东西在动」）
 (function () {
