@@ -1401,10 +1401,7 @@ pub fn cursor_inside(hwnd: HWND) -> bool {
         if GetWindowRect(hwnd, &mut rect) == 0 {
             return false;
         }
-        point.x >= rect.left
-            && point.x < rect.right
-            && point.y >= rect.top
-            && point.y < rect.bottom
+        point.x >= rect.left && point.x < rect.right && point.y >= rect.top && point.y < rect.bottom
     }
 }
 
