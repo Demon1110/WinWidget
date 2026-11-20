@@ -259,7 +259,7 @@ pub fn build_custom(
     }
 
     // A wallpaper window must never be topmost: that would put it in front of everything again.
-    // It is mounted after the web view exists (below), so the whole child-HWND tree comes along.
+    // It is mounted before its web view exists (below), so the view is born inside the shell tree.
     if always_on_top && !wallpaper {
         w::set_topmost(hwnd, true);
     }
@@ -344,12 +344,44 @@ pub fn build_custom(
         window.set_fullscreen(Some(Fullscreen::Borderless(None)));
     }
 
+    // Mount a wallpaper window *before* its web view exists. WebView2 paints through a
+    // DirectComposition surface bound to its host window when the view is created; a window
+    // reparented into the shell's child tree afterwards keeps painting through the old surface,
+    // which lands nowhere on screen — the effect window "runs" but nothing is visible (the very
+    // failure Lively patches with --use-angle=gl). Creating the view inside an already-mounted
+    // child tree is the order the working WebView2 wallpaper engines use and needs no GPU flag.
+    // If the host cannot be found we fail the creation rather than leave a stray top-level window
+    // covering the desktop.
+    if wallpaper {
+        if w::place_on_wallpaper(hwnd, &screen) {
+            crate::core::logging::info(&format!(
+                "win {id}: mounted on the wallpaper layer at {},{} {}x{}",
+                screen.left,
+                screen.top,
+                screen.width(),
+                screen.height()
+            ));
+        } else {
+            crate::core::logging::warn(&format!(
+                "win {id}: could not find the wallpaper host; effect window discarded"
+            ));
+            return Err("could not mount the effect on the wallpaper layer".into());
+        }
+    }
+
     let ipc_key = format!("win:{id}");
     let webview = {
         let mut context = crate::runtime::window::browser()
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let size = window.inner_size();
+        // A mounted wallpaper window was resized through raw Win32; tao's cached size may not have
+        // caught up, so the monitor rectangle is the truth for that layer.
+        let (vw, vh) = if wallpaper {
+            (screen.width().max(1) as u32, screen.height().max(1) as u32)
+        } else {
+            let size = window.inner_size();
+            (size.width.max(1), size.height.max(1))
+        };
         WebViewBuilder::new_with_web_context(&mut context)
             .with_url(&url)
             .with_transparent(transparent)
@@ -367,31 +399,11 @@ pub fn build_custom(
             })
             .with_bounds(Rect {
                 position: PhysicalPosition::new(0, 0).into(),
-                size: PhysicalSize::new(size.width.max(1), size.height.max(1)).into(),
+                size: PhysicalSize::new(vw, vh).into(),
             })
             .build(&window)
             .map_err(|e| format!("WebView2 could not be created: {e}"))?
     };
-
-    // Mount a wallpaper window only now that the web view (and its whole child-HWND tree) exists:
-    // becoming a child of the shell host reparents that tree too. If the host cannot be found we
-    // fail the creation rather than leave a stray top-level window covering the desktop.
-    if wallpaper {
-        if w::place_on_wallpaper(hwnd, &screen) {
-            crate::core::logging::info(&format!(
-                "win {id}: mounted on the wallpaper layer at {},{} {}x{}",
-                screen.left,
-                screen.top,
-                screen.width(),
-                screen.height()
-            ));
-        } else {
-            crate::core::logging::warn(&format!(
-                "win {id}: could not find the wallpaper host; effect window discarded"
-            ));
-            return Err("could not mount the effect on the wallpaper layer".into());
-        }
-    }
 
     // Click-through asked for at creation time: apply it to the top-level window straight away.
     // WebView2's child HWNDs come later, so `mark_custom_loaded` re-applies once the page is ready.

@@ -895,47 +895,41 @@ pub fn detach_from_desktop(hwnd: HWND) {
     }
 }
 
-/// Finds the window that owns the desktop icon layer.
+/// Finds the window the effect must become a child of to sit behind the desktop icons.
 ///
 /// Windows 11 24H2+ ("raised desktop") creates `Progman` with `WS_EX_NOREDIRECTIONBITMAP` and
 /// keeps `SHELLDLL_DefView` (the icons) as its child; the wallpaper is composed by DWM behind it.
-/// Older Windows separates the two into a `WorkerW` that sits below the icon host. Both cases are
-/// handled: we return the window the effect must become a child of, and the `DefView` handle whose
-/// z-order position our window has to sit *below*.
+/// Older Windows separates the two into a `WorkerW` that sits below the icon host.
+///
+/// Either way the preferred host is a `WorkerW`: a WebView2 window parented into Progman's
+/// `WS_EX_NOREDIRECTIONBITMAP` tree runs but composites nothing (verified: the same view paints
+/// fine as a top-level window, and goes blank the moment it becomes a Progman child). So we ask
+/// the shell to spawn the wallpaper `WorkerW` (message `0x052C`) and parent below the icons; only
+/// when the shell refuses to spawn one do we fall back to Progman itself, below `DefView`.
 fn wallpaper_host() -> (HWND, HWND) {
     let prog = progman();
     if prog == 0 {
         return (0, 0);
     }
     unsafe {
-        let raised = GetWindowLongPtrW(prog, GWL_EXSTYLE) & WS_EX_NOREDIRECTIONBITMAP != 0;
-        // Only the classic desktop needs a wallpaper WorkerW. On raised desktops the message is
-        // pointless and would add a cross-process round trip for every display's effect window.
-        if !raised {
-            let mut result: usize = 0;
-            let _ = SendMessageTimeoutW(
-                prog,
-                WM_SPAWN_WORKERW,
-                0,
-                0,
-                SMTO_ABORTIFHUNG,
-                1000,
-                &mut result,
-            );
-        }
+        let mut result: usize = 0;
+        let _ = SendMessageTimeoutW(
+            prog,
+            WM_SPAWN_WORKERW,
+            0,
+            0,
+            SMTO_ABORTIFHUNG,
+            1000,
+            &mut result,
+        );
 
         let defview_class = wide("SHELLDLL_DefView");
         let find_defview = |host: HWND| -> HWND {
             FindWindowExW(host, 0, defview_class.as_ptr(), std::ptr::null())
         };
 
-        // Raised desktop: Progman owns the icons, so it is the host and we sit below DefView.
-        if raised {
-            return (prog, find_defview(prog));
-        }
-
-        // Classic desktop: find the top-level window that hosts DefView, then take the WorkerW
-        // just below it in z-order — that is the wallpaper surface Explorer draws on.
+        // Find the top-level window that hosts DefView, then take the WorkerW just below it in
+        // z-order — that is the wallpaper surface Explorer draws on, behind the icons.
         struct Search {
             defview_parent: HWND,
             worker: HWND,
@@ -2777,21 +2771,16 @@ mod wallpaper_tests {
         }
         let (host, defview) = wallpaper_host();
         assert_ne!(host, 0, "the shell must expose a wallpaper host");
-        let raised =
-            unsafe { GetWindowLongPtrW(prog, GWL_EXSTYLE) } & WS_EX_NOREDIRECTIONBITMAP != 0;
-        if raised {
-            // Win11 24H2+: Progman owns the icons directly, so it is both the host and the place
-            // whose child z-order our effect window has to be inserted below.
-            assert_eq!(host, prog, "raised desktop must parent to Progman");
+        if host == prog {
+            // Fallback layout: DefView lives directly under Progman and no WorkerW could be
+            // spawned, so the effect mounts below the icons inside Progman.
             assert_ne!(defview, 0, "SHELLDLL_DefView must be a child of Progman");
             assert_eq!(class_name(defview), "SHELLDLL_DefView");
         } else {
-            // Classic desktop: the host is the WorkerW below the icon layer.
-            assert_ne!(
-                class_name(host),
-                "",
-                "the wallpaper host must be a real window"
-            );
+            // Preferred layout: the wallpaper WorkerW below the icon host. It has no DefView of
+            // its own — the icons live in the sibling window above us.
+            assert_eq!(class_name(host), "WorkerW");
+            assert_eq!(defview, 0, "the wallpaper WorkerW must not host the icons");
         }
     }
 }
