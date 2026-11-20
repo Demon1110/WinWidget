@@ -1,0 +1,191 @@
+/* 宿主内置弹框的外观。
+ * 颜色全部走 base.css 的 --w-* 变量，所以弹框和卡片主题永远是一套；
+ * 只在这里决定「弹框比卡片更紧凑」的那点排版。 */
+
+html, body { height: 100%; }
+
+body {
+  /* base.css 把 body 当成卡片本体画（有 padding 和 1px 描边），弹框也一样用这块面。 */
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--w-bg);
+  border-radius: calc(var(--w-radius) / var(--w-size-scale));
+}
+
+html.dlg-light body {
+  background: #f4f6f8;
+  color: #1a1d21;
+  box-shadow: inset 0 0 0 calc(1px / var(--w-size-scale)) rgba(0, 0, 0, 0.12);
+}
+html.dlg-light {
+  --w-fg: #1a1d21;
+  --w-fg-muted: rgba(26, 29, 33, 0.62);
+  --w-border: rgba(0, 0, 0, 0.12);
+  --w-control-bg: rgba(0, 0, 0, 0.05);
+  --w-hover: rgba(0, 0, 0, 0.06);
+  --w-on-accent: #0b0d10;
+  color-scheme: light;
+}
+
+.dlg {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  border-radius: inherit;
+  overflow: hidden;
+}
+
+/* ── 头部：图标 + 标题 + 关闭 ───────────────────────────────── */
+
+.dlg-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 14px 0;
+  flex: none;
+  /* 无边框窗口靠这块当拖拽把手 */
+  cursor: default;
+}
+.dlg-head.is-drag { cursor: move; }
+.dlg-head .dlg-title {
+  flex: 1;
+  min-width: 0;
+  font: 600 1rem/1.35 var(--w-font-title);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dlg-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font: 600 11px/1 var(--w-font);
+  color: var(--w-on-accent);
+  background: var(--w-accent);
+}
+.dlg-icon[data-tone="warn"] { background: var(--w-warn); }
+.dlg-icon[data-tone="danger"] { background: var(--w-danger); }
+.dlg-icon[data-tone="success"] { background: #35c077; }
+.dlg-icon[data-empty="true"] { display: none; }
+
+.dlg-x {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--w-fg-muted);
+  font: 15px/1 var(--w-font);
+  cursor: pointer;
+}
+.dlg-x:hover { background: var(--w-hover); color: var(--w-fg); }
+.dlg-x[hidden] { display: none; }
+
+/* ── 正文 ──────────────────────────────────────────────────── */
+
+.dlg-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 12px 14px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dlg-text {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  font-size: 0.857rem;
+  line-height: 1.55;
+  color: var(--w-fg);
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+/* 内容很短时不要用 flex 把正文撑到整屏，高度跟着内容走，由 fitContent 决定窗口多高 */
+.dlg-text[data-tight="true"] { flex: 0 0 auto; }
+
+.dlg-field { flex: none; }
+.dlg-input {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--w-border);
+  border-radius: calc(var(--w-radius) * 0.5);
+  background: var(--w-control-bg);
+  color: inherit;
+  outline: none;
+  font: inherit;
+}
+.dlg-input:focus { border-color: var(--w-accent); }
+
+/* ── 底部按钮 ───────────────────────────────────────────────── */
+
+.dlg-foot {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px;
+}
+.dlg-foot[data-empty="true"] { display: none; }
+
+.dlg-btn {
+  appearance: none;
+  border: 1px solid var(--w-border);
+  border-radius: calc(var(--w-radius) * 0.5);
+  padding: 6px 14px;
+  background: var(--w-control-bg);
+  color: var(--w-fg);
+  font: inherit;
+  cursor: pointer;
+  min-width: 68px;
+}
+.dlg-btn:hover { background: var(--w-hover); }
+.dlg-btn.is-primary { background: var(--w-accent); border-color: transparent; color: var(--w-on-accent); font-weight: 600; }
+.dlg-btn.is-primary:hover { filter: brightness(1.08); }
+.dlg-btn.is-danger { background: var(--w-danger); border-color: transparent; color: #fff; font-weight: 600; }
+.dlg-btn.is-danger:hover { filter: brightness(1.06); }
+
+/* ── toast：没有头尾，只有一个圆角条 ─────────────────────────── */
+
+.dlg[data-kind="toast"] { justify-content: center; }
+.dlg[data-kind="toast"] .dlg-head,
+.dlg[data-kind="toast"] .dlg-foot { display: none; }
+.dlg[data-kind="toast"] .dlg-main {
+  padding: 10px 14px;
+  flex: none;
+  justify-content: center;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.dlg[data-kind="toast"] .dlg-text {
+  flex: none;
+  font-size: 0.857rem;
+  text-align: left;
+  max-height: 100%;
+}
+body[data-toast="true"] {
+  background: rgba(12, 14, 18, 0.92);
+  box-shadow: inset 0 0 0 calc(1px / var(--w-size-scale)) rgba(255, 255, 255, 0.14);
+  color: #f2f4f7;
+}
+
+/* 入场：只是给「凭空出现」一点缓冲，不占时间预算 */
+body[data-animation="fade"] { animation: dlg-fade 0.16s ease-out; }
+body[data-animation="scale"] { animation: dlg-scale 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.1); }
+body[data-animation="slide"] { animation: dlg-slide 0.2s cubic-bezier(0.2, 0.9, 0.3, 1); }
+@keyframes dlg-fade { from { opacity: 0; } }
+@keyframes dlg-scale { from { opacity: 0; transform: scale(0.96); } }
+@keyframes dlg-slide { from { opacity: 0; transform: translateY(8px); } }
+@media (prefers-reduced-motion: reduce) {
+  body[data-animation] { animation: none; }
+}

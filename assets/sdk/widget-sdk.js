@@ -900,6 +900,87 @@
     },
   });
 
+  // ── dialog：宿主内置弹框 ─────────────────────────────────────
+  // 弹框就是 kind 为 alert / confirm / prompt / toast 的窗口，所以它天生能被
+  // `windows.list` 看到、被 `windows.close` 关掉，也不会多出一套生命周期。
+  // 这里只负责把「用户点的是哪个按钮」翻译成一句好用的返回值。
+  function openDialog(kind, options) {
+    const opt = Object.assign({}, options || {});
+    opt.kind = kind;
+    return windowsApi.open(opt);
+  }
+
+  function awaiting(handle, okId) {
+    return handle.closed.then((r) => {
+      const button = r.button == null ? "" : String(r.button);
+      return {
+        button: button,
+        value: r.value,
+        reason: r.reason || "",
+        confirmed: button === okId,
+      };
+    });
+  }
+
+  const dialogApi = Object.freeze({
+    /**
+     * alert({ title, content, icon, okText, autoClose, theme, accentColor, width, … })
+     * → Promise<{ button, reason }>；关掉窗口（× / Esc / 超时）也算看过。
+     */
+    alert(options) {
+      const opt = typeof options === "string" ? { content: options } : options || {};
+      return awaiting(openDialog("alert", opt), opt.okButton || "ok").then((r) => ({
+        button: r.button || "ok",
+        reason: r.reason,
+      }));
+    },
+    /**
+     * confirm({ title, content, okText, cancelText, danger, … })
+     * → Promise<{ confirmed, button, reason }>
+     */
+    confirm(options) {
+      const opt = typeof options === "string" ? { content: options } : options || {};
+      return awaiting(openDialog("confirm", opt), opt.okButton || "ok");
+    },
+    /**
+     * prompt({ title, content, input: { value, placeholder, password, maxLength }, … })
+     * → Promise<{ confirmed, value, button, reason }>
+     */
+    prompt(options) {
+      const opt = typeof options === "string" ? { content: options } : options || {};
+      if (opt.value !== undefined && !opt.input) opt.input = { value: opt.value };
+      return awaiting(openDialog("prompt", opt), opt.okButton || "ok").then((r) => ({
+        value: r.value,
+        confirmed: r.confirmed,
+        button: r.button,
+        reason: r.reason,
+      }));
+    },
+    /**
+     * toast({ content, autoClose, icon, … }) → { id, close() }，立刻返回，不等用户。
+     * toast 不抢焦点、不进任务栏，默认 3 秒自己消失。
+     */
+    toast(options) {
+      const opt = typeof options === "string" ? { content: options } : options || {};
+      const handle = openDialog("toast", opt);
+      return {
+        get id() { return handle.id; },
+        close(reason) { return handle.close(reason || "api"); },
+      };
+    },
+    /**
+     * 页面自己画、但外观与行为按弹框来：dialog.window({ html: "settings.html", … })。
+     * 返回普通窗口 handle；页面里用 `win.result` 交卷。
+     */
+    window(options) {
+      return openDialog("window", options || {});
+    },
+    /** 关掉某个弹框（id 或 key）。 */
+    close(ref, reason) {
+      return windowsApi.close(ref, reason);
+    },
+  });
+
   // ── public API ─────────────────────────────────────────────
   const widget = Object.freeze({
     apiVersion: 1,
@@ -1307,6 +1388,9 @@
 
     /** 多窗口：开窗、查找、通信、批量关闭。旧写法 `utools.createBrowserWindow` 照旧可用。 */
     windows: windowsApi,
+
+    /** 宿主内置弹框：alert / confirm / prompt / toast，配置见 docs/組件開發指南。 */
+    dialog: dialogApi,
 
     appearance: Object.freeze({
       get: () => ({ ...state.appearance }),

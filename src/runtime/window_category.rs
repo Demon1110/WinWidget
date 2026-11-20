@@ -757,8 +757,12 @@ pub fn card_call(
                 .instance(instance)
                 .map(|i| (i.width, i.height))
                 .unwrap_or((s.width, s.height));
-            let w = jnum(p, "width").unwrap_or(old_w).clamp(s.min_width, s.max_width);
-            let h = jnum(p, "height").unwrap_or(old_h).clamp(s.min_height, s.max_height);
+            let w = jnum(p, "width")
+                .unwrap_or(old_w)
+                .clamp(s.min_width, s.max_width);
+            let h = jnum(p, "height")
+                .unwrap_or(old_h)
+                .clamp(s.min_height, s.max_height);
             let x = jnum(p, "x");
             let y = jnum(p, "y");
             if let Some(inst) = app.instance_mut(instance) {
@@ -775,7 +779,9 @@ pub fn card_call(
             app.save();
             app.push_state(instance);
             app.push_state_to_control(None);
-            Reply::Now(json!({ "x": x.unwrap_or(0.0), "y": y.unwrap_or(0.0), "width": w, "height": h }))
+            Reply::Now(
+                json!({ "x": x.unwrap_or(0.0), "y": y.unwrap_or(0.0), "width": w, "height": h }),
+            )
         }
         "window.focus" => {
             if let Some(win) = app.windows.get(instance) {
@@ -1062,8 +1068,15 @@ pub fn custom_call(
     p: &Value,
 ) -> BridgeResult<Reply> {
     if method == "win.create" {
-        let file = req_str(p, "file")?;
-        let options = p.get("options").cloned().unwrap_or_else(|| json!({}));
+        // 弹框是 custom 窗口的特化：没有 file，页面由宿主内置，配置先补全再建窗。
+        let mut options = p.get("options").cloned().unwrap_or_else(|| json!({}));
+        let kind = jstr(&options, "kind").unwrap_or_default();
+        let file = if crate::runtime::dialog::has_builtin_page(&kind) {
+            options = crate::runtime::dialog::normalize(&kind, &options);
+            crate::runtime::dialog::PAGE.to_string()
+        } else {
+            req_str(p, "file")?
+        };
         let parent = match ctx {
             Some(id) => format!("win:{id}"),
             None => format!("card:{instance}"),
@@ -1113,9 +1126,7 @@ pub fn custom_call(
             return Ok(Reply::Now(Value::Bool(found.is_some())));
         }
         return Ok(Reply::Now(
-            found
-                .map(|id| state_json(app, id))
-                .unwrap_or(Value::Null),
+            found.map(|id| state_json(app, id)).unwrap_or(Value::Null),
         ));
     }
     if method == "win.post" || method == "win.broadcast" {

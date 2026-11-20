@@ -861,6 +861,12 @@ impl App {
             Some((path, rest)) => (path, format!("&{rest}")),
             None => (spec.file.as_str(), String::new()),
         };
+        // 弹框没有实体文件：路径是一个宿主保留名，服务端见到它就出内置页并把配置塞进 boot。
+        let path = if path == crate::runtime::dialog::PAGE {
+            "__dialog"
+        } else {
+            path
+        };
         // The markers sit in the URL itself: the page starts loading as soon as the window exists,
         // which can be before the serve state is refreshed, so the server cannot rely on its table
         // alone to know this is a custom window.
@@ -895,6 +901,10 @@ impl App {
                 continue;
             };
             let url = self.custom_url(&manifest, &spec, id);
+            // 弹框的配置要在页面加载前就位：`/__dialog` 一起来就向服务端要它。
+            if spec.file == crate::runtime::dialog::PAGE {
+                self.serve.lock().dialogs.insert(id, spec.options.clone());
+            }
             match crate::runtime::window_category::build_custom(
                 target,
                 &spec,
@@ -910,7 +920,10 @@ impl App {
                     ));
                     self.customs.insert(id, win);
                 }
-                Err(e) => crate::core::logging::error(&format!("win {id}: {e}")),
+                Err(e) => {
+                    self.serve.lock().dialogs.remove(&id);
+                    crate::core::logging::error(&format!("win {id}: {e}"))
+                }
             }
         }
     }
@@ -942,6 +955,7 @@ impl App {
         if self.customs.remove(&id).is_none() {
             return;
         }
+        self.serve.lock().dialogs.remove(&id);
         // 模态窗关了，父窗口要立刻能点，不能等下一轮。
         if let Some(modal_parent) = self.modal_parents.remove(&id) {
             crate::platform::win32::enable_window(modal_parent, true);

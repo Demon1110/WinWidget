@@ -45,6 +45,8 @@ pub struct State {
     pub hosts: HashMap<String, Host>,
     pub instances: HashMap<String, Instance>,
     pub wins: HashMap<u32, WinPage>,
+    /// 内置弹框的配置，按窗口 id 存：`/__dialog` 起来时要立刻拿到它。
+    pub dialogs: HashMap<u32, Value>,
     pub port: u16,
 }
 
@@ -331,10 +333,24 @@ fn serve_page(
             if let Some(mut parent) =
                 parent_instance.and_then(|name| st.instances.get(&name).cloned())
             {
-                parent.boot = custom_boot(&parent.boot, id, visible);
+                parent.boot = match st.dialogs.get(&id).cloned() {
+                    Some(cfg) => dialog_boot(&parent.boot, id, visible, &cfg),
+                    None => custom_boot(&parent.boot, id, visible),
+                };
                 instance = Some(parent);
             }
         }
+    }
+    // 内置弹框：页面在宿主自己的 SDK 目录里，不落组件目录，所以这里要单独放行。
+    if path == "/__dialog" && instance.is_some() {
+        let csp = target.csp.clone();
+        drop(st);
+        return serve_file(
+            &paths.sdk_dir(),
+            "dialog/dialog.html",
+            Some(&csp),
+            instance.as_ref(),
+        );
     }
     let rel = if path == "/" || path.is_empty() {
         target.entry.clone()
@@ -412,6 +428,20 @@ fn custom_boot(parent_boot: &str, id: u32, visible: bool) -> String {
         obj.insert("windowId".into(), serde_json::json!(id));
         obj.insert("parentInstance".into(), instance);
         obj.insert("visible".into(), Value::Bool(visible));
+    }
+    value.to_string()
+}
+
+/// A dialog window's boot data: the custom window markers plus the normalized dialog config, so the
+/// builtin page does not need a second round trip to find out what it is meant to draw.
+fn dialog_boot(parent_boot: &str, id: u32, visible: bool, cfg: &Value) -> String {
+    let mut value: Value = serde_json::from_str(&custom_boot(parent_boot, id, visible))
+        .unwrap_or_else(|_| serde_json::json!({}));
+    if let Some(obj) = value.as_object_mut() {
+        obj.insert("dialog".into(), cfg.clone());
+        if let Some(kind) = cfg.get("kind") {
+            obj.insert("kind".into(), kind.clone());
+        }
     }
     value.to_string()
 }

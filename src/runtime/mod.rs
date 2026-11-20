@@ -6,6 +6,7 @@
 
 pub mod app;
 pub mod bridge;
+pub mod dialog;
 pub mod monitor;
 pub mod shim;
 pub mod snap;

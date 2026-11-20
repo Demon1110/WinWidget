@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="/__fw/dialog/dialog.css">
+  <title>WinWidget</title>
+</head>
+<body>
+  <div class="dlg" id="dlg" data-kind="alert">
+    <div class="dlg-head" id="head">
+      <span class="dlg-icon" id="icon" aria-hidden="true"></span>
+      <span class="dlg-title" id="title"></span>
+      <button class="dlg-x" id="close" type="button" aria-label="关闭">&#215;</button>
+    </div>
+    <div class="dlg-main" id="main">
+      <div class="dlg-text" id="text"></div>
+      <div class="dlg-field" id="field" hidden>
+        <input class="dlg-input" id="input" type="text" autocomplete="off">
+      </div>
+    </div>
+    <div class="dlg-foot" id="foot"></div>
+  </div>
+  <script src="/__fw/dialog/dialog.js"></script>
+</body>
+</html>
