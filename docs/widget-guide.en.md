@@ -7,6 +7,7 @@ A widget is a folder: a `widget.json` file plus ordinary HTML, CSS and JavaScrip
 - [widget.json](#widgetjson)
 - [JavaScript API](#javascript-api)
 - [Windows of your own: createBrowserWindow](#windows-of-your-own-createbrowserwindow)
+- [Dialogs and several windows](#dialogs-and-several-windows)
 - [Looks: follow the theme](#looks-follow-the-theme)
 - [Dragging, menus and clicks](#dragging-menus-and-clicks)
 - [Third-party CLI tools](#third-party-cli-tools)
@@ -734,6 +735,144 @@ These methods keep their uTools names and **neither throw nor go silent**: the h
 - A `wallpaper` window is pinned: move/resize/raise/fullscreen methods return `{ unsupported: … }`, and it never goes through tao's `set_visible`. Show it with `showInactive`, close it with `destroy`.
 
 ---
+
+## Dialogs and several windows
+
+A widget can own more than one window. The host takes care of the three things every widget kept rebuilding: windows have an identity (`id` plus a `key` you choose), windows can talk to each other, and dialogs have a built-in page — no more hand-written `alert.html` per widget.
+
+### Dialogs: `widget.dialog`
+
+```js
+// one button; closing it counts as having seen it
+await widget.dialog.alert({ title: "Reminder", content: "Meeting starts in 10 minutes" });
+
+// go on or not
+const del = await widget.dialog.confirm({
+  title: "Delete this reminder?",
+  content: "This cannot be undone.",
+  okText: "Delete",
+  cancelText: "Keep it",
+  danger: true,
+});
+if (del.confirmed) removeReminder();
+
+// one line of input
+const name = await widget.dialog.prompt({
+  title: "Rename",
+  content: "It was called “Drink water at 19:30”.",
+  input: { value: "Drink water at 19:30", placeholder: "Name" },
+});
+if (name.confirmed) save(name.value);
+
+// say it and move on, without waiting for the user
+widget.dialog.toast({ content: "Saved", icon: "success" });
+```
+
+| Call | Resolves to |
+|---|---|
+| `alert(options)` | `Promise<{ button, reason }>` |
+| `confirm(options)` | `Promise<{ confirmed, button, reason }>` |
+| `prompt(options)` | `Promise<{ confirmed, value, button, reason }>` |
+| `toast(options)` | `{ id, close() }` immediately; disappears after 3 s by default, never takes focus, lets clicks through |
+| `window(options)` | an ordinary window handle whose page you draw; hand in the result with `win.result` |
+
+`reason` says how the window went away:
+
+| reason | When |
+|---|---|
+| `button` | the user pressed a button (`button` is its id) |
+| `esc` | Esc was pressed |
+| `timeout` | `autoClose` ran out |
+| `user` | the × in the corner was pressed |
+| `outside` / `blur` | `closeOnOutsideClick` / `closeOnBlur` |
+| `parent` | the window that opened it closed |
+| `owner` | the widget was uninstalled or the app quit |
+| `api` | your code called `close()` without a reason |
+
+### Dialog options
+
+| Option | Default | Meaning |
+|---|---|---|
+| `title` / `showTitle` | `""` / `true` | heading; `showTitle: false` keeps only the content |
+| `content` / `rawHtml` | — | plain text (wrapped) or HTML (`rawHtml: true`) |
+| `icon` | `"info"` | `info` `warn` `error` `success`; `""` for none |
+| `buttons` | by kind | `[{ id, text, kind: "primary" \| "danger" }]`; with custom buttons `button` is the `id` |
+| `okText` / `cancelText` | OK / Cancel | button labels |
+| `danger` | `false` | paints the main button in the danger colour |
+| `input` | — | for `prompt`: `{ value, placeholder, password, maxLength }` |
+| `width` / `height` | 380 / follows content | window width; height follows the content by default |
+| `fitContent` / `maxHeight` | `true` / 620 | grow with the content, up to `maxHeight` |
+| `frame` / `rounded` / `transparent` | `false` / `true` / `true` | chrome |
+| `backgroundColor` | transparent | pass `"#101216"` for a solid surface |
+| `accentColor` | from the theme | accent for buttons and icon |
+| `theme` | `"inherit"` | `inherit` follows the card; `light` / `dark` force one |
+| `animation` | `fade` | `fade` `scale` `slide` `none` |
+| `closable` / `closeOnEsc` | `true` / `true` | the × and the Esc key |
+| `autoClose` | 3000 for toast, 0 otherwise | milliseconds; 0 never closes on its own |
+| `draggable` | `true` | frameless windows can be dragged |
+| `modal` | `false` | the parent window stops taking input while open |
+| `anchor` / `offset` | — | `"card"` under the card (flips above when there is no room), `"cursor"` at the pointer, `"screen"` centred; `offset: [dx, dy]` nudges it |
+
+### Several windows: `widget.windows`
+
+| Method | Does |
+|---|---|
+| `open(options)` | opens a window and returns a handle at once; with `key` and `reuse` (default `true`) the same name only ever opens one |
+| `get(ref)` | finds an open window synchronously: `id` or `key` |
+| `find(ref)` | the same, but asks the host once (works again after a page reload) |
+| `has(ref)` / `list()` | does it exist / every window of this widget |
+| `post(to, channel, ...args)` | sends to one window, `to` is an id or a key |
+| `broadcast(channel, ...args)` | sends to every window of this widget (card included), skipping the sender |
+| `close(ref, reason)` / `closeAll({ kind, key })` | closes one / closes in bulk |
+| `on("closed" \| "opened" \| "message", fn)` | listens for closes, opens and messages |
+
+```js
+const settings = widget.windows.open({
+  key: "settings",
+  html: "settings.html",
+  width: 420,
+  height: 520,
+  title: "Settings",
+  frame: false,
+  closeOnEsc: true,
+  anchor: "card",
+});
+
+widget.windows.post("settings", "theme-changed", "dark");
+
+const windows = await widget.windows.list();
+widget.windows.closeAll({ kind: "settings" });
+```
+
+Opening the same `key` again does not add a window: it raises the existing one and hands back the same handle. The old `utools.createBrowserWindow` still works — it is `widget.windows.open`.
+
+### Your own window: `widget.window`
+
+On a card it means the card; inside a window it means that window:
+
+| Method | Meaning |
+|---|---|
+| `getSize()` / `setSize(w, h)` | content size in CSS pixels |
+| `getBounds()` / `setBounds({ x, y, width, height })` | position and size |
+| `getPosition()` / `setPosition(x, y)` | position |
+| `focus()` | raise it |
+| `setAlwaysOnTop(bool)` / `isAlwaysOnTop()` | stay above other windows |
+| `setOpacity(0–1)` | transparency (a card is per-pixel transparent, so this fades its content) |
+| `setTitle(text)` | window title |
+| `startDrag()` | drag a frameless window: call it when the user presses your own title bar |
+| `close()` / `hide()` / `show()` / `isVisible()` | hide and show |
+
+```js
+// a frameless panel's own title bar
+document.querySelector(".panel-head").addEventListener("mousedown", (e) => {
+  if (e.button === 0) widget.window.startDrag();
+});
+```
+
+### Two things to keep in mind
+
+- Every window shares the card's origin and CSP: do not treat them as a security boundary.
+- One widget may have 24 windows open at a time; close them when you are done instead of letting them rot.
 
 ## Looks: follow the theme
 

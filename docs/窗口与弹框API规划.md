@@ -383,8 +383,21 @@ document.getElementById("save").onclick = async () => {
 
 ---
 
-需要拍板的三件事（定了我就按 P0 → P1 开工）：
+## 十二、落地进度
 
-1. **弹框由宿主渲染**（内置页面 + 主题联动，零 CSS 成本），同时保留 `html:` 自定义页面 —— 同意吗？
-2. **`dialog` 是 custom 窗口的特化**（复用现有窗口机制、能被 `windows.list` 看到、能被 `windows.close` 关），而不是独立的一套窗口系统 —— 同意吗？
-3. **卡片也补齐 `focus/setAlwaysOnTop/setOpacity/setBounds` 这类自操作**，还是卡片保持"只读 + 显隐"的克制？
+三个拍板点都按「同意」执行，P0 → P2 已落地并推送，P3 的文档部分已完成。
+
+| 阶段 | 状态 | 提交 | 说明 |
+|---|---|---|---|
+| P0 身份、通信、关闭 | ✅ | `d2b98d8` | `key` 复用、`win.list/get/has/post/broadcast/closeAll`、关闭带 `reason`、卡片补 `focus/setAlwaysOnTop/setOpacity/setBounds` |
+| P1 内置弹框页 | ✅ | `d8c16e8` | `widget.dialog` 的 alert / confirm / prompt / toast / window，配置归一在 `runtime/dialog.rs` |
+| P2 配置矩阵 | ✅ | `3121d51` | `autoClose` 宿主兜底、`closeOnBlur`、`closeOnOutsideClick`、`modal`、`anchor`/`offset` |
+| P3 文档与示例 | 🚧 | 本次 | 三语指南新增「弹框与多窗口」整章；示例模板与 desktop-reminder 迁移未做 |
+
+P2 里 `closeOnBlur` / `closeOnOutsideClick` / `modal` 三条走的是窗口失焦与 `EnableWindow`，需要在真机上点一下别处才能看到效果，验证留到有交互的会话；`autoClose` 与 `anchor` 已在真机上量过坐标与关闭原因。
+
+还没做的两件（都不阻塞使用）：
+
+1. `hello-widget` 模板示例：仓库里没有这个模板组件，指南里的示例段落已经覆盖同一份代码，是否要新建一个模板组件需要先定它放宿主仓库还是 Hub。
+2. desktop-reminder 迁到 `widget.dialog.confirm`：它的提醒弹窗带「稍后 / 完成」两个入口，要迁就改用自定义 `buttons`，属于 Hub 侧改动，顺便能去掉固定 380×300 时下半截的空白。
+
