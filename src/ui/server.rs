@@ -69,24 +69,12 @@ pub struct Server_ {
 /// for instance, answers the page with `ERR_UNSAFE_PORT` and a blank white window.
 pub fn start(state: ServeState) -> Result<u16, String> {
     use std::time::{SystemTime, UNIX_EPOCH};
-    // Widget storage (localStorage included) is keyed by origin, and the origin carries this
-    // port, so a port that changes every launch silently wipes page-saved state such as bloom's
-    // persisted effect. Bind a fixed port first; the random draw below stays as the fallback
-    // for the rare case that something else already holds it. The port is drawn from the high
-    // range on purpose: Chromium (and therefore WebView2) refuses a whole list of low ports as
-    // unsafe, and `127.0.0.1:0` can hand back exactly one of them — 6666, for instance, answers
-    // the page with `ERR_UNSAFE_PORT` and a blank white window.
+    // The port is drawn from the high range on purpose: Chromium (and therefore WebView2) refuses
+    // a whole list of low ports as unsafe, and `127.0.0.1:0` can hand back exactly one of them —
+    // 6666, for instance, answers the page with `ERR_UNSAFE_PORT` and a blank white window. Page
+    // state that has to survive a restart belongs in the host's per-instance storage, not in
+    // origin-keyed browser storage, so a fresh random port every launch is safe here.
     let mut last = String::new();
-    if let Ok(server) = Server::http(("127.0.0.1", 43900)) {
-        state.lock().port = 43900;
-        let shared = state.clone();
-        std::thread::spawn(move || {
-            for request in server.incoming_requests() {
-                handle(&shared, request, 43900);
-            }
-        });
-        return Ok(43900);
-    }
     for attempt in 0..24u32 {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
