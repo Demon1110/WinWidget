@@ -838,8 +838,24 @@ unsafe extern "system" fn polished_proc(hwnd: HWND, msg: u32, wp: usize, lp: isi
         // nowhere to draw the caption strip it otherwise keeps around a frameless card.
         return 0;
     }
+    // Activation is the moment DWM rebuilds the frame, and it is also the moment the glass frame
+    // that carries the page's per-pixel alpha is dropped: the transparent pixels outside a rounded
+    // card then land on an opaque sheet and the four corners turn into white nubs. Answering the
+    // activation here keeps Windows from painting the frame at all, and the glass is restated
+    // right after it.
+    if msg == WM_NCACTIVATE {
+        extend_frame(hwnd);
+        polish_frame(hwnd, round);
+        disable_nc_rendering(hwnd);
+        return 1;
+    }
+    if msg == WM_NCPAINT {
+        disable_nc_rendering(hwnd);
+        return 0;
+    }
     let result = CallWindowProcW(previous, hwnd, msg, wp, lp);
-    if msg == WM_NCACTIVATE || msg == WM_ACTIVATE {
+    if msg == WM_ACTIVATE {
+        extend_frame(hwnd);
         polish_frame(hwnd, round);
     }
     result

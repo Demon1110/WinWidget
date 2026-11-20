@@ -313,18 +313,10 @@ pub fn build_custom(
         w::place_above_desktop(hwnd);
     }
     if transparent {
-        // Real per-pixel alpha is a pair: the glass frame over the whole client area, and DWM's
-        // blur-behind with an empty region. A card gets both; without them a transparent window
-        // still paints its web view's white sheet over whatever is behind it. They have to be
-        // stated *after* the frame is dropped, because a frame change clears them.
+        // The glass frame is the whole of per-pixel alpha: it is what lets the page's transparent
+        // pixels land on the desktop. It has to be stated *after* the frame is dropped, because a
+        // frame change clears it.
         w::extend_frame(hwnd);
-        w::per_pixel_alpha(hwnd);
-        // Turn off any DWM backdrop last, after every restack/recomposite above. A `seeThrough`
-        // window must let the page's alpha land on the desktop with no tinted layer in between —
-        // an accent drawn before those frame changes came back as a white sheet on light themes.
-        if jbool(&o, "seeThrough").unwrap_or(false) {
-            w::set_see_through(hwnd, true);
-        }
     }
     // `focusable: false` is the uTools option for overlay windows: they show up on top of the
     // user's work without ever becoming the active window. The style stops a click from doing it,
