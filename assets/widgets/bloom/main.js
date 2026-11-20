@@ -180,7 +180,7 @@ const S = {
   tagline: t({ "zh-CN": "让你的屏幕开出赛博时代的浪漫", "zh-TW": "讓螢幕開出賽博時代的浪漫", en: "Full-screen effects that leave your work alone" }),
   idle: t({ "zh-CN": "未运行", "zh-TW": "未運行", en: "Idle" }),
   running: t({ "zh-CN": "正在运行", "zh-TW": "正在運行", en: "Running" }),
-  blind: t({ "zh-CN": "随便开朵花", "zh-TW": "隨便開朵花", en: "Surprise me" }),
+  blind: t({ "zh-CN": "随便", "zh-TW": "隨便", en: "Surprise" }),
   stop: t({ "zh-CN": "停止运行", "zh-TW": "停止運行", en: "Stop" }),
   hint: t({
     "zh-CN": "特效在最底层穿透运行，不遮挡、不抢焦点；鼠标照点、代码照写。",
@@ -205,7 +205,6 @@ const S = {
 
 $("name").textContent = S.name;
 $("blind").textContent = S.blind;
-$("stop").textContent = S.stop;
 
 // ── 画廊 ──
 function buildCats() {
@@ -268,18 +267,20 @@ function paintGrid() {
 function paintStatus() {
   const fx = latest();
   const dot = $("dot");
+  const badge = $("badge");
   if (fx) {
     dot.style.background = fx.color;
     dot.classList.add("is-live");
-    $("stateText").textContent = `${t(fx.name)} · ${wins.length} ${S.screens}`;
-    $("sub").textContent = `${S.running} · ${t(fx.name)}`;
-    $("stop").disabled = false;
+    badge.classList.add("is-live");
+    // 状态徽标在有特效时就是停止按钮：文字换成动作，运行信息留在副标题里。
+    $("stateText").textContent = S.stop;
+    $("sub").textContent = `${S.running} · ${t(fx.name)} · ${wins.length} ${S.screens}`;
   } else {
     dot.style.background = "";
     dot.classList.remove("is-live");
+    badge.classList.remove("is-live");
     $("stateText").textContent = S.idle;
     $("sub").textContent = S.tagline;
-    $("stop").disabled = true;
   }
   const hovered = hover ? fxOf(hover) : null;
   $("hint").textContent = hovered ? `${t(hovered.name)} · ${t(hovered.desc)}` : S.hint;
@@ -459,7 +460,8 @@ function blindBox() {
 
 // ── 交互绑定 ──
 $("blind").addEventListener("click", blindBox);
-$("stop").addEventListener("click", () => stopAll(false));
+// 状态徽标：没特效时只是「未运行」徽标（点击无动作），跑着的时候它就是停止按钮。
+$("badge").addEventListener("click", () => { if (running) stopAll(false); });
 
 // 设置热更新：只有壁纸透明度变了就轻量同步（拖滑条不重启特效）；
 // 「仅主屏 / 全部屏」或自定义文字变了才就地重排 / 换字重跑。

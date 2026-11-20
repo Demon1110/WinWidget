@@ -23,17 +23,28 @@ body { display: flex; flex-direction: column; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* 右上角动作区：盲盒「随便」+ 状态徽标（运行时即停止按钮） */
+.actions { flex: none; display: flex; align-items: center; gap: 5px; }
+.mini { padding: 3px 9px; font-size: 0.68rem; line-height: 1.4; border-radius: 99px; }
+.mini:active { transform: scale(0.96); }
 .badge {
   flex: none;
   min-width: 0;
-  max-width: 54%;
+  max-width: 9.5em;
   display: flex;
   align-items: center;
   gap: 5px;
   padding: 3px 8px;
+  border: 0;
   border-radius: 99px;
   background: var(--w-control-bg);
+  font: inherit;
+  color: inherit;
+  cursor: default;
 }
+.badge.is-live { cursor: pointer; }
+.badge.is-live:hover { background: var(--w-hover); }
+.badge.is-live:active { transform: scale(0.96); }
 .dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--w-fg-faint); }
 .dot.is-live { animation: bloom-pulse 2.4s ease-in-out infinite; }
 #stateText {
@@ -45,6 +56,7 @@ body { display: flex; flex-direction: column; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.badge.is-live #stateText { color: var(--w-fg); }
 
 /* ── 分类 ── */
 .cats {
@@ -142,13 +154,7 @@ body { display: flex; flex-direction: column; }
   color: var(--w-fg-muted);
 }
 
-/* ── 底部动作 ── */
-.foot { flex: none; display: flex; gap: 5px; }
-.foot .w-btn { padding: 4px 8px; font-size: 0.78rem; text-align: center; }
-#blind { flex: 1 1 auto; }
-#stop { flex: 0 0 auto; min-width: 5.4em; }
-#stop:disabled { opacity: 0.42; cursor: default; }
-
+/* ── 提示 ── */
 .hint {
   flex: none;
   margin: 0;
