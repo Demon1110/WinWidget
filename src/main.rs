@@ -78,6 +78,11 @@ fn main() {
         "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion",
     );
     browser_args.push_str(" --disable-backgrounding-occluded-windows");
+    // Reparenting a WebView2 surface onto Progman/WorkerW puts its host HWND behind the icons.
+    // Chromium's default D3D/DirectComposition path then paints through a separate top-level
+    // "Intermediate D3D Window" that is not reparented with the host, so the wallpaper effect
+    // stays invisible. OpenGL via ANGLE keeps the compositor inside the child tree.
+    browser_args.push_str(" --use-angle=gl");
     if config_low_resource() {
         browser_args.push_str(" --disable-gpu --disable-gpu-compositing --js-flags=--lite-mode");
     }
