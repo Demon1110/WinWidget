@@ -296,13 +296,6 @@ impl WidgetWin {
             // The rebuild above would bring the caption back; keep the non-client frame dark.
             w::disable_nc_rendering(hwnd);
         }
-        if click_through != self.click_through {
-            self.click_through = click_through;
-            // Top-level only: Windows then skips this card and all of its children, while the
-            // WebView keeps its per-pixel-alpha surface intact. Toggling the style on the
-            // WebView's own children is what used to leave the card alive but invisible.
-            w::set_click_through(hwnd, click_through);
-        }
         if layer != self.layer {
             self.layer = layer.to_string();
             set_meta_layer(hwnd, layer);
@@ -322,6 +315,13 @@ impl WidgetWin {
                     w::set_topmost(hwnd, false);
                 }
             }
+        }
+        if click_through != self.click_through {
+            self.click_through = click_through;
+            // Top-level only: Windows then skips this card and all of its children, while the
+            // WebView keeps its per-pixel-alpha surface intact. Toggling the style on the
+            // WebView's own children is what used to leave the card alive but invisible.
+            w::set_click_through(hwnd, click_through);
         }
     }
 }

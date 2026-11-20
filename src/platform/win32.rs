@@ -1116,10 +1116,9 @@ pub fn place_on_wallpaper(hwnd: HWND, screen: &RECT) -> bool {
             SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
         );
 
-        // Belt and braces: never take focus, never eat a click. z-order already guarantees the
-        // desktop stays usable, but a stray Explorer restack must not be able to lock the mouse.
+        // Belt and braces: never take focus. Click-through itself belongs to the card's lock
+        // state, not to the layer — an unlocked desktop card still has to accept the pointer.
         set_no_activate(hwnd, true);
-        set_click_through(hwnd, true);
     }
     true
 }
@@ -1163,27 +1162,34 @@ pub fn set_no_activate(hwnd: HWND, on: bool) {
 
 /// Click-through: the window keeps its per-pixel alpha and the mouse hit-test skips it.
 ///
-/// Set the bit on the top-level card only. `WS_EX_TRANSPARENT` on a top-level window makes
-/// Windows skip the window together with its child windows, so the WebView still follows the
-/// pointer normally when the flag is off. Do **not** push the bit down onto the WebView's child
-/// windows: they composite a per-pixel-alpha surface, and clearing that flag again makes DWM
-/// treat the surface as opaque while its pixels are still fully transparent. The card then stays
-/// alive and hit-testable but paints nothing until the flag is set on again.
+/// `WS_EX_TRANSPARENT` alone only changes painting order; Windows requires `WS_EX_LAYERED` as
+/// well before it ignores the window — including the WebView2 children — for hit-testing. Adding
+/// or removing the layered bit rebuilds the DWM surface, which throws away the per-pixel-alpha
+/// frame, so the frame and blur region are stated again right away. Do **not** push the bit down
+/// onto the WebView's child windows: disabling or restyling them stops Chromium's compositor and
+/// leaves the card alive but blank.
 pub fn set_click_through(hwnd: HWND, on: bool) {
-    set_transparent_ex(hwnd, on);
-}
-
-fn set_transparent_ex(hwnd: HWND, on: bool) {
     unsafe {
         let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-        let style = if on {
-            ex | WS_EX_TRANSPARENT
-        } else {
-            ex & !WS_EX_TRANSPARENT
-        };
-        if style != ex {
-            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style);
+        let layered = WS_EX_LAYERED | WS_EX_TRANSPARENT;
+        let style = if on { ex | layered } else { ex & !layered };
+        if style == ex {
+            return;
         }
+        SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style);
+    }
+    extend_frame(hwnd);
+    per_pixel_alpha(hwnd);
+    unsafe {
+        SetWindowPos(
+            hwnd,
+            0,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+        );
     }
 }
 
