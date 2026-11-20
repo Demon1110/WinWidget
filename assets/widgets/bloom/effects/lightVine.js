@@ -89,15 +89,9 @@ window.bloomRegister('lightVine',
       // 当前活跃藤蔓：vines 数组最后一条
       var currentVine = state.vines.length > 0 ? state.vines[state.vines.length - 1] : null;
 
-      // 需要新建藤蔓的情况：没有活跃藤蔓 / 距离上次生长点太远 / 藤蔓已枯萎
+      // 只在没有藤蔓或已枯萎时新建；帧间跳跃靠下面的插值补点连起来，
+      // 不再按距离切断——快速甩鼠标时笔迹也保持连续
       var needNewVine = !currentVine || currentVine.dead;
-
-      if (!needNewVine) {
-        // 检查距离最后一个点的距离
-        var lastPt = currentVine.points[currentVine.points.length - 1];
-        var dist = Math.sqrt((mx - lastPt.x) * (mx - lastPt.x) + (my - lastPt.y) * (my - lastPt.y));
-        if (dist > 80) needNewVine = true; // 鼠标跳跃太远，断开旧藤蔓开新的
-      }
 
       if (needNewVine) {
         // 控制藤蔓总数
@@ -116,7 +110,9 @@ window.bloomRegister('lightVine',
         state.vines.push(currentVine);
       }
 
-      // 生长：追加新点
+      // 生长：沿上一落点→当前位置按固定步长插值补点。
+      // 60fps 下快速甩动一帧能跨上百像素，只记端点笔迹就会断裂；
+      // 插值后无论多快都是密集连续的节点。
       var cv = currentVine;
       var lastP = cv.points.length > 0 ? cv.points[cv.points.length - 1] : null;
       var stepDist = lastP ? Math.sqrt((mx - lastP.x) * (mx - lastP.x) + (my - lastP.y) * (my - lastP.y)) : MIN_DIST + 1;
@@ -124,25 +120,36 @@ window.bloomRegister('lightVine',
       if (stepDist >= MIN_DIST) {
         // 粗细由速度决定：越快越粗
         var thickness = Math.min(1.5 + spd * 0.08, 5);
-        cv.points.push({
-          x: mx + (Math.random() - 0.5) * 2,
-          y: my + (Math.random() - 0.5) * 2,
-          age: 0,
-          thickness: thickness
-        });
+        var STEP = 12;                        // 补点步长(px)
+        var MAX_SEGS = 64;                    // 单帧补点上限（约 768px 跳跃）
+        var segs = Math.min(Math.max(1, Math.round(stepDist / STEP)), MAX_SEGS);
+        var fromX = lastP ? lastP.x : mx;
+        var fromY = lastP ? lastP.y : my;
+        // 花的概率按补点数摊薄，保持每帧期望花量与旧版一致
+        var flowerP = FLOWER_RATE * 0.15 / segs;
 
-        // 随机生花
-        if (Math.random() < FLOWER_RATE * 0.15 && cv.points.length > 2) {
-          var fp = cv.points[cv.points.length - 1];
-          cv.flowers.push({
-            x: fp.x,
-            y: fp.y,
-            hue: cv.hue + (Math.random() - 0.5) * 60,
-            bloom: 0,
-            life: FLOWER_LIFE,
-            maxLife: FLOWER_LIFE,
-            size: 2 + Math.random() * 3
+        for (var gi = 1; gi <= segs; gi++) {
+          var gt = gi / segs;
+          cv.points.push({
+            x: fromX + (mx - fromX) * gt + (Math.random() - 0.5) * 2,
+            y: fromY + (my - fromY) * gt + (Math.random() - 0.5) * 2,
+            age: 0,
+            thickness: thickness
           });
+
+          // 随机生花
+          if (Math.random() < flowerP && cv.points.length > 2) {
+            var fp = cv.points[cv.points.length - 1];
+            cv.flowers.push({
+              x: fp.x,
+              y: fp.y,
+              hue: cv.hue + (Math.random() - 0.5) * 60,
+              bloom: 0,
+              life: FLOWER_LIFE,
+              maxLife: FLOWER_LIFE,
+              size: 2 + Math.random() * 3
+            });
+          }
         }
 
         // 限制单条藤蔓的点数（防止内存爆炸）
@@ -210,10 +217,12 @@ window.bloomRegister('lightVine',
       var pts = v.points;
       if (pts.length < 2) continue;
 
-      // 分段绘制以实现粗细和颜色渐变
-      for (var si = 1; si < pts.length; si++) {
-        var p1 = pts[si - 1];
-        var p2 = pts[si];
+      // 中点平滑：每段从「上点与本点的中点」出发、经本点、到「本点与下点的中点」结束，
+      // 段与段首尾相接无缝隙。旧写法每段终点落在 mid(p2,p3) 而下一段又从 p2 起笔，
+      // 中间半个点距没人画——点距一大笔迹就断成虚线。
+      for (var si = 0; si < pts.length - 1; si++) {
+        var p1 = pts[si];
+        var p2 = pts[si + 1];
         var ageRatio = Math.max(0, 1 - p2.age / POINT_LIFE);
         var alpha = ageRatio * 0.7;
         var thick = p2.thickness * ageRatio;
@@ -225,15 +234,16 @@ window.bloomRegister('lightVine',
         ctx.lineWidth = thick;
         ctx.beginPath();
 
-        // 用二次贝塞尔平滑：取相邻点中点作为控制点
-        if (si < pts.length - 1) {
-          var p3 = pts[si + 1];
-          var mx2 = (p2.x + p3.x) / 2;
-          var my2 = (p2.y + p3.y) / 2;
+        if (si === 0) {
           ctx.moveTo(p1.x, p1.y);
-          ctx.quadraticCurveTo(p2.x, p2.y, mx2, my2);
         } else {
-          ctx.moveTo(p1.x, p1.y);
+          var pm = pts[si - 1];
+          ctx.moveTo((pm.x + p1.x) / 2, (pm.y + p1.y) / 2);
+        }
+        if (si < pts.length - 2) {
+          var p3 = pts[si + 2];
+          ctx.quadraticCurveTo(p2.x, p2.y, (p2.x + p3.x) / 2, (p2.y + p3.y) / 2);
+        } else {
           ctx.lineTo(p2.x, p2.y);
         }
         ctx.stroke();
