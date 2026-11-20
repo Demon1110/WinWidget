@@ -3,10 +3,42 @@ body { display: flex; flex-direction: column; }
 .led { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 7px; position: relative; }
 
 header { display: flex; align-items: center; gap: 8px; flex: none; }
-.name { font-size: 0.93rem; letter-spacing: 0.02em; flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.heading { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+.name { font-size: 0.93rem; letter-spacing: 0.02em; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.book { max-width: 100%; padding: 0; border: 0; background: transparent; color: var(--w-fg-muted); font-size: 0.66rem; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.book:hover { color: var(--w-accent); }
 .stats { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; min-width: 0; }
 .balance { font-size: 0.78rem; font-weight: 600; color: var(--w-fg); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .flow { font-size: 0.66rem; color: var(--w-fg-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.book-panel {
+  position: absolute; z-index: 8; top: 36px; left: 0; width: min(276px, 100%);
+  max-height: calc(100% - 42px); overflow-y: auto;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 8px; border-radius: 10px;
+  background: color-mix(in srgb, var(--w-bg-solid) 92%, transparent);
+  box-shadow: inset 0 0 0 1px var(--w-border), 0 8px 24px rgba(0, 0, 0, 0.38);
+}
+.book-panel[hidden] { display: none; }
+.book-head { display: flex; align-items: center; gap: 6px; font-size: 0.76rem; color: var(--w-fg); }
+.book-head span { flex: 1 1 0; }
+.book-close { width: 18px; height: 18px; padding: 0; border-radius: 50%; font-size: 0.8rem; line-height: 1; color: var(--w-fg-muted); }
+.book-close:hover { color: var(--w-fg); background: var(--w-hover); }
+.book-note { font-size: 0.65rem; line-height: 1.45; color: var(--w-fg-muted); }
+.book-note.is-warn { color: var(--w-danger); }
+.book-list { display: flex; flex-direction: column; gap: 2px; max-height: 116px; overflow-y: auto; }
+.book-row { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.book-pick { flex: 1 1 0; min-width: 0; padding: 4px 6px; border-radius: 6px; text-align: left; font-size: 0.72rem; color: var(--w-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.book-pick:hover { background: var(--w-hover); }
+.book-pick.is-on { background: color-mix(in srgb, var(--w-accent) 18%, transparent); color: var(--w-fg); }
+.book-copy { flex: none; padding: 2px 6px; border-radius: 6px; font-size: 0.64rem; color: var(--w-fg-muted); background: var(--w-control-bg); }
+.book-copy:hover { color: var(--w-fg); background: var(--w-hover); }
+.book-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.book-act { padding: 3px 8px; border-radius: 7px; font-size: 0.68rem; color: var(--w-fg-muted); background: var(--w-control-bg); }
+.book-act:hover { color: var(--w-fg); background: var(--w-hover); }
+.book-act.is-danger { color: var(--w-danger); }
+.book-act.is-danger:hover { background: color-mix(in srgb, var(--w-danger) 18%, transparent); }
+.led.is-choosing .entry, .led.is-choosing .cats, .led.is-choosing .add, .led.is-choosing .list { opacity: 0.35; pointer-events: none; }
 
 .entry { display: flex; gap: 6px; align-items: center; flex: none; }
 .seg { display: flex; flex: none; border-radius: 99px; background: var(--w-control-bg); padding: 2px; gap: 2px; }

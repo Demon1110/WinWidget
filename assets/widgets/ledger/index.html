@@ -5,14 +5,18 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main class="led">
+  <main class="led" id="led">
     <header>
-      <span class="name" id="title"></span>
+      <span class="heading">
+        <span class="name" id="title"></span>
+        <button class="book" id="book" data-no-drag aria-haspopup="true" aria-expanded="false"></button>
+      </span>
       <span class="stats">
         <span class="balance" id="balance"></span>
         <span class="flow" id="flow"></span>
       </span>
     </header>
+    <div class="book-panel" id="bookPanel" data-no-drag hidden></div>
 
     <div class="entry">
       <div class="seg" id="seg" data-no-drag>
