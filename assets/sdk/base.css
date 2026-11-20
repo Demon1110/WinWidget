@@ -1,9 +1,10 @@
 /* WinWidget base stylesheet. Loaded automatically before the theme and the widget's own CSS.
  *
- * Layout: <html> is the transparent window, padded by --w-margin to leave room for the shadow;
- * <body> is the card. Put your content straight into <body>.
- * Use the --w-* variables and the w-* classes below, and your widget follows every theme
- * and the user's appearance settings. Themes set html[data-theme="<id>"]. */
+ * 布局：<html> 就是那块透明窗口，<body> 就是卡片本体，内容直接往 <body> 里放。
+ * --w-margin 现在恒为 0：窗口矩形等于卡片矩形，不再为卡片外投影预留一圈留白
+ * （窗口边界之外画不出像素，留白只会让窗口尺寸和卡片对不上）。
+ * 想调整外观请用下面的 --w-* 变量和 w-* 类，这样组件自动跟随每个主题和用户外观设置。
+ * 主题通过 html[data-theme="<id>"] 覆盖变量。 */
 
 :root {
   --w-font-fallback: "Segoe UI Variable Text", "Segoe UI", "Microsoft JhengHei UI", "Microsoft YaHei UI", sans-serif;
@@ -33,9 +34,11 @@
 
   --w-radius: 16px;
   --w-padding: 16px;
-  --w-margin: 20px;
-  /* lengths divided by the zoom, so a bigger card keeps the same shadow */
-  --w-shadow: 0 calc(6px / var(--w-size-scale)) calc(16px / var(--w-size-scale)) rgba(0, 0, 0, 0.32);
+  /* 卡片四周的留白，恒为 0：窗口矩形即卡片矩形，宿主也会注入同名变量覆盖这个默认值 */
+  --w-margin: 0px;
+  /* 外投影默认关闭：没有留白时它会被窗口边界裁掉，还会在圆角外露出阴影色块；
+     卡片的立体感靠下面 body 里那圈 1px 内描边 */
+  --w-shadow: none;
   --w-font-scale: 1;
   --w-size-scale: 1;                    /* > 1 while the card is bigger than its default size (widget.json "size.grow"): the card is zoomed by it */
   --w-opacity: 1;
@@ -47,8 +50,8 @@ html {
   height: 100%;
   margin: 0;
   padding: var(--w-margin);
-  /* A background image (even an invisible one) stops CSS from propagating the body's
-     background to the whole window, which would paint over the shadow margin. */
+  /* 一层看不见的背景图，用来阻止 body 的背景被“传播”到整个窗口（那会盖住留白区）。
+     留白归零后这条依然保留，组件自定义页面靠它保证 body 的背景只铺在卡片里。 */
   background: transparent linear-gradient(transparent, transparent);
   overflow: hidden;
   font-size: calc(14px * var(--w-font-scale));
@@ -67,7 +70,8 @@ body {
   zoom: var(--w-size-scale);
   border-radius: calc(var(--w-radius) / var(--w-size-scale));
   background: var(--w-bg);
-  box-shadow: var(--w-shadow), inset 0 0 0 calc(1px / var(--w-size-scale)) var(--w-border);
+  /* 不画外投影：窗口边界就在卡片边缘，画出去的部分会被裁掉。留一圈 1px 内描边立边即可。 */
+  box-shadow: inset 0 0 0 calc(1px / var(--w-size-scale)) var(--w-border);
   color: var(--w-fg);
   font-family: var(--w-font);
   line-height: 1.4;

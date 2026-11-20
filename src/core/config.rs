@@ -75,10 +75,11 @@ fn default_hotkeys() -> HashMap<String, String> {
 pub struct InstanceConfig {
     pub id: String,
     pub widget: String,
-    /// Top-left of the card in physical screen pixels (the shadow margin is not included).
+    /// 卡片左上角在物理屏幕坐标里的位置。投影留白已经取消（见 `appearance::margin_dip`），
+    /// 这个坐标同时就是窗口的左上角。
     pub x: i32,
     pub y: i32,
-    /// Card size in device-independent pixels.
+    /// 卡片尺寸，单位为逻辑像素（DIP）。
     pub width: f64,
     pub height: f64,
     /// "desktop" | "normal" | "top"

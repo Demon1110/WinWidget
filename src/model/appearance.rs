@@ -5,7 +5,13 @@
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 
-pub const SHADOW_MARGIN_DIP: f64 = 20.0;
+/// 卡片四周的投影留白（每边），现在已经归零。
+///
+/// 原先这里是 20：窗口比视觉卡片大一圈，页面用这点空档画卡片外投影。
+/// 但留白会让窗口矩形和用户看到的卡片对不上——鼠标命中的边界、摆放位置、
+/// 记进配置的尺寸都得先减掉一圈留白，而窗口边界之外本来画不出任何像素，
+/// 所以统一改成 0，让窗口矩形就等于卡片矩形。
+pub const SHADOW_MARGIN_DIP: f64 = 0.0;
 
 pub fn defaults() -> Map<String, Value> {
     let mut m = Map::new();
@@ -90,12 +96,9 @@ pub fn shadow(a: &Map<String, Value>) -> bool {
     a.get("shadow").and_then(|v| v.as_bool()).unwrap_or(false)
 }
 
-pub fn margin_dip(a: &Map<String, Value>) -> i32 {
-    if style(a) == "transparent" && shadow(a) {
-        SHADOW_MARGIN_DIP as i32
-    } else {
-        0
-    }
+/// 窗口比卡片多出来的那圈留白，恒为 0：窗口矩形就是卡片矩形。
+pub fn margin_dip(_a: &Map<String, Value>) -> i32 {
+    0
 }
 
 /// The two style blocks a widget page gets: theme (`:root`) and instance (`html:root`).
@@ -226,11 +229,11 @@ fn css(
             &crate::core::util::fmt_num(num(layer, "opacity", 1.0).clamp(0.1, 1.0)),
         );
     }
-    if layer.contains_key("shadow") && !shadow(layer) {
-        var("shadow", "0 0 0 transparent"); // base.css combines this with an inset border
-    }
     if let Some(m) = margin {
         var("margin", &format!("{m}px"));
+        // 窗口不再给投影留白：卡片外投影会被窗口边界裁掉，还会在圆角外的四个小三角里
+        // 露出阴影色块。所以主题里给的 --w-shadow 一并关掉，卡片只靠自身的 1px 内描边立边。
+        var("shadow", "0 0 0 transparent");
     }
     out.push('}');
     out

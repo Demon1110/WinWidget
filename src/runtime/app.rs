@@ -1107,12 +1107,13 @@ impl App {
         Ok(id)
     }
 
-    /// A free spot against the right edge of the primary work area. `width_dip` and `height_dip`
-    /// are the card's logical size: the returned x/y is the card's top-left, so the shadow margin
-    /// is added on the outside and the whole card stays inside the work area.
+    /// 卡片在主屏work区右边找空位时的算法。`width_dip` / `height_dip` 是卡片的逻辑尺寸，
+    /// 返回的 x/y 是卡片左上角；四周的投影留白（`SHADOW_MARGIN_DIP`，现已为 0）加在外侧，
+    /// 保证整张卡片仍完整落在工作区内。
     fn free_slot(&self, width_dip: f64, height_dip: f64) -> (i32, i32) {
         let scale = self.scale_factor();
         let (left, right, bottom) = self.primary_work_area();
+        // 留白归零后这个值恒为 0，保留变量是为了让“卡片外沿”的算式仍然可读。
         let shadow = (SHADOW_MARGIN_DIP * scale).round() as i32;
         let gap = (8.0 * scale).round() as i32;
         let width = (width_dip * scale).round() as i32;

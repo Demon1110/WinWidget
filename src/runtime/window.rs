@@ -384,6 +384,8 @@ pub fn build(
     developer: bool,
     proxy: tao::event_loop::EventLoopProxy<Ev>,
 ) -> Result<WidgetWin, String> {
+    // 卡片四周的投影留白，现在恒为 0（见 `appearance::margin_dip`）：窗口矩形就等于卡片矩形，
+    // 所以下面的 outer 与 card 是同一个矩形。这层换算先留着，免得以后要恢复留白时漏算。
     let margin = ((margin_dip as f64) * scale).round() as i32;
     let card = card_rect(inst, scale);
     let outer = w::inflate(card, margin);
