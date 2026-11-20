@@ -239,6 +239,12 @@ pub fn build_custom(
         .with_skip_taskbar(skip_taskbar)
         .with_visible(false)
         .with_inner_size(LogicalSize::new(width, height));
+    if wallpaper {
+        // tao's frameless windows keep the hidden shadow borders by default, which insets the
+        // client area by the border thickness; a wallpaper surface must have its client equal the
+        // whole monitor rectangle or the web view leaves a frame of bare background around it.
+        builder = builder.with_undecorated_shadow(false);
+    }
     if let (Some(minw), Some(minh)) = (jnum(&o, "minWidth"), jnum(&o, "minHeight")) {
         builder = builder.with_min_inner_size(LogicalSize::new(minw, minh));
     }
