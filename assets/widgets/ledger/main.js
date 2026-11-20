@@ -370,9 +370,11 @@ function renderBookPanel() {
     <div class="book-list">${rows}</div>
     <div class="book-actions">
       <button class="book-act" data-act="new">${L("新建帳本", "新建账本", "New ledger")}</button>
+      <label class="book-act book-file">${L("匯入備份", "导入备份", "Import")}<input id="importFile" type="file" accept=".json,application/json"></label>
       ${bookId ? `<button class="book-act" data-act="export">${L("匯出備份", "导出备份", "Export")}</button>` : ""}
       ${bookId ? `<button class="book-act is-danger" data-act="delete">${deleteArmed ? L("再按一次刪除", "再按一次删除", "Delete again") : L("刪除帳本", "删除账本", "Delete ledger")}</button>` : ""}
     </div>
+    <div class="book-note is-import">${L("匯入會建立一本新帳本，不會覆蓋現有資料；也可以把 JSON 拖到卡片上。", "导入会建立一本新账本，不会覆盖现有数据；也可以把 JSON 拖到卡片上。", "Import creates a new ledger and never overwrites existing data. You can also drop the JSON on the card.")}</div>
     ${warn ? `<div class="book-note${deleteArmed ? " is-warn" : ""}">${warn}</div>` : ""}
     ${lastExport && lastExport.bookId === bookId ? `<div class="book-export">
       <div>${L("已匯出到「下載」資料夾", "已导出到「下载」文件夹", "Saved to Downloads")}</div>
@@ -474,6 +476,46 @@ async function exportBook() {
   } catch (e) {
     toast(L("匯出失敗", "导出失败", "Export failed"));
     widget.log(`ledger: export ${e.message}`);
+  }
+}
+
+async function importBookFile(file) {
+  if (busy) return;
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) {
+    toast(L("備份檔太大", "备份文件太大", "Backup file is too large"));
+    return;
+  }
+  busy = true;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if (!data || typeof data !== "object" || !Array.isArray(data.entries)) throw new Error("not a ledger backup");
+    const list = data.entries
+      .map((e) => ({
+        t: Number(e && e.time),
+        a: Math.round(Number(e && e.amount) * 100) / 100,
+        k: e && e.kind === "in" ? "in" : "out",
+        c: String((e && e.category) || "other"),
+      }))
+      .filter((e) => Number.isFinite(e.t) && e.t > 0 && Number.isFinite(e.a) && e.a > 0);
+    const skipped = data.entries.length - list.length;
+    if (data.entries.length && !list.length) throw new Error("no valid entries");
+    const base = String((data.book && data.book.name) || file.name.replace(/\.json$/i, "")).trim();
+    await listBooks();
+    const name = uniqueName(base || L("匯入帳本", "导入账本", "Imported ledger"));
+    const id = await createBook(name, list.slice().sort((a, b) => a.t - b.t));
+    await useBook(id);
+    const msg = skipped
+      ? L(`已匯入 ${list.length} 筆，略過 ${skipped} 筆無效記錄`, `已导入 ${list.length} 条，跳过 ${skipped} 条无效记录`, `Imported ${list.length}, skipped ${skipped} invalid`)
+      : L(`已匯入 ${list.length} 筆到「${name}」`, `已导入 ${list.length} 条到“${name}”`, `Imported ${list.length} into "${name}"`);
+    toast(msg);
+  } catch (e) {
+    toast(L("匯入失敗，這不是有效的帳本備份", "导入失败，这不是有效的账本备份", "Import failed: not a ledger backup"));
+    widget.log(`ledger: import ${e.message}`);
+  } finally {
+    busy = false;
+    if (panelOpen) renderBookPanel();
   }
 }
 
@@ -674,6 +716,31 @@ widget.on("show", () => refreshFromDb());
 setInterval(() => {
   if (!document.hidden) refreshFromDb();
 }, 5000);
+
+document.addEventListener("dragover", (e) => {
+  if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes("Files")) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "copy";
+});
+
+document.addEventListener("drop", async (e) => {
+  if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
+  e.preventDefault();
+  const file = e.dataTransfer.files[0];
+  if (!/\.json$/i.test(file.name) && file.type !== "application/json") {
+    toast(L("請拖入 JSON 備份檔", "请拖入 JSON 备份文件", "Drop a JSON backup file"));
+    return;
+  }
+  await importBookFile(file);
+  if (panelOpen) renderBookPanel();
+});
+
+document.addEventListener("change", async (e) => {
+  if (!e.target || e.target.id !== "importFile") return;
+  const file = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (file) await importBookFile(file);
+});
 
 /**
  * The amount is typed in yuan: "100" → 100, "123" → 123, "1,234.5" → 1234.5, "12..3" → 12.3.

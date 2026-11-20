@@ -26,6 +26,7 @@ header { display: flex; align-items: center; gap: 8px; flex: none; }
 .book-close:hover { color: var(--w-fg); background: var(--w-hover); }
 .book-note { font-size: 0.65rem; line-height: 1.45; color: var(--w-fg-muted); }
 .book-note.is-warn { color: var(--w-danger); }
+.book-note.is-import { color: var(--w-accent); }
 .book-export { padding: 5px 6px; border-radius: 7px; background: var(--w-control-bg); font-size: 0.64rem; line-height: 1.4; color: var(--w-fg-muted); }
 .book-export-path { color: var(--w-fg); word-break: break-all; }
 .book-export-name { margin-top: 2px; word-break: break-all; }
@@ -42,6 +43,8 @@ header { display: flex; align-items: center; gap: 8px; flex: none; }
 .book-act:hover { color: var(--w-fg); background: var(--w-hover); }
 .book-act.is-danger { color: var(--w-danger); }
 .book-act.is-danger:hover { background: color-mix(in srgb, var(--w-danger) 18%, transparent); }
+.book-file { position: relative; display: inline-flex; align-items: center; overflow: hidden; cursor: pointer; }
+.book-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .led.is-choosing .entry, .led.is-choosing .cats, .led.is-choosing .add, .led.is-choosing .list { opacity: 0.35; pointer-events: none; }
 
 .entry { display: flex; gap: 6px; align-items: center; flex: none; }
