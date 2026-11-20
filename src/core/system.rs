@@ -29,6 +29,7 @@ const OWNS: &[&str] = &[
     "system.adapters",
     "system.ping",
     "system.platform",
+    "system.theme",
     "paths.named",
     "notify.show",
     "notify.cancel",
@@ -116,6 +117,28 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
             let timeout = jnum(p, "timeout").unwrap_or(1500.0) as u64;
             ctx.spawn_value(move || crate::platform::sysinfo::ping(&host, timeout));
             Ok(Reply::Later)
+        }
+        // The power card's light/dark switch: it flips Windows itself (both the app-mode and the
+        // system-mode switches in the Personalise key), not WinWidget's ui_theme — cards running
+        // in "auto" follow on their own. No argument answers the current mode; "toggle" flips,
+        // "light"/"dark" set it.
+        "system.theme" => {
+            ctx.require("system")?;
+            let current_light = ctx.ports.system.light_mode();
+            let requested = p.get("theme").and_then(|v| v.as_str()).map(String::from);
+            let next_light = match requested.as_deref() {
+                Some("toggle") => Some(!current_light),
+                Some("light") => Some(true),
+                Some("dark") => Some(false),
+                _ => None,
+            };
+            if let Some(next) = next_light {
+                if next != current_light {
+                    ctx.ports.system.set_light_mode(next)?;
+                }
+            }
+            let answer = next_light.unwrap_or(current_light);
+            Ok(Reply::Now(json!(if answer { "light" } else { "dark" })))
         }
         // utools.isDev / isWindows / isMacOS / isLinux / isDarkColors answered by the host, so the
         // compatibility layer never has to guess from the user agent.
@@ -322,6 +345,9 @@ mod tests {
         }
         fn light_mode(&self) -> bool {
             self.light
+        }
+        fn set_light_mode(&self, _light: bool) -> Result<(), String> {
+            Ok(())
         }
     }
 

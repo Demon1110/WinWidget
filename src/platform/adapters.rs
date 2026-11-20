@@ -34,6 +34,9 @@ impl SystemPort for WinSystem {
     fn light_mode(&self) -> bool {
         crate::platform::system_light()
     }
+    fn set_light_mode(&self, light: bool) -> Result<(), String> {
+        crate::platform::set_system_light(light)
+    }
 }
 
 struct WinBluetooth;

@@ -96,6 +96,47 @@ pub fn system_light() -> bool {
         .unwrap_or(true)
 }
 
+const SYSTEM_LIGHT_NAME: &str = "SystemUsesLightTheme";
+
+/// Flips Windows' own light/dark mode: the app-mode and the system-mode switches move together
+/// (that is what the power card's toggle means), then a settings-change broadcast makes every
+/// already-running window — explorer, the cards themselves — repaint without a reboot.
+pub fn set_system_light(light: bool) -> Result<(), String> {
+    use winreg::enums::{HKEY_CURRENT_USER, KEY_SET_VALUE};
+    use winreg::RegKey;
+    let key = RegKey::predef(HKEY_CURRENT_USER)
+        .open_subkey_with_flags(PERSONALIZE_KEY, KEY_SET_VALUE)
+        .map_err(|e| e.to_string())?;
+    let v: u32 = if light { 1 } else { 0 };
+    key.set_value(APPS_LIGHT_NAME, &v)
+        .map_err(|e| e.to_string())?;
+    key.set_value(SYSTEM_LIGHT_NAME, &v)
+        .map_err(|e| e.to_string())?;
+    broadcast_theme_change();
+    Ok(())
+}
+
+/// The same broadcast the Settings app sends when the mode flips, so the change lands live.
+fn broadcast_theme_change() {
+    use crate::platform::win32 as w;
+    const HWND_BROADCAST: isize = 0xFFFF;
+    const WM_SETTINGCHANGE: u32 = 0x001A;
+    const SMTO_ABORTIFHUNG: u32 = 0x0002;
+    let param = w::wide("ImmersiveColorSet");
+    unsafe {
+        let mut result: usize = 0;
+        let _ = w::SendMessageTimeoutW(
+            HWND_BROADCAST,
+            WM_SETTINGCHANGE,
+            0,
+            param.as_ptr() as isize,
+            SMTO_ABORTIFHUNG,
+            1000,
+            &mut result,
+        );
+    }
+}
+
 // ── autostart ───────────────────────────────────────────────────────────────
 
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";

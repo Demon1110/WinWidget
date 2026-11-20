@@ -9,7 +9,7 @@
   "category": "system",
   "preview": "preview/{theme}.{lang}.webp",
   "size": { "width": 320, "height": 110, "minWidth": 160, "minHeight": 70, "maxWidth": 700, "maxHeight": 300, "grow": 1 },
-  "permissions": [],
+  "permissions": ["system"],
   "settings": [
     { "key": "lock", "type": "toggle", "label": { "zh-TW": "鎖定", "zh-CN": "锁定", "en": "Lock" }, "default": true },
     { "key": "sleep", "type": "toggle", "label": { "zh-TW": "睡眠", "zh-CN": "睡眠", "en": "Sleep" }, "default": true },

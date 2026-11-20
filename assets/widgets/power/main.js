@@ -17,17 +17,18 @@ const ACTIONS = [
 const ARM_MS = 3000;
 let armed = null, armTimer = 0;
 
-// 深浅色开关：切换的是宿主全局的 uiTheme（light↔dark），与控制中心里的主题偏好同一处配置。
-// 浅色/auto 显示月牙（点击去深色），深色显示太阳（点击回浅色）；auto 想恢复只能回控制中心。
+// 深浅色开关：切换的是 Windows 系统自身的深浅模式（设置 > 个性化 > 颜色 里的两个开关），
+// 不是 WinWidget 的 ui_theme —— 卡片在「跟随系统」时自己跟着变。系统浅色显月牙（点击去深色），
+// 系统深色显太阳（点击回浅色）。
 const THEME_NAME = { "zh-TW": "深淺色", "zh-CN": "深浅色", en: "Theme" };
 const MOON_ICON = '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/>';
 const SUN_ICON = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/>';
-let uiTheme = "light";
+let sysTheme = "light";
 
 function themeButton() {
   if (opts.themeToggle !== true) return "";
   return `<button class="act" data-id="__theme" data-no-drag
-      title="${t(THEME_NAME)} · ${uiTheme}"><svg viewBox="0 0 24 24" aria-hidden="true">${uiTheme === "dark" ? SUN_ICON : MOON_ICON}</svg>
+      title="${t(THEME_NAME)} · ${sysTheme}"><svg viewBox="0 0 24 24" aria-hidden="true">${sysTheme === "dark" ? SUN_ICON : MOON_ICON}</svg>
       <span class="lab">${t(THEME_NAME)}</span></button>`;
 }
 
@@ -47,8 +48,8 @@ $("acts").onclick = (e) => {
   if (!b) return;
   if (b.dataset.id === "__theme") {
     widget
-      .call("app.uiTheme", { theme: "toggle" })
-      .then((m) => { uiTheme = typeof m === "string" && m ? m : "light"; render(); })
+      .call("system.theme", { theme: "toggle" })
+      .then((m) => { sysTheme = typeof m === "string" && m ? m : "light"; render(); })
       .catch((err) => widget.log(`theme: ${err.message}`));
     return;
   }
@@ -70,11 +71,11 @@ $("acts").onclick = (e) => {
 widget.settings.onChange((s) => { opts = s; render(); });
 widget.appearance.onChange(render);
 
-// 页面起来先问一次宿主的当前模式，图标才不会指错方向。
+// 页面起来先问一次 Windows 当前的深浅模式，图标才不会指错方向。
 function syncTheme() {
   widget
-    .call("app.uiTheme", {})
-    .then((m) => { uiTheme = typeof m === "string" && m ? m : "light"; render(); })
+    .call("system.theme", {})
+    .then((m) => { sysTheme = typeof m === "string" && m ? m : "light"; render(); })
     .catch(() => {});
 }
 syncTheme();

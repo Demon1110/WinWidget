@@ -26,6 +26,8 @@ pub trait SystemPort: Send + Sync {
     fn known_folder_path(&self, name: &str) -> Option<String>;
     /// Windows' "apps use light theme" switch.
     fn light_mode(&self) -> bool;
+    /// Flips Windows' own light/dark mode (app-mode and system-mode switches together).
+    fn set_light_mode(&self, light: bool) -> Result<(), String>;
 }
 
 /// Paired Bluetooth devices and their reported battery levels.
@@ -103,6 +105,9 @@ impl SystemPort for NullPorts {
     }
     fn light_mode(&self) -> bool {
         true
+    }
+    fn set_light_mode(&self, _light: bool) -> Result<(), String> {
+        Err("system theme is not available in this host".into())
     }
 }
 
