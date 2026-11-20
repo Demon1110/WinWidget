@@ -9,8 +9,10 @@
 // only exist to document the ABI.
 #![allow(non_snake_case, dead_code, clippy::upper_case_acronyms)]
 
+use std::collections::HashMap;
 use std::ffi::c_void;
 use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
 
 pub type HWND = isize;
 pub type HINSTANCE = isize;
@@ -75,6 +77,7 @@ pub const GWLP_HWNDPARENT: i32 = -8;
 pub const GCLP_HBRBACKGROUND: i32 = -10;
 
 pub const WM_SIZE: u32 = 0x0005;
+pub const WM_NCDESTROY: u32 = 0x0082;
 pub const WM_ACTIVATE: u32 = 0x0006;
 pub const WM_SHOWWINDOW: u32 = 0x0018;
 pub const WM_WINDOWPOSCHANGING: u32 = 0x0046;
@@ -782,6 +785,49 @@ pub fn clear_frame(hwnd: HWND) {
     unsafe {
         let _ = DwmExtendFrameIntoClientArea(hwnd, &margins);
     }
+}
+
+/// Re-applies the frame polish whenever the activation state changes.
+///
+/// DWM recomposites a window when it gains or loses activation, and the recomposite is where it
+/// goes back to painting the caption strip over a borderless card: the polish applied at creation
+/// only survives until the user clicks somewhere else. A frameless window therefore has to keep
+/// re-stating it.
+pub fn keep_frame_polished(hwnd: HWND, round: bool) {
+    unsafe {
+        let previous = SetWindowLongPtrW(hwnd, GWLP_WNDPROC, polished_proc as *const () as isize);
+        if previous == 0 {
+            return;
+        }
+        if let Ok(mut m) = polished_procs().lock() {
+            m.insert(hwnd as usize, (previous, round));
+        }
+    }
+}
+
+fn polished_procs() -> &'static Mutex<HashMap<usize, (isize, bool)>> {
+    static PROCS: OnceLock<Mutex<HashMap<usize, (isize, bool)>>> = OnceLock::new();
+    PROCS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+unsafe extern "system" fn polished_proc(hwnd: HWND, msg: u32, wp: usize, lp: isize) -> isize {
+    let entry = polished_procs()
+        .lock()
+        .ok()
+        .and_then(|m| m.get(&(hwnd as usize)).copied());
+    let Some((previous, round)) = entry else {
+        return 0;
+    };
+    if msg == WM_NCDESTROY {
+        if let Ok(mut m) = polished_procs().lock() {
+            m.remove(&(hwnd as usize));
+        }
+    }
+    let result = CallWindowProcW(previous, hwnd, msg, wp, lp);
+    if msg == WM_NCACTIVATE || msg == WM_ACTIVATE {
+        polish_frame(hwnd, round);
+    }
+    result
 }
 
 /// Strips the caption and sizing edge from a window that asked to be frameless. Windows keeps an

@@ -302,6 +302,9 @@ pub fn build_custom(
         w::drop_frame(hwnd);
         w::fit_client(hwnd, px, py, to_px(width), to_px(height));
         w::polish_frame(hwnd, rounded);
+        // DWM redraws the caption when the window loses activation, so the polish has to be
+        // re-stated on every activation change, not only at creation.
+        w::keep_frame_polished(hwnd, rounded);
     }
     // `layer: "desktop"` puts the window directly above the wallpaper and below every ordinary
     // window — the place a desktop-level canvas belongs, so an effect can play on the wallpaper
