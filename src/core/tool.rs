@@ -320,15 +320,12 @@ fn cache_is_fresh(path: &Path, spec: &ToolSpec) -> Result<bool, String> {
         (None, None) => true,
         _ => false,
     };
-    if !meta.url.eq_ignore_ascii_case(&spec.url)
+    let stale = !meta.url.eq_ignore_ascii_case(&spec.url)
         || !hash_matches
         || meta.size != size
         || meta.mtime != mtime_stamp(&file)
-        || spec.size.map(|n| n != size).unwrap_or(false)
-    {
-        return Ok(false);
-    }
-    Ok(true)
+        || spec.size.map(|n| n != size).unwrap_or(false);
+    Ok(!stale)
 }
 
 fn write_meta(path: &Path, spec: &ToolSpec) -> Result<(), String> {
