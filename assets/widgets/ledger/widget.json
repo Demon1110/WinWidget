@@ -2,11 +2,11 @@
   "id": "winwidget.ledger",
   "name": { "zh-TW": "記帳速記", "zh-CN": "记账速记", "en": "Quick ledger" },
   "description": {
-    "zh-TW": "打個數字、點分類就記一筆；輸入法不用切換，右下角看本月支出。",
-    "zh-CN": "打个数字、点分类就记一笔；不用切输入法，右下角看本月支出。",
-    "en": "Type an amount, tap a category, done. The month's spending stays in view."
+    "zh-TW": "打個數字、點分類就記一筆；右上角看本月結餘，切換收支看各自合計。",
+    "zh-CN": "打个数字、点分类就记一笔；右上角看本月结余，切换收支看各自合计。",
+    "en": "Type an amount, tap a category. The month's balance stays in the corner, with a total for each side."
   },
-  "version": "1.1.0",
+  "version": "1.1.1",
   "author": "WinWidget",
   "entry": "index.html",
   "icon": "icon.svg",

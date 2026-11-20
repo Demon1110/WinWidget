@@ -57,27 +57,44 @@ function saveUi() {
 
 function totals() {
   let out = 0;
-  let day = 0;
+  let inc = 0;
+  let dayOut = 0;
+  let dayIn = 0;
   const today = new Date();
   for (const e of entries) {
-    if (e.k !== "out") continue;
-    if (monthKey(e.t) !== nowKey) continue;
-    out += e.a;
     const d = new Date(e.t);
-    if (d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate()) day += e.a;
+    if (d.getFullYear() * 12 + d.getMonth() !== nowKey) continue;
+    const isToday =
+      d.getFullYear() === today.getFullYear() &&
+      d.getMonth() === today.getMonth() &&
+      d.getDate() === today.getDate();
+    if (e.k === "in") {
+      inc += e.a;
+      if (isToday) dayIn += e.a;
+    } else {
+      out += e.a;
+      if (isToday) dayOut += e.a;
+    }
   }
-  return { out, day };
+  return { out, inc, dayOut, dayIn, balance: inc - out };
 }
 
 function renderHead() {
-  const { out, day } = totals();
-  const d = new Date();
-  $("month").textContent = `${d.getMonth() + 1}${L("月", "月", "")} · ${sym()}${money(out)}`;
-  $("month").title = L(
-    `本月支出 ${sym()}${money(out)}｜今天 ${sym()}${money(day)}`,
-    `本月支出 ${sym()}${money(out)}｜今天 ${sym()}${money(day)}`,
-    `This month ${sym()}${money(out)} · today ${sym()}${money(day)}`
+  const { out, inc, dayOut, dayIn, balance } = totals();
+  const sign = balance < 0 ? "−" : "";
+  $("balance").textContent = `${L("結餘", "结余", "Balance")} ${sign}${sym()}${money(Math.abs(balance))}`;
+  $("balance").title = L(
+    `本月收入 ${sym()}${money(inc)}｜本月支出 ${sym()}${money(out)}`,
+    `本月收入 ${sym()}${money(inc)}｜本月支出 ${sym()}${money(out)}`,
+    `This month in ${sym()}${money(inc)} · out ${sym()}${money(out)}`
   );
+  const isOut = kind === "out";
+  $("flow").textContent = isOut
+    ? `${L("本月支出", "本月支出", "Spent this month")} ${sym()}${money(out)}`
+    : `${L("本月收入", "本月收入", "Received this month")} ${sym()}${money(inc)}`;
+  $("flow").title = isOut
+    ? L(`今天支出 ${sym()}${money(dayOut)}`, `今天支出 ${sym()}${money(dayOut)}`, `Today ${sym()}${money(dayOut)}`)
+    : L(`今天收入 ${sym()}${money(dayIn)}`, `今天收入 ${sym()}${money(dayIn)}`, `Today ${sym()}${money(dayIn)}`);
 }
 
 function renderCats() {
