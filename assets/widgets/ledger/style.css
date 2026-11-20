@@ -43,6 +43,10 @@ header { display: flex; align-items: center; gap: 8px; flex: none; }
 .book-act:hover { color: var(--w-fg); background: var(--w-hover); }
 .book-act.is-danger { color: var(--w-danger); }
 .book-act.is-danger:hover { background: color-mix(in srgb, var(--w-danger) 18%, transparent); }
+.book-act.is-primary { color: var(--w-fg); background: color-mix(in srgb, var(--w-accent) 24%, transparent); }
+.book-act.is-primary:hover { background: color-mix(in srgb, var(--w-accent) 34%, transparent); }
+.book-merge { display: flex; flex-direction: column; gap: 5px; padding: 7px; border-radius: 8px; background: var(--w-control-bg); }
+.book-merge-title { font-size: 0.72rem; color: var(--w-fg); }
 .book-file { position: relative; display: inline-flex; align-items: center; overflow: hidden; cursor: pointer; }
 .book-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .led.is-choosing .entry, .led.is-choosing .cats, .led.is-choosing .add, .led.is-choosing .list { opacity: 0.35; pointer-events: none; }

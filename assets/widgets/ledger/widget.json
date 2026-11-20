@@ -2,11 +2,11 @@
   "id": "winwidget.ledger",
   "name": { "zh-TW": "記帳速記", "zh-CN": "记账速记", "en": "Quick ledger" },
   "description": {
-    "zh-TW": "打個數字、點分類就記一筆；帳本獨立保存，可匯出及匯入備份，多張卡片可共用同一本，移除卡片不會丟資料。",
-    "zh-CN": "打个数字、点分类就记一笔；账本独立保存，可导出及导入备份，多张卡片可共用同一本，移除卡片不会丢数据。",
-    "en": "Type an amount, tap a category. Ledgers live apart from the card, can be exported and imported, shared by several cards, and survive removing a card."
+    "zh-TW": "打個數字、點分類就記一筆；帳本獨立保存，可匯出及匯入備份，同名帳本可選合併或另建，多張卡片可共用同一本，移除卡片不會丟資料。",
+    "zh-CN": "打个数字、点分类就记一笔；账本独立保存，可导出及导入备份，同名账本可选合并或另建，多张卡片可共用同一本，移除卡片不会丢数据。",
+    "en": "Type an amount, tap a category. Ledgers live apart from the card, can be exported and imported, merged or kept separate by name, shared by several cards, and survive removing a card."
   },
-  "version": "1.3.0",
+  "version": "1.4.0",
   "author": "WinWidget",
   "entry": "index.html",
   "icon": "icon.svg",

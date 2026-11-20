@@ -20,7 +20,7 @@ const CATS = {
 const BOOK_PREFIX = "book/";
 const ENTRY_PREFIX = "entry/";
 
-let entries = [];              // { id, t: <ms>, a: <number>, k: "out"|"in", c: <cat key> }
+let entries = [];              // { id, uid, t: <ms>, a: <number>, k: "out"|"in", c: <cat key> }
 let kind = "out";
 let cat = "meal";
 let bookId = "";
@@ -34,6 +34,7 @@ let busy = false;
 let refreshing = false;
 let exporting = false;
 let lastExport = null;          // { bookId, dir, name }
+let importPrompt = null;        // { base, list, targetId, targetName, invalid, duplicates }
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const sym = () => String(widget.settings.get("currency") || "¥").slice(0, 3);
@@ -53,6 +54,7 @@ const hhmm = (ms) => {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
 const rid = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+const newUid = () => (globalThis.crypto && crypto.randomUUID ? crypto.randomUUID() : rid());
 const defaultBookName = () => L("預設帳本", "默认账本", "Default ledger");
 
 let toastTimer = 0;
@@ -167,7 +169,14 @@ function fromDoc(d) {
   const t = Number(d.t);
   const a = Number(d.a);
   if (!Number.isFinite(t) || !Number.isFinite(a)) return null;
-  return { id: String(d._id), t, a, k: d.k === "in" ? "in" : "out", c: String(d.c || "other") };
+  return {
+    id: String(d._id),
+    uid: String(d.uid || d._id),
+    t,
+    a,
+    k: d.k === "in" ? "in" : "out",
+    c: String(d.c || "other"),
+  };
 }
 
 function sortEntries(list) {
@@ -177,6 +186,10 @@ function sortEntries(list) {
 async function readEntries(id) {
   if (!id) return [];
   const docs = await allDocs(entryPrefix(id));
+  const missing = docs.filter((d) => d && d._id && !d.uid);
+  if (missing.length) {
+    await Promise.all(missing.map((d) => widget.db.put({ ...d, uid: String(d._id) }))).catch(() => {});
+  }
   return sortEntries(docs.map(fromDoc).filter(Boolean));
 }
 
@@ -205,8 +218,9 @@ function entryDocId(time, id) {
 
 function sourceDocs(list, id) {
   return list.map((e, i) => ({
-    _id: entryDocId(Number(e.t), id) + `-${i}`,
+    _id: `${entryDocId(Number(e.t), id)}-${i}-${rid()}`,
     book: id,
+    uid: String(e.uid || newUid()),
     t: Number(e.t),
     a: Number(e.a),
     k: e.k === "in" ? "in" : "out",
@@ -320,8 +334,9 @@ function resetDeleteArm() {
 }
 
 function closeBookPanel(force = false) {
-  if (!bookId && !force) return;
+  if (!bookId && !importPrompt && !force) return;
   panelOpen = false;
+  importPrompt = null;
   $("bookPanel").hidden = true;
   $("book").setAttribute("aria-expanded", "false");
   $("led").classList.remove("is-choosing");
@@ -329,8 +344,12 @@ function closeBookPanel(force = false) {
 }
 
 function renderBookPanel() {
-  const required = !bookId;
-  const title = required ? L("選擇帳本", "选择账本", "Choose ledger") : L("帳本", "账本", "Book");
+  const required = !bookId && !importPrompt;
+  const title = importPrompt
+    ? L("匯入備份", "导入备份", "Import backup")
+    : required
+      ? L("選擇帳本", "选择账本", "Choose ledger")
+      : L("帳本", "账本", "Book");
   const note = required
     ? L(
         "這張卡片還沒有帳本。選擇現有帳本會與其他卡片共用資料；也可以新建或複製一本。",
@@ -361,27 +380,55 @@ function renderBookPanel() {
           "Press again to delete every entry in this ledger. Export a backup first."
         )
       : "";
+  const ignored = importPrompt ? importPrompt.invalid + importPrompt.duplicates : 0;
+  const prompt = importPrompt
+    ? `<div class="book-merge">
+        <div class="book-merge-title">${esc(L("發現同名帳本", "发现同名账本", "Same ledger name"))}</div>
+        <div class="book-note">${esc(
+          L(
+            `備份「${importPrompt.base}」與現有帳本「${importPrompt.targetName}」同名。`,
+            `备份“${importPrompt.base}”与现有账本“${importPrompt.targetName}”同名。`,
+            `The backup "${importPrompt.base}" has the same name as "${importPrompt.targetName}".`
+          )
+        )}</div>
+        <div class="book-note">${esc(
+          L(
+            `共 ${importPrompt.list.length} 筆記錄${ignored ? `，另有 ${ignored} 筆將略過` : ""}。合併會按記錄 ID 去重，ID 相同只保留一份；另建會建立一本新帳本。`,
+            `共 ${importPrompt.list.length} 条记录${ignored ? `，另有 ${ignored} 条将跳过` : ""}。合并会按记录 ID 去重，ID 相同只保留一份；另建会建立一本新账本。`,
+            `${importPrompt.list.length} entries${ignored ? `, ${ignored} more will be skipped` : ""}. Merge deduplicates by entry ID; create a separate ledger instead if you want both.`
+          )
+        )}</div>
+        <div class="book-actions">
+          <button class="book-act is-primary" data-act="merge-import">${esc(L(`合併到「${importPrompt.targetName}」`, `合并到“${importPrompt.targetName}”`, `Merge into "${importPrompt.targetName}"`))}</button>
+          <button class="book-act" data-act="new-import">${L("另建新帳本", "另建新账本", "Create separate ledger")}</button>
+          <button class="book-act" data-act="cancel-import">${L("取消", "取消", "Cancel")}</button>
+        </div>
+      </div>`
+    : "";
+  const normal = importPrompt
+    ? ""
+    : `<div class="book-note">${note}</div>
+      <div class="book-list">${rows}</div>
+      <div class="book-actions">
+        <button class="book-act" data-act="new">${L("新建帳本", "新建账本", "New ledger")}</button>
+        <label class="book-act book-file">${L("匯入備份", "导入备份", "Import")}<input id="importFile" type="file" accept=".json,application/json"></label>
+        ${bookId ? `<button class="book-act" data-act="export">${L("匯出備份", "导出备份", "Export")}</button>` : ""}
+        ${bookId ? `<button class="book-act is-danger" data-act="delete">${deleteArmed ? L("再按一次刪除", "再按一次删除", "Delete again") : L("刪除帳本", "删除账本", "Delete ledger")}</button>` : ""}
+      </div>
+      <div class="book-note is-import">${L("匯入遇到同名帳本會先詢問是否合併；也可以把 JSON 拖到卡片上。", "导入遇到同名账本会先询问是否合并；也可以把 JSON 拖到卡片上。", "If a ledger with the same name exists, you can choose to merge; you can also drop the JSON on the card.")}</div>
+      ${warn ? `<div class="book-note${deleteArmed ? " is-warn" : ""}">${warn}</div>` : ""}
+      ${lastExport && lastExport.bookId === bookId ? `<div class="book-export">
+        <div>${L("已匯出到「下載」資料夾", "已导出到「下载」文件夹", "Saved to Downloads")}</div>
+        ${lastExport.dir ? `<div class="book-export-path" title="${esc(lastExport.dir)}">${esc(lastExport.dir)}</div>` : ""}
+        <div class="book-export-name">${esc(lastExport.name)}</div>
+        <div class="book-export-hint">${L("若同名檔案已存在，Windows 會自動加上 (1)", "若同名文件已存在，Windows 会自动加上 (1)", "Windows adds (1) if the name already exists")}</div>
+      </div>` : ""}`;
   $("bookPanel").innerHTML = `
     <div class="book-head">
-      <span>${title}</span>
-      ${bookId ? `<button class="book-close" data-act="close" aria-label="close">×</button>` : ""}
+      <span>${esc(title)}</span>
+      ${bookId || importPrompt ? `<button class="book-close" data-act="close" aria-label="close">×</button>` : ""}
     </div>
-    <div class="book-note">${note}</div>
-    <div class="book-list">${rows}</div>
-    <div class="book-actions">
-      <button class="book-act" data-act="new">${L("新建帳本", "新建账本", "New ledger")}</button>
-      <label class="book-act book-file">${L("匯入備份", "导入备份", "Import")}<input id="importFile" type="file" accept=".json,application/json"></label>
-      ${bookId ? `<button class="book-act" data-act="export">${L("匯出備份", "导出备份", "Export")}</button>` : ""}
-      ${bookId ? `<button class="book-act is-danger" data-act="delete">${deleteArmed ? L("再按一次刪除", "再按一次删除", "Delete again") : L("刪除帳本", "删除账本", "Delete ledger")}</button>` : ""}
-    </div>
-    <div class="book-note is-import">${L("匯入會建立一本新帳本，不會覆蓋現有資料；也可以把 JSON 拖到卡片上。", "导入会建立一本新账本，不会覆盖现有数据；也可以把 JSON 拖到卡片上。", "Import creates a new ledger and never overwrites existing data. You can also drop the JSON on the card.")}</div>
-    ${warn ? `<div class="book-note${deleteArmed ? " is-warn" : ""}">${warn}</div>` : ""}
-    ${lastExport && lastExport.bookId === bookId ? `<div class="book-export">
-      <div>${L("已匯出到「下載」資料夾", "已导出到「下载」文件夹", "Saved to Downloads")}</div>
-      ${lastExport.dir ? `<div class="book-export-path" title="${esc(lastExport.dir)}">${esc(lastExport.dir)}</div>` : ""}
-      <div class="book-export-name">${esc(lastExport.name)}</div>
-      <div class="book-export-hint">${L("若同名檔案已存在，Windows 會自動加上 (1)", "若同名文件已存在，Windows 会自动加上 (1)", "Windows adds (1) if the name already exists")}</div>
-    </div>` : ""}
+    ${prompt}${normal}
   `;
   $("bookPanel").hidden = false;
   panelOpen = true;
@@ -444,10 +491,10 @@ async function exportBook() {
     const payload = {
       app: "WinWidget",
       widget: "winwidget.ledger",
-      version: 1,
+      version: 2,
       book: { id: bookId, name: bookName },
       exportedAt: new Date().toISOString(),
-      entries: list.map((e) => ({ time: e.t, amount: e.a, kind: e.k, category: e.c })),
+      entries: list.map((e) => ({ id: e.uid, time: e.t, amount: e.a, kind: e.k, category: e.c })),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -479,6 +526,99 @@ async function exportBook() {
   }
 }
 
+function parseBackup(data) {
+  if (!data || typeof data !== "object" || !Array.isArray(data.entries)) throw new Error("not a ledger backup");
+  const seen = new Set();
+  const list = [];
+  let invalid = 0;
+  let duplicates = 0;
+  for (const e of data.entries) {
+    const t = Number(e && e.time);
+    const a = Math.round(Number(e && e.amount) * 100) / 100;
+    if (!Number.isFinite(t) || t <= 0 || !Number.isFinite(a) || a <= 0) {
+      invalid++;
+      continue;
+    }
+    const raw = e && (e.id || e.uid);
+    const uid = raw ? String(raw).slice(0, 200) : newUid();
+    if (seen.has(uid)) {
+      duplicates++;
+      continue;
+    }
+    seen.add(uid);
+    list.push({ uid, t, a, k: e.kind === "in" ? "in" : "out", c: String(e.category || "other") });
+  }
+  if (data.entries.length && !list.length) throw new Error("no valid entries");
+  return { list, invalid, duplicates };
+}
+
+function importToast(name, added, invalid, duplicates) {
+  const bits = [];
+  if (added) {
+    bits.push(L(`已匯入 ${added} 筆到「${name}」`, `已导入 ${added} 条到“${name}”`, `Imported ${added} into "${name}"`));
+  } else {
+    bits.push(L(`「${name}」沒有新增記錄`, `“${name}”没有新增记录`, `No new entries for "${name}"`));
+  }
+  if (duplicates) bits.push(L(`略過 ${duplicates} 筆重複`, `跳过 ${duplicates} 条重复`, `Skipped ${duplicates} duplicate`));
+  if (invalid) bits.push(L(`略過 ${invalid} 筆無效記錄`, `跳过 ${invalid} 条无效记录`, `Skipped ${invalid} invalid`));
+  toast(bits.join(L("；", "；", "; ")));
+}
+
+async function createImportedBook(base, list, invalid, duplicates) {
+  const name = uniqueName(base || L("匯入帳本", "导入账本", "Imported ledger"));
+  const id = await createBook(name, list.slice().sort((a, b) => a.t - b.t));
+  await useBook(id);
+  importToast(name, list.length, invalid, duplicates);
+}
+
+async function mergeIntoBook(id, list) {
+  const meta = await widget.db.get(bookDoc(id));
+  if (!meta) throw new Error("ledger missing");
+  const existing = await readEntries(id);
+  const seen = new Set(existing.map((e) => e.uid));
+  const add = [];
+  let duplicates = 0;
+  for (const e of list) {
+    if (seen.has(e.uid)) {
+      duplicates++;
+      continue;
+    }
+    seen.add(e.uid);
+    add.push(e);
+  }
+  if (add.length) {
+    await putAll(sourceDocs(add, id));
+    await widget.db.put({ ...meta, updated: Date.now() });
+  }
+  return { added: add.length, duplicates };
+}
+
+async function finishImport(mode) {
+  const p = importPrompt;
+  if (!p || busy) return;
+  busy = true;
+  let done = false;
+  try {
+    if (mode === "merge") {
+      const result = await mergeIntoBook(p.targetId, p.list);
+      await useBook(p.targetId);
+      importToast(p.targetName, result.added, p.invalid, p.duplicates + result.duplicates);
+    } else {
+      await createImportedBook(p.base, p.list, p.invalid, p.duplicates);
+    }
+    done = true;
+  } catch (e) {
+    toast(mode === "merge"
+      ? L("合併失敗", "合并失败", "Could not merge")
+      : L("匯入失敗", "导入失败", "Import failed"));
+    widget.log(`ledger: import ${e.message}`);
+  } finally {
+    if (done) importPrompt = null;
+    busy = false;
+    if (panelOpen) renderBookPanel();
+  }
+}
+
 async function importBookFile(file) {
   if (busy) return;
   if (!file) return;
@@ -490,26 +630,23 @@ async function importBookFile(file) {
   try {
     const text = await file.text();
     const data = JSON.parse(text);
-    if (!data || typeof data !== "object" || !Array.isArray(data.entries)) throw new Error("not a ledger backup");
-    const list = data.entries
-      .map((e) => ({
-        t: Number(e && e.time),
-        a: Math.round(Number(e && e.amount) * 100) / 100,
-        k: e && e.kind === "in" ? "in" : "out",
-        c: String((e && e.category) || "other"),
-      }))
-      .filter((e) => Number.isFinite(e.t) && e.t > 0 && Number.isFinite(e.a) && e.a > 0);
-    const skipped = data.entries.length - list.length;
-    if (data.entries.length && !list.length) throw new Error("no valid entries");
+    const parsed = parseBackup(data);
     const base = String((data.book && data.book.name) || file.name.replace(/\.json$/i, "")).trim();
     await listBooks();
-    const name = uniqueName(base || L("匯入帳本", "导入账本", "Imported ledger"));
-    const id = await createBook(name, list.slice().sort((a, b) => a.t - b.t));
-    await useBook(id);
-    const msg = skipped
-      ? L(`已匯入 ${list.length} 筆，略過 ${skipped} 筆無效記錄`, `已导入 ${list.length} 条，跳过 ${skipped} 条无效记录`, `Imported ${list.length}, skipped ${skipped} invalid`)
-      : L(`已匯入 ${list.length} 筆到「${name}」`, `已导入 ${list.length} 条到“${name}”`, `Imported ${list.length} into "${name}"`);
-    toast(msg);
+    const target = books.find((b) => b.name.trim() === base);
+    if (target) {
+      importPrompt = {
+        base,
+        list: parsed.list,
+        targetId: target.id,
+        targetName: target.name,
+        invalid: parsed.invalid,
+        duplicates: parsed.duplicates,
+      };
+      renderBookPanel();
+      return;
+    }
+    await createImportedBook(base, parsed.list, parsed.invalid, parsed.duplicates);
   } catch (e) {
     toast(L("匯入失敗，這不是有效的帳本備份", "导入失败，这不是有效的账本备份", "Import failed: not a ledger backup"));
     widget.log(`ledger: import ${e.message}`);
@@ -565,6 +702,13 @@ async function onPanelClick(e) {
     } else if (name === "export") {
       resetDeleteArm();
       await exportBook();
+    } else if (name === "merge-import") {
+      await finishImport("merge");
+    } else if (name === "new-import") {
+      await finishImport("new");
+    } else if (name === "cancel-import") {
+      importPrompt = null;
+      renderBookPanel();
     } else if (name === "delete") {
       if (!bookId) return;
       if (!deleteArmed) {
@@ -771,9 +915,10 @@ async function add() {
     return;
   }
   const now = Date.now();
-  const e = { id: `${ENTRY_PREFIX}${bookId}/${now}/${rid()}`, t: now, a: Math.round(amount * 100) / 100, k: kind, c: cat };
+  const uid = newUid();
+  const e = { id: `${ENTRY_PREFIX}${bookId}/${now}/${rid()}`, uid, t: now, a: Math.round(amount * 100) / 100, k: kind, c: cat };
   try {
-    await widget.db.put({ _id: e.id, book: bookId, t: e.t, a: e.a, k: e.k, c: e.c });
+    await widget.db.put({ _id: e.id, book: bookId, uid, t: e.t, a: e.a, k: e.k, c: e.c });
   } catch (err) {
     toast(L("儲存失敗", "保存失败", "Could not save"));
     widget.log(`ledger: add ${err.message}`);
