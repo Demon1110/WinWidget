@@ -182,7 +182,7 @@ jobs:
       # → dist\WinWidget-<版本>-windows-x64.exe + sha256 → 脱离 assets\ 跑 list 自检
       - name: Package
         shell: pwsh
-        run: pwsh -NoProfile -File scripts/package-windows.ps1
+        run: pwsh -NoProfile -File scripts/package-windows.ps1 -Upx 
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -193,37 +193,6 @@ jobs:
             dist/*.exe.sha256
           if-no-files-found: error
 
-  # ---------------- 4. 开发者文档（顶替 crates.io 那一步） ----------------
-  docs:
-    name: Developer guide
-    needs: [prepare, checks]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install zhconv
-        run: python -m pip install --disable-pip-version-check zhconv
-
-      # 三语 Markdown（docs/）→ 单文件自包含 HTML（assets/docs/，洗掉运行时依赖，双击就能看）
-      - name: Build the guide
-        run: python scripts/build-docs.py
-
-      # 改了 Markdown 却忘了重新生成 → 这一步失败，别把过期的文档发出去
-      # 生成物有两处：assets/docs 的两个 HTML，以及 docs 里由繁體转出的简体 Markdown
-      - name: Docs are in sync
-        run: git diff --exit-code -- assets/docs "docs/組件開發指南.zh-CN.md"
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: WinWidget-Docs
-          path: assets/docs/developer-guide.html
-          if-no-files-found: error
 
   # ---------------- 5. 全部成功后再提交、打 tag、发 Release ----------------
   release:
@@ -283,14 +252,12 @@ jobs:
           # 只挑文件：dist/ 下可能有打包留下的目录，不能用 dist/* 一把抓
           # 单文件 exe 是应用内更新下载并自我替换的那个；文档单独发一份，
           # 没装程序的人也能直接读。
-          mv dist/developer-guide.html "dist/WinWidget-${VERSION}-developer-guide.html"
           gh release create "$TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --title "WinWidget v$VERSION" \
             --generate-notes \
             dist/*.exe \
             dist/*.exe.sha256 \
-            "dist/WinWidget-${VERSION}-developer-guide.html"
 
       - name: Summary
         env:
