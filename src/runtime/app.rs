@@ -101,6 +101,9 @@ pub struct App {
     theme_check_ms: i64,
     fullscreen_ticks: u32,
     fullscreen_area: Option<crate::platform::win32::RECT>,
+    /// The virtual desktop id seen on the previous `sync_desktop`, so a switch can be acted on
+    /// exactly once instead of on every poll.
+    last_desktop: Option<String>,
 }
 
 fn same_area(
@@ -203,6 +206,7 @@ impl App {
             theme_check_ms: 0,
             fullscreen_ticks: 0,
             fullscreen_area: None,
+            last_desktop: None,
         };
         app.boot_defaults();
         app.start_tray();
@@ -563,6 +567,47 @@ impl App {
     pub fn sync_desktop(&mut self, current: &str) {
         for win in self.windows.values_mut() {
             win.sync_desktop(current);
+        }
+        // The wallpaper layer is shared by every desktop, so wallpaper-hosted effect windows
+        // never move: the shell's switcher just stops compositing them elsewhere. Two things go
+        // wrong for them across a switch. Some Windows builds hide them and never show them back
+        // — re-show any that went missing. Worse, WebView2 stops presenting to its composition
+        // surface while its window is on a background desktop, and never resumes: the window
+        // comes back as a see-through hole (the wallpaper shows straight through it). Hiding and
+        // re-showing the window for one frame forces the presenter to start again. Only a real
+        // change kicks — the poll runs every 120 ms and `tick` calls this every second, so doing
+        // it unconditionally would blink the effects constantly. Stopping an effect destroys the
+        // window first, so this can never resurrect something the user closed.
+        let switched = self.last_desktop.as_deref() != Some(current);
+        self.last_desktop = Some(current.to_string());
+        let mut reshow = 0;
+        let mut kicked = 0;
+        for win in self.customs.values() {
+            if win.wallpaper && !win.destroyed {
+                let hwnd = win.hwnd();
+                let visible = unsafe { crate::platform::win32::IsWindowVisible(hwnd) } != 0;
+                if !visible {
+                    crate::platform::win32::show_no_activate(hwnd);
+                    reshow += 1;
+                }
+                if switched {
+                    if visible {
+                        crate::platform::win32::hide(hwnd);
+                    }
+                    crate::platform::win32::show_no_activate(hwnd);
+                    kicked += 1;
+                }
+            }
+        }
+        if reshow > 0 {
+            crate::core::logging::info(&format!(
+                "desktop switch: re-showed {reshow} wallpaper window(s)"
+            ));
+        }
+        if switched && kicked > 0 {
+            crate::core::logging::info(&format!(
+                "desktop switch: kicked {kicked} wallpaper window(s) to re-present"
+            ));
         }
     }
 
