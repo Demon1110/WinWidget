@@ -26,6 +26,10 @@ header { display: flex; align-items: center; gap: 8px; flex: none; }
 .book-close:hover { color: var(--w-fg); background: var(--w-hover); }
 .book-note { font-size: 0.65rem; line-height: 1.45; color: var(--w-fg-muted); }
 .book-note.is-warn { color: var(--w-danger); }
+.book-export { padding: 5px 6px; border-radius: 7px; background: var(--w-control-bg); font-size: 0.64rem; line-height: 1.4; color: var(--w-fg-muted); }
+.book-export-path { color: var(--w-fg); word-break: break-all; }
+.book-export-name { margin-top: 2px; word-break: break-all; }
+.book-export-hint { margin-top: 2px; opacity: 0.75; }
 .book-list { display: flex; flex-direction: column; gap: 2px; max-height: 116px; overflow-y: auto; }
 .book-row { display: flex; align-items: center; gap: 2px; min-width: 0; }
 .book-pick { flex: 1 1 0; min-width: 0; padding: 4px 6px; border-radius: 6px; text-align: left; font-size: 0.72rem; color: var(--w-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

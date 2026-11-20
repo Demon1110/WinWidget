@@ -6,7 +6,7 @@
     "zh-CN": "打个数字、点分类就记一笔；账本独立保存，多张卡片可共用同一本，移除卡片不会丢数据。",
     "en": "Type an amount, tap a category. Ledgers live apart from the card, can be shared by several cards, and survive removing a card."
   },
-  "version": "1.2.0",
+  "version": "1.2.1",
   "author": "WinWidget",
   "entry": "index.html",
   "icon": "icon.svg",

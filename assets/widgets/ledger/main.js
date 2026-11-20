@@ -33,6 +33,7 @@ let deleteTimer = 0;
 let busy = false;
 let refreshing = false;
 let exporting = false;
+let lastExport = null;          // { bookId, dir, name }
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const sym = () => String(widget.settings.get("currency") || "¥").slice(0, 3);
@@ -373,6 +374,12 @@ function renderBookPanel() {
       ${bookId ? `<button class="book-act is-danger" data-act="delete">${deleteArmed ? L("再按一次刪除", "再按一次删除", "Delete again") : L("刪除帳本", "删除账本", "Delete ledger")}</button>` : ""}
     </div>
     ${warn ? `<div class="book-note${deleteArmed ? " is-warn" : ""}">${warn}</div>` : ""}
+    ${lastExport && lastExport.bookId === bookId ? `<div class="book-export">
+      <div>${L("已匯出到「下載」資料夾", "已导出到「下载」文件夹", "Saved to Downloads")}</div>
+      ${lastExport.dir ? `<div class="book-export-path" title="${esc(lastExport.dir)}">${esc(lastExport.dir)}</div>` : ""}
+      <div class="book-export-name">${esc(lastExport.name)}</div>
+      <div class="book-export-hint">${L("若同名檔案已存在，Windows 會自動加上 (1)", "若同名文件已存在，Windows 会自动加上 (1)", "Windows adds (1) if the name already exists")}</div>
+    </div>` : ""}
   `;
   $("bookPanel").hidden = false;
   panelOpen = true;
@@ -446,8 +453,9 @@ async function exportBook() {
     const safe = (bookName || "ledger").replace(/[\\/:*?"<>|]/g, "_");
     const now = new Date();
     const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const filename = `winwidget-ledger-${safe}-${day}.json`;
     a.href = url;
-    a.download = `winwidget-ledger-${safe}-${day}.json`;
+    a.download = filename;
     a.addEventListener("click", (ev) => ev.stopPropagation());
     document.body.appendChild(a);
     exporting = true;
@@ -459,7 +467,10 @@ async function exportBook() {
       URL.revokeObjectURL(url);
       a.remove();
     }, 1000);
-    toast(L("已匯出帳本", "已导出账本", "Ledger exported"));
+    const dir = await widget.paths.named("downloads").catch(() => null);
+    lastExport = { bookId, dir: dir || "", name: filename };
+    toast(L("已匯出到「下載」資料夾", "已导出到「下载」文件夹", "Saved to Downloads"));
+    renderBookPanel();
   } catch (e) {
     toast(L("匯出失敗", "导出失败", "Export failed"));
     widget.log(`ledger: export ${e.message}`);
