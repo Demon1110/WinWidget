@@ -1068,9 +1068,12 @@ function onAction(a) {
       api("instance.duplicate", { id }).then((r) => { ui.sel = r.id; remember(); toast(t("已複製一份，放在桌面的空位")); });
       break;
     case "remove":
-      if (armed(a, t("再按一次移除"), "remove:" + id)) {
+      if (armed(a, inst && inst.widget === "winwidget.ledger" ? t("再按一次移除，帳本資料會保留") : t("再按一次移除"), "remove:" + id)) {
         const name = inst ? inst.name : "";
-        api("instance.remove", { id }).then(() => toast(t("已移除「{name}」，它保存的內容也已刪除", { name })));
+        const kept = inst && inst.widget === "winwidget.ledger";
+        api("instance.remove", { id }).then(() => toast(kept
+          ? t("已移除「{name}」，帳本資料仍保留在帳本中", { name })
+          : t("已移除「{name}」，它保存的內容也已刪除", { name })));
       }
       break;
     case "clearAll":
