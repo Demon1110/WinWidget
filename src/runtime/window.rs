@@ -355,6 +355,23 @@ pub fn card_rect(inst: &InstanceConfig, scale: f64) -> w::RECT {
     }
 }
 
+/// Any mouse press on the card reports `window.front`, and the host lifts the card above its
+/// desktop siblings: two overlapping cards each stay operable, while the restack (host-side, in
+/// `win32::raise_card_front`) never reaches ordinary windows. Capture phase, every button.
+const CARD_FRONT_SCRIPT: &str = r#"
+(function () {
+  if (window.__WV_FRONT_READY) return;
+  window.__WV_FRONT_READY = true;
+  document.addEventListener("mousedown", function () {
+    try {
+      if (window.chrome && window.chrome.webview) {
+        window.chrome.webview.postMessage(JSON.stringify({ m: "window.front", p: {} }));
+      }
+    } catch (e) {}
+  }, true);
+})();
+"#;
+
 /// Builds the window and its webview on the app's own event loop.
 #[allow(clippy::too_many_arguments)] // one call site, and each argument is a distinct piece of setup
 pub fn build(
@@ -466,6 +483,7 @@ pub fn build(
             .with_transparent(true)
             .with_devtools(developer)
             .with_initialization_script(crate::runtime::shim::SCRIPT)
+            .with_initialization_script(CARD_FRONT_SCRIPT)
             .with_ipc_handler(move |request| {
                 let body = request.body().clone();
                 crate::runtime::app::post(

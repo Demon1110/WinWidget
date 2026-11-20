@@ -677,6 +677,15 @@ fn eval(app: &App, instance: &str, script: &str) {
 /// Card-side fire-and-forget notifications (`window.*` without an id). `true` when handled.
 pub fn card_notify(app: &mut App, instance: &str, method: &str, params: &Value) -> bool {
     match method {
+        "window.front" => {
+            // The page reports a press on the card: lift it above its desktop siblings so two
+            // overlapping cards stay operable. Fire-and-forget, one per mouse press.
+            if let Some(win) = app.windows.get(instance) {
+                crate::core::logging::info(&format!("card_notify window.front: {instance}"));
+                crate::platform::win32::raise_card_front(win.hwnd());
+            }
+            true
+        }
         "window.drag" => {
             start_drag(app, instance, params);
             true

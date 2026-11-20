@@ -301,6 +301,9 @@ extern "system" {
     pub fn GetWindowTextW(hwnd: HWND, buffer: *mut u16, len: i32) -> i32;
     pub fn GetWindow(hwnd: HWND, cmd: u32) -> HWND;
     pub fn GetParent(hwnd: HWND) -> HWND;
+    pub fn SetPropW(hwnd: HWND, name: *const u16, value: HANDLE) -> i32;
+    pub fn GetPropW(hwnd: HWND, name: *const u16) -> HANDLE;
+    pub fn RemovePropW(hwnd: HWND, name: *const u16) -> HANDLE;
     pub fn GetClassLongPtrW(hwnd: HWND, index: i32) -> isize;
     pub fn SetClassLongPtrW(hwnd: HWND, index: i32, value: isize) -> isize;
     pub fn InvalidateRect(hwnd: HWND, rect: *const RECT, erase: i32) -> i32;
@@ -860,6 +863,36 @@ pub fn disable_nc_rendering(hwnd: HWND) {
     }
 }
 
+/// Property name marking a window as a desktop-mounted card, so z-order helpers can tell cards
+/// apart from effect windows and ordinary-layer windows without guessing from styles.
+const DESKTOP_CARD_PROP: &str = "WinWidget.DesktopCard";
+
+/// Marks `hwnd` as a desktop card. Kept as a window property so every lookup is a cheap
+/// `GetPropW` instead of a fragile style/parent reconstruction.
+fn mark_desktop_card(hwnd: HWND) {
+    let name = wide(DESKTOP_CARD_PROP);
+    unsafe {
+        SetPropW(hwnd, name.as_ptr(), 1 as HANDLE);
+    }
+}
+
+/// Clears the desktop-card mark when a card leaves the desktop layer.
+fn unmark_desktop_card(hwnd: HWND) {
+    let name = wide(DESKTOP_CARD_PROP);
+    unsafe {
+        RemovePropW(hwnd, name.as_ptr());
+    }
+}
+
+/// Whether `hwnd` carries the desktop-card mark.
+fn is_desktop_card(hwnd: HWND) -> bool {
+    if hwnd == 0 {
+        return false;
+    }
+    let name = wide(DESKTOP_CARD_PROP);
+    unsafe { GetPropW(hwnd, name.as_ptr()) != 0 }
+}
+
 /// The desktop layer: a popup that the desktop owns, sitting directly above it. Ownership keeps a
 /// card behind ordinary windows and on the desktop when Win+D is pressed, and the window stays
 /// top-level because only a top-level window can carry the DWM frame that gives per-pixel alpha.
@@ -869,6 +902,16 @@ pub fn place_above_desktop(hwnd: HWND) {
         return;
     }
     unsafe {
+        // Cards must be plain top-level popups. A leftover parent handle (picked up from the
+        // wallpaper layer, or whatever the shell left behind) turns this window into the
+        // popup-with-parent hybrid, and two hybrid windows refuse to restack against each other:
+        // SetWindowPos between them reports success yet routes the move into the parent's child
+        // chain, where neither window actually lives — the z-order silently never changes. Drop
+        // the handle on every mount so inter-card restacking stays an ordinary top-level move.
+        if GetParent(hwnd) != 0 {
+            SetParent(hwnd, 0);
+        }
+        mark_desktop_card(hwnd);
         if GetWindowLongPtrW(hwnd, GWLP_HWNDPARENT) != prog {
             SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, prog);
         }
@@ -910,6 +953,7 @@ pub fn place_above_desktop(hwnd: HWND) {
 
 pub fn detach_from_desktop(hwnd: HWND) {
     unsafe {
+        unmark_desktop_card(hwnd);
         let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
         if style & WS_CHILD != 0 {
             SetParent(hwnd, 0);
@@ -919,6 +963,82 @@ pub fn detach_from_desktop(hwnd: HWND) {
             SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, 0);
         }
     }
+}
+
+/// Lifts the clicked desktop card above its siblings, leaving ordinary windows untouched.
+///
+/// Desktop cards are plain popups marked with the desktop-card property; effect windows are
+/// `WS_CHILD`ren of the wallpaper host and never carry the mark. The highest marked sibling is
+/// pushed just below the clicked one, so the clicked card ends up on top of the desktop band and
+/// never crosses ordinary windows above it.
+pub fn raise_card_front(hwnd: HWND) {
+    unsafe {
+        if !is_desktop_card(hwnd) {
+            // Ordinary-layer cards get the system's click-to-front; only desktop cards play this.
+            return;
+        }
+        let mut ctx = TopCardSearch {
+            exclude: hwnd,
+            found: 0,
+        };
+        EnumWindows(Some(find_top_card), &mut ctx as *mut TopCardSearch as isize);
+        let top = ctx.found;
+        if top == 0 || top == hwnd {
+            crate::core::logging::info(&format!(
+                "raise_card_front hwnd={hwnd} skip: no higher desktop sibling (top={top})"
+            ));
+            return;
+        }
+        // Owned popups refuse a pure z-order restack: SetWindowPos with NOMOVE|NOSIZE reports
+        // success yet leaves the order untouched (observed 2026-11-20 — the same class of quirk
+        // the virtual-desktop remount fights). A real geometry change does go through, so the
+        // sibling is pushed below the clicked card in two steps that differ by one pixel of
+        // height: the nudge is invisible, both steps carry the same insertAfter, and the second
+        // one restores the exact original rectangle.
+        let rect = window_rect(top);
+        let moved = SetWindowPos(
+            top,
+            hwnd,
+            rect.left,
+            rect.top,
+            rect.width(),
+            rect.height() + 1,
+            SWP_NOACTIVATE,
+        ) != 0;
+        let settled = SetWindowPos(
+            top,
+            hwnd,
+            rect.left,
+            rect.top,
+            rect.width(),
+            rect.height(),
+            SWP_NOACTIVATE,
+        ) != 0;
+        crate::core::logging::info(&format!(
+            "raise_card_front hwnd={hwnd} top={top} moved={moved} settled={settled}"
+        ));
+    }
+}
+
+/// State handed to the `EnumWindows` callback through its `lParam`.
+struct TopCardSearch {
+    exclude: HWND,
+    found: HWND,
+}
+
+/// `EnumWindows` walks top to bottom, so the first hit is the highest remaining sibling. Only
+/// marked desktop cards qualify — effect windows (wallpaper children) and ordinary-layer windows
+/// are invisible to this search and therefore never get restacked by a card click.
+unsafe extern "system" fn find_top_card(hwnd: HWND, data: isize) -> i32 {
+    let ctx = &mut *(data as *mut TopCardSearch);
+    if hwnd == ctx.exclude {
+        return 1;
+    }
+    if IsWindowVisible(hwnd) != 0 && is_desktop_card(hwnd) {
+        ctx.found = hwnd;
+        return 0;
+    }
+    1
 }
 
 /// Finds the window the effect must become a child of to sit behind the desktop icons.
