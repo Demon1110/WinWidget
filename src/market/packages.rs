@@ -405,10 +405,22 @@ fn install_staged(app: &mut App, staged: &Staged) -> Result<Value, String> {
     copy_dir(&staged.dir, &desktop)?;
     app.catalog = crate::model::catalog::Catalog::default();
     app.catalog.scan();
-
-    let before = app.cfg().instances.len();
-    let id = app.add_widget(&manifest.id, None)?;
-    let had_instance = app.cfg().instances.len() > before;
+    // A built-in widget that just arrived as a Hub package keeps the card the user already has.
+    let adopted = app.adopt_legacy_widgets();
+    let existing = if adopted {
+        app.cfg()
+            .instances
+            .iter()
+            .find(|i| i.widget.eq_ignore_ascii_case(&manifest.id))
+            .map(|i| i.id.clone())
+    } else {
+        None
+    };
+    let added = existing.is_none();
+    let id = match existing {
+        Some(id) => id,
+        None => app.add_widget(&manifest.id, None)?,
+    };
     // The install sheet listed these permissions and the user pressed install, which is the same
     // consent `widget.grant` records elsewhere — without it the package installs and then every
     // bridged call fails with "permission denied" until the user hunts for the switch.
@@ -430,7 +442,7 @@ fn install_staged(app: &mut App, staged: &Staged) -> Result<Value, String> {
     Ok(json!({
         "name": manifest.display_name(),
         "version": manifest.version,
-        "instanceId": if had_instance { Value::String(id) } else { Value::Null },
+        "instanceId": if added { Value::String(id) } else { Value::Null },
         "update": staged.update.is_some(),
     }))
 }

@@ -116,6 +116,31 @@ fn same_area(
     }
 }
 
+/// Built-in widgets that moved to the Hub under a shorter id. The card config and the widget's
+/// database are rewritten once so an old desktop card keeps its data after the move.
+const LEGACY_WIDGET_IDS: &[(&str, &str)] = &[("winwidget.ledger", "ledger")];
+
+/// Points cards that still use a pre-move id at the installed package. Only runs when the new id
+/// is in the catalog, so a user who has not installed it yet is left untouched.
+fn adopt_legacy_instances(
+    instances: &mut [InstanceConfig],
+    catalog: &crate::model::catalog::Catalog,
+) -> bool {
+    let mut changed = false;
+    for inst in instances.iter_mut() {
+        for (old, new) in LEGACY_WIDGET_IDS {
+            if inst.widget.eq_ignore_ascii_case(old)
+                && catalog.find(new).is_some()
+                && inst.widget != *new
+            {
+                inst.widget = (*new).to_string();
+                changed = true;
+            }
+        }
+    }
+    changed
+}
+
 /// Same monitor rect on both sides, including "neither has one".
 impl App {
     pub fn new(proxy: EventLoopProxy<Ev>) -> App {
@@ -127,6 +152,13 @@ impl App {
         }
         let mut catalog = crate::model::catalog::Catalog::default();
         catalog.scan();
+        // A built-in widget that now lives in the Hub keeps its documents under the new id.
+        for (old, new) in LEGACY_WIDGET_IDS {
+            crate::core::db::migrate_namespace(old, new);
+        }
+        if adopt_legacy_instances(&mut store.data.instances, &catalog) {
+            store.save();
+        }
         let themes = crate::model::themes::Themes::load();
         let serve = ServeState::default();
         let port = match server::start(serve.clone()) {
@@ -205,6 +237,16 @@ impl App {
 
     pub fn save(&self) {
         self.store.save();
+    }
+
+    /// Repoints cards whose widget moved from built-in to a Hub package. Called after an install
+    /// rescans the catalog so the old card adopts the new package instead of leaving a dead card.
+    pub fn adopt_legacy_widgets(&mut self) -> bool {
+        let changed = adopt_legacy_instances(&mut self.store.data.instances, &self.catalog);
+        if changed {
+            self.save();
+        }
+        changed
     }
 
     pub fn instance(&self, id: &str) -> Option<&InstanceConfig> {

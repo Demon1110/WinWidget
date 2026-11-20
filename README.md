@@ -14,7 +14,7 @@
 
 ## 功能
 
-- **57 个内置组件**：clock、analogclock、flipclock、worldclock、calendar、countdown、pomodoro、timer、progress、weather、forecast、airquality、sunmoon、sysinfo、usage、netspeed、disks、battery、network、pcinfo、recyclebin、volume、power、notes、todo、launcher、habits、calculator、search、infocard、rss、currency、dailyimage、onthisday、media、photoframe、whitenoise、label；工具类 droptray、qrshare、units、passgen；生活记录 ledger、water、chargeguard、dataplan；系统网络 sitemonitor、github、ical；专注 agenda、focus、quicknotes；内容 poem、moonphase、meetplan；屏幕特效 bloom（39 款全屏特效，穿透底层运行）。
+- **57 个内置组件**：clock、analogclock、flipclock、worldclock、calendar、countdown、pomodoro、timer、progress、weather、forecast、airquality、sunmoon、sysinfo、usage、netspeed、disks、battery、network、pcinfo、recyclebin、volume、power、notes、todo、launcher、habits、calculator、search、infocard、rss、currency、dailyimage、onthisday、media、photoframe、whitenoise、label；工具类 droptray、qrshare、units、passgen；生活记录 water、chargeguard、dataplan；系统网络 sitemonitor、github、ical；专注 agenda、focus、quicknotes；内容 poem、moonphase、meetplan；屏幕特效 bloom（39 款全屏特效，穿透底层运行）。
 - **三种层级**：桌面层（贴在壁纸上、Win+D 不会被带走）、置顶（总在最前）、普通；可锁定位置（锁定时鼠标点击穿过组件，解锁恢复交互）、可按比例缩放、可吸附对齐。
 - **外观逐卡可调**：透明 / 磨砂（DWM 亚克力）、阴影、背景色与不透明度、文字色、强调色（可取 Windows 系统色）、字体、字号比例、圆角、内边距、整卡透明度、自定义 CSS。
 - **三套主题**：`instrument`（深色仪器）、`paper`（浅色纸张）、`type`（排印风），主题切换即时生效，单张卡片也可单独指定主题。

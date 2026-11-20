@@ -170,6 +170,32 @@ fn announce(ctx: &mut Ctx, store: &Store, ids: &[String]) {
     }
 }
 
+/// Renames a widget's database when a built-in widget moves to the Hub under a new id. Existing
+/// cards keep their instance storage; this keeps the documents they refer to in the same place.
+pub fn migrate_namespace(from: &str, to: &str) -> bool {
+    let dir = crate::core::paths::get().plugins_dir();
+    let old = dir.join(format!("{}.json", sanitize(from)));
+    let new = dir.join(format!("{}.json", sanitize(to)));
+    if !old.is_file() || new.exists() {
+        return false;
+    }
+    if let Err(e) = std::fs::rename(&old, &new) {
+        crate::core::logging::error(&format!(
+            "db: could not move {} to {}: {e}",
+            old.display(),
+            new.display()
+        ));
+        return false;
+    }
+    let old_att = dir.join(format!("{}.attachments", sanitize(from)));
+    let new_att = dir.join(format!("{}.attachments", sanitize(to)));
+    if old_att.is_dir() && !new_att.exists() {
+        let _ = std::fs::rename(old_att, new_att);
+    }
+    crate::core::logging::info(&format!("db: moved {} to {}", old.display(), new.display()));
+    true
+}
+
 /// One widget's database: `{ "docs": { id: {…} }, "attachments": { id: type } }` plus a
 /// `<id>.attachments/` folder for the bytes. Public inside the crate only so the clipboard can
 /// hand a picture straight to a widget's attachment store.

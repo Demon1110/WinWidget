@@ -1067,15 +1067,16 @@ function onAction(a) {
     case "duplicate":
       api("instance.duplicate", { id }).then((r) => { ui.sel = r.id; remember(); toast(t("已複製一份，放在桌面的空位")); });
       break;
-    case "remove":
-      if (armed(a, inst && inst.widget === "winwidget.ledger" ? t("再按一次移除，帳本資料會保留") : t("再按一次移除"), "remove:" + id)) {
+    case "remove": {
+      const ledger = inst && (inst.widget === "ledger" || inst.widget === "winwidget.ledger");
+      if (armed(a, ledger ? t("再按一次移除，帳本資料會保留") : t("再按一次移除"), "remove:" + id)) {
         const name = inst ? inst.name : "";
-        const kept = inst && inst.widget === "winwidget.ledger";
-        api("instance.remove", { id }).then(() => toast(kept
+        api("instance.remove", { id }).then(() => toast(ledger
           ? t("已移除「{name}」，帳本資料仍保留在帳本中", { name })
           : t("已移除「{name}」，它保存的內容也已刪除", { name })));
       }
       break;
+    }
     case "clearAll":
       if (armed(a, t("再按一次清除"), "clearAll")) {
         const n = S.instances.length;
