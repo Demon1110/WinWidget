@@ -415,7 +415,7 @@ async function run(effectId) {
       w.fresh = false;
       setTimeout(() => { if (running === effectId) sendEffect(w, effectId); }, 900);
     }
-    try { localStorage.setItem("bloom:fx", effectId); } catch (e) {}
+    widget.call("storage.set", { key: "bloom:fx", value: effectId }).catch(() => {});
     toast(S.started(t(fx.name)));
   } finally {
     busy = false;
@@ -426,7 +426,7 @@ async function stopAll(quiet) {
   const gone = wins;
   wins = [];
   running = null;
-  try { localStorage.removeItem("bloom:fx"); } catch (e) {}
+  widget.call("storage.remove", { key: "bloom:fx" }).catch(() => {});
   for (const w of gone) await closeWin(w);
   paintStatus();
   if (!quiet) toast(S.stopped);
@@ -500,11 +500,15 @@ setTimeout(() => {
   else paintStatus();
 }, 1200);
 
-// 宿主重启后没有心跳可听（overlay 窗口已随进程销毁），靠 localStorage 把特效接回来。
-// 等心跳先跑完再动手，两者不会打架：有心跳（overlay 活着）时 running 已有值。
+// 宿主重启后没有心跳可听（overlay 窗口已随进程销毁），靠宿主按实例存储把特效接回来。
+// 存储走宿主 storage（instances/<id>.json），不绑页面 origin：本地服务端口每次启动都会变，
+// localStorage 会随 origin 一起失效。等心跳先跑完再动手，两者不会打架：有心跳（overlay 活着）时 running 已有值。
 setTimeout(() => {
   if (running) return;
-  let saved = "";
-  try { saved = localStorage.getItem("bloom:fx") || ""; } catch (e) {}
-  if (saved && fxOf(saved)) run(saved);
+  widget
+    .call("storage.get", { key: "bloom:fx" })
+    .then((saved) => {
+      if (typeof saved === "string" && saved && fxOf(saved)) run(saved);
+    })
+    .catch(() => {});
 }, 2000);
