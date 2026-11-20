@@ -853,7 +853,9 @@ impl App {
                 return;
             }
             win.loaded = true;
-            if win.ignore_mouse {
+            // Wallpaper windows are child windows behind the icon layer: they never capture the
+            // mouse, and the layered click-through style would make their WebView invisible.
+            if win.ignore_mouse && !win.wallpaper {
                 Some(win.hwnd())
             } else {
                 None

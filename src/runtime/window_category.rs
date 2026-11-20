@@ -395,8 +395,11 @@ pub fn build_custom(
 
     // Click-through asked for at creation time: apply it to the top-level window straight away.
     // WebView2's child HWNDs come later, so `mark_custom_loaded` re-applies once the page is ready.
+    // A wallpaper window is already behind the icon layer and every ordinary window, so it cannot
+    // eat the mouse in the first place; `WS_EX_LAYERED` on such a child window also stops it from
+    // being composited and leaves the effect invisible, so click-through is skipped for that layer.
     let ignore_mouse = jbool(&o, "ignoreMouseEvents").unwrap_or(false);
-    if ignore_mouse {
+    if ignore_mouse && !wallpaper {
         w::set_click_through(hwnd, true);
     }
 
@@ -1256,7 +1259,11 @@ fn invoke(app: &mut App, id: u32, m: &str, p: &Value) -> BridgeResult<Reply> {
             let ignore = jbool(p, "ignore").unwrap_or(false);
             if let Some(win) = app.customs.get_mut(&id) {
                 win.ignore_mouse = ignore;
-                w::set_click_through(win.hwnd(), ignore);
+                // A wallpaper window sits below the icons and cannot receive the pointer; the
+                // layered style that implements click-through would stop it from compositing.
+                if !win.wallpaper {
+                    w::set_click_through(win.hwnd(), ignore);
+                }
             }
             Value::Null
         }
