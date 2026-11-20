@@ -197,7 +197,7 @@ jobs:
   # ---------------- 5. 全部成功后再提交、打 tag、发 Release ----------------
   release:
     name: Commit, tag, GitHub Release
-    needs: [prepare, windows, docs]
+    needs: [prepare, windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
