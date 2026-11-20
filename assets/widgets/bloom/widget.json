@@ -70,9 +70,9 @@
       "type": "text",
       "label": { "zh-TW": "文字特效文本", "zh-CN": "文字特效文本", "en": "Text for word effects" },
       "description": {
-        "zh-TW": "星塵成字、鐵畫銀鉤、字火煙花顯示的文字，2-10 個字，留空用各特效默認",
-        "zh-CN": "星尘成字、铁画银钩、字火烟花显示的文字，2-10 个字，留空用各特效默认",
-        "en": "Text shown by Glyph dust, Iron glyph and Glyph fireworks (2-10 chars; empty = each effect's default)"
+        "zh-TW": "星塵成字、鐵畫銀鉤、字火煙花、千字流轉顯示的文字，2-10 個字，留空用各特效默認",
+        "zh-CN": "星尘成字、铁画银钩、字火烟花、千字流转显示的文字，2-10 个字，留空用各特效默认",
+        "en": "Text shown by Glyph dust, Iron glyph, Glyph fireworks and Morphing words (2-10 chars; empty = each effect's default)"
       },
       "default": ""
     }

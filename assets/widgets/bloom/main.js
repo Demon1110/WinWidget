@@ -78,7 +78,7 @@ const CATALOG = [
   { id: "ribbon", cat: "heal", icon: "🎀", color: "#ff7eb6",
     name: { "zh-CN": "流光丝带", "zh-TW": "流光絲帶", en: "Ribbon of light" },
     desc: { "zh-CN": "柔顺发光的彩带正弦飘动", "zh-TW": "柔順發光的彩帶正弦飄動", en: "A soft ribbon swaying in phase" } },
-  { id: "morphText", cat: "heal", icon: "✒️", color: "#8ef0c8",
+  { id: "morphText", cat: "heal", icon: "✒️", color: "#8ef0c8", customText: true,
     name: { "zh-CN": "千字流转", "zh-TW": "千字流轉", en: "Morphing words" },
     desc: { "zh-CN": "粒子在字与字之间蜿蜒流淌", "zh-TW": "粒子在字與字之間蜿蜒流淌", en: "Particles flowing from word to word" } },
   { id: "skyLantern", cat: "heal", icon: "🏮", color: "#ff9a3c",

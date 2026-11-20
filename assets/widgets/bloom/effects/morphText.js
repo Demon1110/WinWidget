@@ -11,6 +11,10 @@
 window.bloomRegister3D('morphText', {
   fps: 30,
   init(scene, camera, state) {
+    // 自定义文本（2-10 字）按字符拆成逐字流转的序列；未配置时用默认多词
+    if (state.text && !state.words) {
+      state.words = Array.from(state.text).join('\n');
+    }
     state.words = state.words || '玩出花\n万物皆粒子\n静水流深';
     state.glyphColor = state.glyphColor || '#8ef0c8';
     state.density = state.density || 60;
@@ -32,7 +36,7 @@ window.bloomRegister3D('morphText', {
     // -- 逐词采样，统一粒子总数 N（不足的词按 stride 重复采样点并加抖动） --
     const viewH = 2 * Math.tan(camera.fov * Math.PI / 360) * camera.position.z;
     const maxWorldW = viewH * camera.aspect * 0.92;
-    const wordLines = String(state.words).split('\n').map(function (s) { return s.trim(); }).filter(function (s) { return s.length > 0; }).slice(0, 6);
+    const wordLines = String(state.words).split('\n').map(function (s) { return s.trim(); }).filter(function (s) { return s.length > 0; }).slice(0, 12);
     if (wordLines.length === 0) wordLines.push('玩出花');
     state._wordList = wordLines;
     state._density = state.density;
