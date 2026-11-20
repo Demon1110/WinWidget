@@ -595,7 +595,20 @@ impl App {
                         crate::platform::win32::hide(hwnd);
                     }
                     crate::platform::win32::show_no_activate(hwnd);
+                    // A blank presentation surface is the real killer: WebView2 stops submitting
+                    // its composition output while the window sits on a background desktop and
+                    // never resumes, so the user looks at bare wallpaper. Hiding and re-showing
+                    // the window is not enough to wake the presenter; only an actual client-size
+                    // change makes it re-submit. Nudge the width by one pixel and restore.
+                    crate::platform::win32::nudge_present(hwnd);
                     kicked += 1;
+                    // Cards hit the same freeze: a page that comes back from a hidden desktop
+                    // stops running its JavaScript (which is how an effect fails to remount at
+                    // all). Resize-nudge every card as well; a hidden card stays hidden because
+                    // `SetWindowPos` never changes visibility.
+                    for card in self.windows.values() {
+                        crate::platform::win32::nudge_present(card.hwnd());
+                    }
                 }
             }
         }
@@ -608,6 +621,15 @@ impl App {
             crate::core::logging::info(&format!(
                 "desktop switch: kicked {kicked} wallpaper window(s) to re-present"
             ));
+            // The immediate kick lands while the shell is still finishing the switch, where a
+            // resize can be swallowed; WebView2's presenter is also known to stay blank after
+            // it. One more nudge a second later, once the new desktop is fully active, is what
+            // reliably wakes it.
+            let proxy = self.proxy.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(900));
+                let _ = crate::core::bus::post(&proxy, Ev::NudgeWallpaper);
+            });
         }
     }
 

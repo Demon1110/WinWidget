@@ -33,6 +33,13 @@ fn main() {
     }));
     logging::info(&format!("WinWidget {APP_VERSION} starting"));
 
+    // WebView2's occlusion detection mistakes a virtual-desktop switch for "fully covered by
+    // other windows" and suspends the renderer; coming back never unsuspends it, so wallpaper
+    // effects turn into see-through holes and widget pages stop running their JavaScript.
+    // Lively Wallpaper fights the same bug. Killing the feature for every WebView2 the host
+    // creates (this env var is appended to the browser-process arguments) is the only fix that
+    // reaches the renderer itself — resize nudges and page reloads cannot wake a suspended
+    // render process.
     let args: Vec<String> = std::env::args().skip(1).collect();
     // A release is one exe, so the update replaces it from the freshly downloaded copy. That copy
     // runs this branch and owns the work, so it must come before the single-instance check.
@@ -75,11 +82,20 @@ fn main() {
     // The wry defaults are repeated here because a second --disable-features switch would
     // override the first instead of merging with it.
     let mut browser_args = String::from(
-        "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion",
+        "--disable-features=msWebViewOcclusion,msWebOOcclusion,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion,NativeWindowOcclusionTracker",
     );
     browser_args.push_str(" --disable-backgrounding-occluded-windows");
     if config_low_resource() {
         browser_args.push_str(" --disable-gpu --disable-gpu-compositing --js-flags=--lite-mode");
+    }
+    // Anything already in the environment (diagnostics like a temporary
+    // --remote-debugging-port) must survive: our flags are appended after it.
+    if let Ok(external) = std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS") {
+        let external = external.trim().to_string();
+        if !external.is_empty() {
+            browser_args.push(' ');
+            browser_args.push_str(&external);
+        }
     }
     std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", &browser_args);
 
@@ -195,6 +211,30 @@ fn main() {
             }
             Event::UserEvent(Ev::Desktop(desktop)) => {
                 app.sync_desktop(&desktop);
+                *control = ControlFlow::Wait;
+            }
+            Event::UserEvent(Ev::NudgeWallpaper) => {
+                // The delayed second kick after a desktop switch: WebView2's presenter is fully
+                // settled by now, so a client-size change forces it to re-submit its surface.
+                // Cards get nudged too — their frozen pages are what keeps an effect from
+                // remounting at all.
+                let mut nudged = 0;
+                for win in app.customs.values() {
+                    if win.wallpaper && !win.destroyed {
+                        // Remount beats everything else: the freeze lives in the composition
+                        // subtree binding, not in the page (renderer and GPU keep running), so
+                        // only a full SetParent cycle re-binds it.
+                        crate::platform::win32::remount_wallpaper(win.hwnd());
+                        nudged += 1;
+                    }
+                }
+                for card in app.windows.values() {
+                    crate::platform::win32::nudge_present(card.hwnd());
+                    nudged += 1;
+                }
+                if nudged > 0 {
+                    logging::info(&format!("desktop switch: remounted {nudged} window(s)"));
+                }
                 *control = ControlFlow::Wait;
             }
             Event::UserEvent(Ev::Tick) => {

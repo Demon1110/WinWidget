@@ -73,6 +73,9 @@ pub enum Ev {
     Tick,
     /// The active Windows virtual desktop changed; cards assigned to other desktops are hidden.
     Desktop(String),
+    /// A delayed follow-up nudge for wallpaper effect windows: right after a switch WebView2
+    /// may still be mid-transition, so the presenter is kicked again about a second later.
+    NudgeWallpaper,
     /// A page queued something that has to be built on the loop (a custom window, today).
     Wake,
 }

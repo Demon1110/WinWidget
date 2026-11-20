@@ -1636,6 +1636,48 @@ pub fn hide(hwnd: HWND) {
     }
 }
 
+/// Forces WebView2 to re-submit its composition surface by changing the client size for one
+/// step and restoring it. After a virtual-desktop switch the presenter can leave the surface
+/// blank (the wallpaper shows straight through the window), and `hide`/`show` alone does not
+/// wake it — WebView2 only re-submits when the client rectangle actually changes.
+pub fn nudge_present(hwnd: HWND) {
+    unsafe {
+        let mut rect: RECT = std::mem::zeroed();
+        if GetWindowRect(hwnd, &mut rect) == 0 {
+            return;
+        }
+        let w = rect.right - rect.left;
+        let h = rect.bottom - rect.top;
+        let flags = SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE;
+        SetWindowPos(hwnd, 0, 0, 0, w + 1, h, flags);
+        SetWindowPos(hwnd, 0, 0, 0, w, h, flags);
+    }
+}
+
+/// Forces the DWM to rebuild a wallpaper window's composition subtree: leave the wallpaper host,
+/// become a top-level window again, then mount back with `place_on_wallpaper`. After a
+/// virtual-desktop switch WebView2's DComp output can stop being composited onto the host's
+/// subtree — the page keeps running (renderer and GPU stay busy) but the pixels never reach the
+/// screen, and no resize, show/hide, or even a page reload re-binds it. A full `SetParent` cycle
+/// is the only thing that does.
+pub fn remount_wallpaper(hwnd: HWND) {
+    unsafe {
+        let mut rect: RECT = std::mem::zeroed();
+        if GetWindowRect(hwnd, &mut rect) == 0 {
+            return;
+        }
+        hide(hwnd);
+        // Back to a top-level window first: a WS_CHILD cannot be re-parented to NULL directly.
+        let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+        SetWindowLongPtrW(hwnd, GWL_STYLE, (style & !WS_CHILD) | WS_POPUP);
+        SetParent(hwnd, 0);
+        // Give the shell a beat to release the old subtree before remounting.
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        place_on_wallpaper(hwnd, &rect);
+        show_no_activate(hwnd);
+    }
+}
+
 /// Rectangle at `anchor` expanded by `margin` on every side — the window, while the card is the
 /// inner rectangle.
 pub fn inflate(card: RECT, margin: i32) -> RECT {
