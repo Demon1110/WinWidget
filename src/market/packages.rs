@@ -405,8 +405,8 @@ fn install_staged(app: &mut App, staged: &Staged) -> Result<Value, String> {
     copy_dir(&staged.dir, &desktop)?;
     app.catalog = crate::model::catalog::Catalog::default();
     app.catalog.scan();
-    // A built-in widget that just arrived as a Hub package keeps the card the user already has.
-    let adopted = app.adopt_legacy_widgets();
+    // A widget that declares an alias keeps the card the user already had under the old id.
+    let adopted = app.adopt_renamed_widgets();
     let existing = if adopted {
         app.cfg()
             .instances

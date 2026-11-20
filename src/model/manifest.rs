@@ -9,6 +9,10 @@ use std::path::{Path, PathBuf};
 #[serde(default)]
 pub struct Manifest {
     pub id: String,
+    /// Ids this package replaces. A built-in widget that moves to the Hub keeps its old id here
+    /// so the host can repoint existing cards and rename its old database without special-casing
+    /// any single widget.
+    pub aliases: Vec<String>,
     pub name: Option<Value>,
     pub description: Option<Value>,
     pub version: String,
@@ -174,6 +178,21 @@ impl Manifest {
                 "\"{}\" is not a valid id: use lowercase letters, digits, dots, dashes and underscores (2–64 characters)",
                 self.id
             ));
+        }
+        self.aliases.retain(|a| !a.trim().is_empty());
+        let mut alias_names = std::collections::HashSet::new();
+        for alias in &self.aliases {
+            if alias.eq_ignore_ascii_case(&self.id) {
+                return Err(format!("alias \"{alias}\" is the widget's own id"));
+            }
+            if !valid_id(alias) {
+                return Err(format!(
+                    "alias \"{alias}\" is invalid: use lowercase letters, digits, dots, dashes and underscores (2–64 characters)"
+                ));
+            }
+            if !alias_names.insert(alias.to_lowercase()) {
+                return Err(format!("two aliases resolve to \"{alias}\""));
+            }
         }
         if self.entry.trim().is_empty() {
             self.entry = "index.html".into();
@@ -516,6 +535,35 @@ mod tests {
             }]"#,
             r#"["tool.exec", "network:example.com"]"#,
         );
+        assert!(manifest.validate().is_err());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn accepts_aliases_for_a_renamed_widget() {
+        let dir =
+            std::env::temp_dir().join(format!("winwidget-manifest-alias-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("index.html"), "<!doctype html>").unwrap();
+        let json = r#"{
+            "id": "ledger",
+            "version": "1.4.0",
+            "aliases": ["winwidget.ledger"],
+            "size": { "width": 320, "height": 300 }
+        }"#;
+        let mut manifest: Manifest = serde_json::from_str(json).unwrap();
+        manifest.dir = dir.clone();
+        assert!(manifest.validate().is_ok());
+        assert_eq!(manifest.aliases, vec!["winwidget.ledger"]);
+
+        let json = r#"{
+            "id": "ledger",
+            "version": "1.4.0",
+            "aliases": ["ledger"],
+            "size": { "width": 320, "height": 300 }
+        }"#;
+        let mut manifest: Manifest = serde_json::from_str(json).unwrap();
+        manifest.dir = dir.clone();
         assert!(manifest.validate().is_err());
         let _ = std::fs::remove_dir_all(dir);
     }

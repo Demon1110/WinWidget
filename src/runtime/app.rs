@@ -116,25 +116,19 @@ fn same_area(
     }
 }
 
-/// Built-in widgets that moved to the Hub under a shorter id. The card config and the widget's
-/// database are rewritten once so an old desktop card keeps its data after the move.
-const LEGACY_WIDGET_IDS: &[(&str, &str)] = &[("winwidget.ledger", "ledger")];
-
-/// Points cards that still use a pre-move id at the installed package. Only runs when the new id
-/// is in the catalog, so a user who has not installed it yet is left untouched.
-fn adopt_legacy_instances(
+/// Points cards that still use a widget's previous id at the installed replacement. The mapping
+/// comes from each widget's `aliases` declaration, never from a hardcoded widget name.
+fn adopt_renamed_instances(
     instances: &mut [InstanceConfig],
     catalog: &crate::model::catalog::Catalog,
 ) -> bool {
     let mut changed = false;
     for inst in instances.iter_mut() {
-        for (old, new) in LEGACY_WIDGET_IDS {
-            if inst.widget.eq_ignore_ascii_case(old)
-                && catalog.find(new).is_some()
-                && inst.widget != *new
-            {
-                inst.widget = (*new).to_string();
+        for (old, new) in catalog.renames() {
+            if inst.widget.eq_ignore_ascii_case(old) && !inst.widget.eq_ignore_ascii_case(new) {
+                inst.widget = new.to_string();
                 changed = true;
+                break;
             }
         }
     }
@@ -152,11 +146,12 @@ impl App {
         }
         let mut catalog = crate::model::catalog::Catalog::default();
         catalog.scan();
-        // A built-in widget that now lives in the Hub keeps its documents under the new id.
-        for (old, new) in LEGACY_WIDGET_IDS {
+        // A widget that declares aliases keeps its documents under its current id; old namespaces
+        // are renamed once, before any card is opened.
+        for (old, new) in catalog.renames() {
             crate::core::db::migrate_namespace(old, new);
         }
-        if adopt_legacy_instances(&mut store.data.instances, &catalog) {
+        if adopt_renamed_instances(&mut store.data.instances, &catalog) {
             store.save();
         }
         let themes = crate::model::themes::Themes::load();
@@ -239,10 +234,10 @@ impl App {
         self.store.save();
     }
 
-    /// Repoints cards whose widget moved from built-in to a Hub package. Called after an install
-    /// rescans the catalog so the old card adopts the new package instead of leaving a dead card.
-    pub fn adopt_legacy_widgets(&mut self) -> bool {
-        let changed = adopt_legacy_instances(&mut self.store.data.instances, &self.catalog);
+    /// Repoints cards whose widget declared an alias, then reapplies the catalog. Called after an
+    /// install rescans the catalog so an old card adopts the replacement instead of going dead.
+    pub fn adopt_renamed_widgets(&mut self) -> bool {
+        let changed = adopt_renamed_instances(&mut self.store.data.instances, &self.catalog);
         if changed {
             self.save();
         }

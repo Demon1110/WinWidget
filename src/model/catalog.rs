@@ -58,6 +58,16 @@ impl Catalog {
             .or_else(|| self.by_id.values().find(|m| m.id.eq_ignore_ascii_case(id)))
     }
 
+    /// All `(previous_id, current_id)` pairs declared by installed widgets. The host uses these
+    /// to repoint old cards and rename old databases, so no widget name ever appears in Rust.
+    pub fn renames(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.by_id.values().flat_map(|m| {
+            m.aliases
+                .iter()
+                .map(move |alias| (alias.as_str(), m.id.as_str()))
+        })
+    }
+
     pub fn problems(&self) -> &[Problem] {
         &self.problems
     }
