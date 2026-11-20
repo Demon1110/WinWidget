@@ -1,6 +1,6 @@
 [package]
 name = "winwidget"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2021"
 description = "WinWidget — desktop widgets for Windows, written in Rust: HTML/CSS/JS widgets, themes and a control center"
 license = "GPL-3.0-only"

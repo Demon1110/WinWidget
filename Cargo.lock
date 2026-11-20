@@ -3541,7 +3541,7 @@ dependencies = [
 
 [[package]]
 name = "winwidget"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "flate2",
  "image",
