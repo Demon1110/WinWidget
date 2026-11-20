@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 
 const OWNS: &[&str] = &[
     "settings.set",
+    "app.uiTheme",
     "storage.get",
     "storage.set",
     "storage.remove",
@@ -80,6 +81,32 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
             ctx.app.storage.remove(&instance, &key);
             Ok(Reply::Now(Value::Null))
         }
+        "app.uiTheme" => {
+            // The power card carries a light/dark toggle. No "theme" argument answers the
+            // current mode; "toggle" flips light↔dark (auto falls into dark first); an
+            // explicit light/dark/auto sets it exactly like the control center does. The
+            // control center is pushed so its own switch and page follow immediately.
+            let current = ctx.app.cfg().ui_theme.clone();
+            let requested = p.get("theme").and_then(|v| v.as_str()).map(String::from);
+            let next = match requested.as_deref() {
+                Some("toggle") => {
+                    if current.eq_ignore_ascii_case("light") {
+                        "dark".to_string()
+                    } else {
+                        "light".to_string()
+                    }
+                }
+                Some(m @ ("light" | "dark" | "auto")) => (*m).to_string(),
+                _ => current.clone(),
+            };
+            if next != current {
+                ctx.app.cfg_mut().ui_theme = next.clone();
+                ctx.app.save();
+                ctx.app.push_state_to_control(None);
+            }
+            Ok(Reply::Now(json!(next)))
+        }
+
         "storage.keys" => Ok(Reply::Now(Value::Array(
             ctx.app
                 .storage

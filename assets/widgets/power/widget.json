@@ -15,6 +15,7 @@
     { "key": "sleep", "type": "toggle", "label": { "zh-TW": "睡眠", "zh-CN": "睡眠", "en": "Sleep" }, "default": true },
     { "key": "restart", "type": "toggle", "label": { "zh-TW": "重新啟動", "zh-CN": "重启", "en": "Restart" }, "default": true },
     { "key": "shutdown", "type": "toggle", "label": { "zh-TW": "關機", "zh-CN": "关机", "en": "Shut down" }, "default": true },
-    { "key": "signout", "type": "toggle", "label": { "zh-TW": "登出", "zh-CN": "注销", "en": "Sign out" }, "default": false }
+    { "key": "signout", "type": "toggle", "label": { "zh-TW": "登出", "zh-CN": "注销", "en": "Sign out" }, "default": false },
+    { "key": "themeToggle", "type": "toggle", "label": { "zh-TW": "深淺色切換", "zh-CN": "深浅色切换", "en": "Theme toggle" }, "default": false }
   ]
 }
