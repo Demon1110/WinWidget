@@ -297,14 +297,13 @@ pub fn build_custom(
     if !frame {
         // Windows keeps a thin caption edge on a top-level window; a frameless window has to mean
         // its client area really is the window rectangle, otherwise a full-screen surface leaves
-        // a sliver of the screen uncovered. tao also reserved room for an invisible shadow frame,
-        // so the geometry is set again once that frame is gone.
+        // a sliver of the screen uncovered. The frame is pinned away first, while the window still
+        // carries the shadow insets, so `fit_client` then sets the outer rectangle straight to the
+        // requested size instead of adding those insets back on top of it.
+        w::keep_frame_polished(hwnd, rounded);
         w::drop_frame(hwnd);
         w::fit_client(hwnd, px, py, to_px(width), to_px(height));
         w::polish_frame(hwnd, rounded);
-        // DWM redraws the caption when the window loses activation, so the polish has to be
-        // re-stated on every activation change, not only at creation.
-        w::keep_frame_polished(hwnd, rounded);
     }
     // `layer: "desktop"` puts the window directly above the wallpaper and below every ordinary
     // window — the place a desktop-level canvas belongs, so an effect can play on the wallpaper
@@ -387,6 +386,11 @@ pub fn build_custom(
         // caught up, so the monitor rectangle is the truth for that layer.
         let (vw, vh) = if wallpaper {
             (screen.width().max(1) as u32, screen.height().max(1) as u32)
+        } else if !frame {
+            // A frameless card's client rectangle was pinned to the whole window with raw Win32,
+            // so tao's cached size can lag behind it and leave the view undersized. The request
+            // is the truth for this layer.
+            (to_px(width).max(1) as u32, to_px(height).max(1) as u32)
         } else {
             let size = window.inner_size();
             (size.width.max(1), size.height.max(1))

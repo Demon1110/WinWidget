@@ -802,6 +802,16 @@ pub fn keep_frame_polished(hwnd: HWND, round: bool) {
         if let Ok(mut m) = polished_procs().lock() {
             m.insert(hwnd as usize, (previous, round));
         }
+        // A frame change is what makes the window recompute its client area under the new rule.
+        SetWindowPos(
+            hwnd,
+            0,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+        );
     }
 }
 
@@ -822,6 +832,11 @@ unsafe extern "system" fn polished_proc(hwnd: HWND, msg: u32, wp: usize, lp: isi
         if let Ok(mut m) = polished_procs().lock() {
             m.remove(&(hwnd as usize));
         }
+    }
+    if msg == WM_NCCALCSIZE && wp != 0 {
+        // The client rectangle is the window rectangle: with no non-client area left, DWM has
+        // nowhere to draw the caption strip it otherwise keeps around a frameless card.
+        return 0;
     }
     let result = CallWindowProcW(previous, hwnd, msg, wp, lp);
     if msg == WM_NCACTIVATE || msg == WM_ACTIVATE {
