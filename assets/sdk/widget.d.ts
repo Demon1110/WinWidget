@@ -334,6 +334,41 @@ declare namespace WinWidget {
     option?: { text?: string };
   }
 
+  /** Shared helpers in `widget.util`, so widgets do not ship their own copies. */
+  interface Util {
+    /** document.getElementById, kept for one-line cards. */
+    $(id: string): HTMLElement | null;
+    /** querySelectorAll as an array; scope defaults to document. */
+    $$(selector: string, scope?: ParentNode): Element[];
+    /** Escapes < > & " for safe HTML text. */
+    esc(value: unknown): string;
+    /** Zero-padded two-digit string: 3 → "03". */
+    pad(value: number): string;
+    /** Round and clamp `value` into [lo, hi]; returns `fallback` when it is not a number. */
+    clampInt(value: unknown, lo: number, hi: number, fallback: number): number;
+    startOfDay(date: Date | number): Date;
+    addDays(date: Date | number, days: number): Date;
+    /** "YYYY-MM-DD" for the local date. */
+    dayKey(date?: Date | number): string;
+    /** "HH:MM" in the widget's locale; pass an IANA zone name to format elsewhere. */
+    hhmm(ms: number, timeZone?: string): string;
+    /** "MM:SS" from milliseconds. */
+    mmss(ms: number): string;
+    /** Human file size: "1.5 MB". */
+    fmtBytes(bytes: number): string;
+    /** Short random id, base-36 timestamp + random. */
+    rid(): string;
+    /** crypto.randomUUID() when available, else rid(). */
+    uid(): string;
+    sleep(ms: number): Promise<void>;
+    /** Trailing-edge debounce; the returned function also has `.cancel()`. */
+    debounce<T extends (...args: any[]) => void>(fn: T, wait?: number): T & { cancel(): void };
+    /** Leading-edge throttle with a trailing call. */
+    throttle<T extends (...args: any[]) => void>(fn: T, wait?: number): T;
+    /** Three-language shortcut: L("預設", "默认", "Default"). */
+    L(tw: string, cn: string, en: string): string;
+  }
+
   interface Widget {
     /** 1 for this API. */
     readonly apiVersion: number;
@@ -364,6 +399,8 @@ declare namespace WinWidget {
 
     /** Picks the text for the user's language: t({ "zh-TW": "早安", en: "Morning" }). */
     t<T = string>(text: Localized<T>): T;
+    /** Shared DOM / formatting / timing helpers (see Util). */
+    readonly util: Util;
 
     /** Host events. Returns a function that stops listening. */
     on<K extends keyof Events>(event: K, listener: (data: Events[K]) => void): () => void;

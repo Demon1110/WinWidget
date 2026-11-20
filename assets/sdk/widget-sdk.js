@@ -468,6 +468,88 @@
     }, 0);
   });
 
+  // ── small helpers every widget keeps redefining ───────────────────────────
+  // These live in the SDK so widgets do not ship their own `$`, `esc`, `pad` and
+  // date/byte helpers over and over. They are pure and side-effect free.
+  const $ = (id) => document.getElementById(id);
+  const $$ = (selector, scope) => Array.from((scope || document).querySelectorAll(selector));
+  const esc = (value) =>
+    String(value ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const pad = (n) => String(n).padStart(2, "0");
+  const clampInt = (value, lo, hi, fallback) => {
+    const n = Math.round(Number(value));
+    return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fallback;
+  };
+  const startOfDay = (d) => {
+    const x = d instanceof Date ? new Date(d) : new Date(d);
+    return new Date(x.getFullYear(), x.getMonth(), x.getDate());
+  };
+  const addDays = (d, n) => {
+    const x = d instanceof Date ? new Date(d) : new Date(d);
+    x.setDate(x.getDate() + Number(n || 0));
+    return x;
+  };
+  const dayKey = (d) => {
+    const x = d instanceof Date ? d : new Date(d || Date.now());
+    return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`;
+  };
+  const hhmm = (ms, tz) => {
+    const d = new Date(ms || Date.now());
+    const opts = { hour: "2-digit", minute: "2-digit", hourCycle: "h23" };
+    if (tz) opts.timeZone = String(tz);
+    try {
+      return new Intl.DateTimeFormat(locale, opts).format(d);
+    } catch (_) {
+      return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+  };
+  const mmss = (ms) => {
+    const s = Math.max(0, Math.round(Number(ms) || 0) / 1000);
+    return `${pad(Math.floor(s / 60))}:${pad(Math.floor(s % 60))}`;
+  };
+  const fmtBytes = (bytes) => {
+    let n = Number(bytes) || 0;
+    const units = ["B", "KB", "MB", "GB", "TB"];
+    let u = 0;
+    while (n >= 1024 && u < units.length - 1) {
+      n /= 1024;
+      u += 1;
+    }
+    return `${n >= 100 || u === 0 ? Math.round(n) : n.toFixed(1)} ${units[u]}`;
+  };
+  const rid = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  const uid = () => (globalThis.crypto && crypto.randomUUID ? crypto.randomUUID() : rid());
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Number(ms) || 0));
+  function debounce(fn, wait = 150) {
+    let timer = 0;
+    const wrapped = (...args) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn(...args), wait);
+    };
+    wrapped.cancel = () => clearTimeout(timer);
+    return wrapped;
+  }
+  function throttle(fn, wait = 150) {
+    let last = 0;
+    let timer = 0;
+    let lastArgs = null;
+    const fire = () => {
+      timer = 0;
+      last = Date.now();
+      fn(...lastArgs);
+    };
+    return (...args) => {
+      lastArgs = args;
+      const since = Date.now() - last;
+      if (since >= wait) {
+        fire();
+      } else if (!timer) {
+        timer = setTimeout(fire, wait - since);
+      }
+    };
+  }
+  const L = (tw, cn, en) => t({ "zh-TW": tw, "zh-CN": cn, en });
+
   // ── sharp: the chain stays in the page, the pixels are processed by the host ─────────
   const SHARP_REFUSED = ["tint", "median", "composite", "trim", "normalize"];
 
@@ -578,6 +660,27 @@
 
     /** Picks the string for the user's language from { "zh-TW": ..., "zh-CN": ..., en: ... }. */
     t,
+
+    /** Small DOM / formatting / timing helpers the widgets keep redefining. */
+    util: Object.freeze({
+      $,
+      $$,
+      esc,
+      pad,
+      clampInt,
+      startOfDay,
+      addDays,
+      dayKey,
+      hhmm,
+      mmss,
+      fmtBytes,
+      rid,
+      uid,
+      sleep,
+      debounce,
+      throttle,
+      L,
+    }),
 
     /**
      * Listen to host events. Lifecycle: "ready" ({visible}: page is up), "show"/"hide"
