@@ -57,7 +57,12 @@ window.bloomRegister('retroGrid',
     ctx.arc(sunX, sunY, sunR, 0, Math.PI * 2);
     ctx.fill();
 
-    // 复古条纹：越靠下越宽，像被地平线切开的太阳
+    // 复古条纹：越靠下越宽，像被地平线切开的太阳。
+    // 条纹裁剪进太阳圆内——否则矩形条纹会伸出圆外，形成一个突兀的黑框。
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(sunX, sunY, sunR, 0, Math.PI * 2);
+    ctx.clip();
     for (var b = 0; b < 9; b++) {
       var t2 = b / 9;
       var gap = sunY + sunR * (-0.25 + t2 * 1.3);
@@ -65,6 +70,7 @@ window.bloomRegister('retroGrid',
       ctx.fillStyle = 'rgba(18,3,32,' + (0.55 + t2 * 0.35).toFixed(3) + ')';
       ctx.fillRect(sunX - sunR - 2, gap, sunR * 2 + 4, thick);
     }
+    ctx.restore();
 
     // ── 地面 ──
     var ground = ctx.createLinearGradient(0, horizon, 0, h);

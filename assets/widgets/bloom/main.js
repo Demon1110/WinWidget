@@ -136,15 +136,6 @@ const CATS = [
   { id: "relax", name: { "zh-CN": "解压系", "zh-TW": "解壓系", en: "Chill" } },
 ];
 
-// 盲盒：按时段挑一组，再随机一朵 —— 同一时段也不会每次都一样。
-const BLIND = [
-  { from: 22, to: 6, ids: ["starfield", "deepSea", "fireflies", "constellationTour"] },
-  { from: 6, to: 10, ids: ["sakura", "inkSpring", "aurora", "butterflyDream"] },
-  { from: 10, to: 14, ids: ["cyberPulse", "gravityParticles", "glowVine", "kaleido"] },
-  { from: 14, to: 18, ids: ["gravityParticles", "ribbon", "sunsetSea", "mouseFollow"] },
-  { from: 18, to: 22, ids: ["matrix", "rainNeon", "fireworks", "skyLantern"] },
-];
-
 // ── 状态 ──
 let wins = [];          // [{ id, displayId, fresh }]
 let running = null;     // 正在跑的 effect id
@@ -454,11 +445,13 @@ if (window.ipcRenderer) {
   });
 }
 
+// 盲盒：从全目录均匀随机抽一朵，连续两次不重样。
+// 之前按时段分小组（每组只有 4 个），随机面太窄，翻来覆去总是那几个。
+let lastBlind = "";
 function blindBox() {
-  const hour = new Date().getHours();
-  const slot = BLIND.find((s) => (s.from <= s.to ? hour >= s.from && hour < s.to : hour >= s.from || hour < s.to)) || BLIND[0];
-  const pool = slot.ids.filter((id) => fxOf(id));
-  const pick = pool[Math.floor(Math.random() * pool.length)] || "sakura";
+  const pool = CATALOG.map((f) => f.id).filter((id) => id !== lastBlind);
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  lastBlind = pick;
   run(pick);
 }
 
