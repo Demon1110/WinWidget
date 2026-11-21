@@ -408,7 +408,7 @@ document.getElementById("save").onclick = async () => {
 
 另外两点顺带修掉：`set_visible` 会按 tao 缓存的样式重写扩展样式，把 `WS_EX_LAYERED` 抹掉，所以创建时的整窗透明度改成「显示之后」再设一次，并在页面 `ready` 与 `win.show` 时补回；`frame:true` 不再同时写两行标题（原生标题栏有标题时页面标题默认关掉）。
 
-真机复测（2560×1440）：方框那条四角 90 度、`GetLayeredWindowAttributes` 读到 `alpha=235`（0.92）；无边框直角那条压在浏览器窗口上能看到底色透出来（把 `opacity` 临时改 0.4 时整块明显变淡，说明页面侧生效）；默认圆角那条四角平滑、圆角外是桌面，没有白尖；模态期间父卡片 `IsWindowEnabled=False`，点「确定」后回到 `True`，再点卡片能正常弹框。
+真机复测（2560×1440）：方框那条四角 90 度、`GetLayeredWindowAttributes` 读到 `alpha=235`（0.92）；无边框直角那条压在浏览器窗口上能看到底色透出来（把 `opacity` 临时改 0.4 时整块明显变淡，说明页面侧生效——这条判断在第十一轮被推翻，那时淡的只是内容层）；默认圆角那条四角平滑、圆角外是桌面，没有白尖；模态期间父卡片 `IsWindowEnabled=False`，点「确定」后回到 `True`，再点卡片能正常弹框。
 
 P2 里 `closeOnBlur` / `closeOnOutsideClick` / `modal` 三条走的是窗口失焦与 `EnableWindow`，需要在真机上点一下别处才能看到效果，第一轮只验了 `modal`；`autoClose` 与 `anchor` 已在真机上量过坐标与关闭原因。`closeOnBlur` / `closeOnOutsideClick` 与 `closeOnEsc` 的真机验收见第七轮。
 
@@ -550,6 +550,24 @@ DWM 就照「有边框」这扇窗口去合成：整窗玻璃帧（`DwmExtendFra
 | 直角子窗区域 | `2` | 仍是 `2`（`SIMPLEREGION`），四角 1:1 放大皆 90° |
 
 顺带记两条：① `GWL_STYLE` 要给 `0x14CF0000` 这种读法解码，`0x00C00000` 是 `WS_BORDER + WS_DLGFRAME`（合起来就是 `WS_CAPTION`），别只看 `WS_SYSMENU`；② 事后补改样式（`SetWindowLongPtr` + `SWP_FRAMECHANGED` + `RedrawWindow`）不会把已经合成过一次的标题条擦掉，必须让 DWM 从「隐藏 → 显示」重新合成一帧——所以修法只能放在 frame change 里，而不是显示之后补一刀。
+
+### 真机返修第十一轮：弹框的 `opacity` 只淡了内容，底板一动不动
+
+用户把「无边框 + 直角 + 92% 透明」那条的 `opacity` 调低到 `0.2`，看到的却是「只有文字发虚，整块面板还是实心的」，于是直接问 `opacity` 到底是干嘛用的。真机取证（`opacity: 0.2`）读面板空白处像素：修前 `#3A4348`，和文档里写的「整窗半透明」完全不是一回事。
+
+根因在页面结构：`dialog.css` 里 `body` 才是那张卡片本体（`background: var(--w-bg)`、`box-shadow: inset 0 0 0 1px var(--w-border)`、圆角也挂在 `body` 上），`#dlg` 只是里面的内容容器、自己没有背景。`dialog.js` 却把 `opacity` 写在 `dlg.style.opacity` 上，于是只有图标、文字、按钮跟着淡，底板原地不动。
+
+修法不必新加钩子：`base.css` 里早有一条闲置的 `--w-opacity`（`:root` 默认 `1`，`body { opacity: var(--w-opacity) }`），把值改写到 `documentElement` 上即可，淡的就变成整扇面（底板 + 内容）。注意两件事：① 入场闸门会临时把 `body.style.opacity` 置 `"0"` 再在 reveal 时清空，内联优先于变量，清空后变量才生效，所以不能直接改 `body.style.opacity`；② `@keyframes dlg-fade` 的 `from { opacity: 0 }` 会从 0 平滑过渡到变量值，淡入不受影响。
+
+真机验收（2560×1440，`cargo build --release` 后重启宿主，把部署副本的 `opacity` 临时改成 `0.2`）：
+
+| 采样点 | 修前 | 修后 |
+|---|---|---|
+| 面板空白处 | `#3A4348`（实心，桌面透不过来） | `#97B0B9` / `#9AB4BB` |
+| 同位置桌面壁纸 | `#B2CFD7` / `#B0CCD7` | 同左 |
+| 合成结果 | 只有内容层 20% | 面板 = 0.2 × `#3A4348` + 0.8 × 壁纸 ≈ `#9AB4BB`，文字同样 20% |
+
+另外推翻上一轮的一条旁证：把 `opacity` 改 0.4 时「整块明显变淡」并不能证明页面侧生效，那时淡的也只是内容层；而在弹框 hwnd 上手工注入 `SetLayeredWindowAttributes(..., LWA_ALPHA)` 得到的「整窗均匀变淡」是窗口级 alpha 的假象，两种都不能当页面侧 `opacity` 的证据。
 
 ### 还没做的
 

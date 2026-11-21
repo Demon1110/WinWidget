@@ -649,7 +649,7 @@ win.on("closed", () => widget.log("window closed"));
 | `roundedCorners` / `rounded` | `true` | Round the corners; `false` gives square ones. On a frameless window the host clips the whole window to a rectangle — keep the page free of `border-radius` too |
 | `alwaysOnTop` | `false` | Stay above other windows |
 | `skipTaskbar` | `false` | Keep out of the taskbar |
-| `opacity` | 1 | 0–1, whole window |
+| `opacity` | 1 | 0–1, whole window (frameless: the whole panel fades) |
 | `backgroundColor` | white | `"#0f1a24"` or `"rgba(15,26,36,0.9)"`, for example |
 | `transparent` | `false` | Only for a real transparent background, with `frame:false` |
 | `seeThrough` | `false` | With `transparent`: tells DWM to stop drawing its own backdrop behind the window, so the page's alpha lands on what is behind it |
@@ -821,7 +821,7 @@ widget.dialog.toast({ content: "Saved", icon: "success" });
 | `alwaysOnTop` / `skipTaskbar` | `true` / `true` | a dialog sits above other windows and stays out of the taskbar by default; `false` makes it an ordinary window (`skipTaskbar: false` leaves a taskbar button) |
 | `anchor` / `offset` | — | `"card"` under the card (flips above when there is no room), `"cursor"` at the pointer, `"screen"` centred; `offset: [dx, dy]` nudges it |
 
-`frame` and `rounded` share the corners: with the native frame (`frame: true`) the client area is a rectangle and `rounded` only concerns the window shell; a framed window is always opaque (the glass frame and per-pixel transparency do not mix, and the title stays on the caption bar alone), so `opacity` becomes whole-window alpha. Frameless, `rounded: false` is drawn square by the page and `opacity` is also applied there, leaving the desktop visible outside the corners.
+`frame` and `rounded` share the corners: with the native frame (`frame: true`) the client area is a rectangle and `rounded` only concerns the window shell; a framed window is always opaque (the glass frame and per-pixel transparency do not mix, and the title stays on the caption bar alone), so `opacity` becomes whole-window alpha. Frameless, `rounded: false` is drawn square by the page and `opacity` is also applied there, leaving the desktop visible outside the corners. There the page fades the **whole panel** — the plate and its contents fade together and the desktop shows through the panel; it is not just the text turning faint. Under the hood that means raising `--w-opacity` (`base.css` paints `body` as the card body itself, and `body { opacity: var(--w-opacity) }` covers this case).
 
 ### Several windows: `widget.windows`
 
