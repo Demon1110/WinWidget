@@ -174,6 +174,11 @@ fn css(
             &format!("rgba({r},{g},{b},{})", crate::core::util::fmt_num(op)),
         );
         var("bg-solid", &format!("rgb({r},{g},{b})"));
+        // 没有卡片底的主题（「玻璃上的字」把 backgroundOpacity 设成 0）不该再画那圈 1px 内描边：
+        // 描边是给卡片立的边，卡片都不存在了，它只是平白在玻璃上加一道线。
+        if op <= 0.0 {
+            var("card-ring", "transparent");
+        }
     }
     if layer.contains_key("textColor") {
         var(

@@ -27,6 +27,9 @@
   --w-danger: #ff6b5e;
   --w-border: rgba(255, 255, 255, 0.10);
   --w-rule: rgba(255, 255, 255, 0.09);
+  /* 卡片那圈 1px 内描边单独一个变量：没有卡片底的主题（`backgroundOpacity: 0`）要能单独关掉它，
+     而不牵连输入框、分隔线用的 --w-border */
+  --w-card-ring: var(--w-border);
   --w-track: rgba(255, 255, 255, 0.09);
   --w-control-bg: rgba(255, 255, 255, 0.06);
   --w-hover: rgba(255, 255, 255, 0.07);
@@ -71,7 +74,7 @@ body {
   border-radius: calc(var(--w-radius) / var(--w-size-scale));
   background: var(--w-bg);
   /* 不画外投影：窗口边界就在卡片边缘，画出去的部分会被裁掉。留一圈 1px 内描边立边即可。 */
-  box-shadow: inset 0 0 0 calc(1px / var(--w-size-scale)) var(--w-border);
+  box-shadow: inset 0 0 0 calc(1px / var(--w-size-scale)) var(--w-card-ring);
   color: var(--w-fg);
   font-family: var(--w-font);
   line-height: 1.4;
@@ -121,6 +124,22 @@ button { font: inherit; color: inherit; }
 /* A scrolling box with no visible scrollbar: keep the wheel/touch scroll, hide the chrome. */
 .w-scroll-none { scrollbar-width: none; }
 .w-scroll-none::-webkit-scrollbar { display: none; }
+
+/* 滚动条：默认那套灰白滑块跟任何主题都打架（尤其在玻璃、纸卡上），统一换成一条细的、跟着
+   --w-fg 取色的滑块；轨道透明，滑块用 padding-box 收窄，视觉上是圆头细条而不是一条实心条。 */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb {
+  min-height: 28px;
+  border: 3px solid transparent;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--w-fg) 24%, transparent) padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--w-fg) 38%, transparent) padding-box; }
+::-webkit-scrollbar-thumb:active { background: color-mix(in srgb, var(--w-accent) 55%, transparent) padding-box; }
+/* 不要碰 `scrollbar-width` / `scrollbar-color`：Windows 上的 Chromium 一收到这两个就会切成
+   系统那套带上下箭头的滚动条，比默认的还难看；只给 ::-webkit-scrollbar 才是干净的细条。 */
 
 /* A <select> popup is drawn by the engine, not by CSS: without explicit colours the
    options inherit the card's light text and land on the popup's own white sheet —
