@@ -633,6 +633,7 @@ extern "system" {
         value: *const c_void,
         size: u32,
     ) -> i32;
+    pub fn DwmGetWindowAttribute(hwnd: HWND, attribute: u32, value: *mut c_void, size: u32) -> i32;
 }
 
 #[link(name = "kernel32")]
@@ -1948,9 +1949,31 @@ pub fn is_zoomed(hwnd: HWND) -> bool {
 /// Geometry decides, the way FullWidget did: a maximized window, one that still has a title bar,
 /// the desktop shell itself, or our own windows never count. `SHQueryUserNotificationState` alone
 /// is not enough here — a live wallpaper renders "full screen" all day and would hide the cards.
+/// 窗口被 DWM 藏起来（在别的虚拟桌面、刚建好还没画、或被 shell 收起）时，屏幕上其实什么都
+/// 没有。UWP 的 CoreWindow 尤其爱这么干，它们仍会老老实实报一个整屏矩形。
+fn dwm_cloaked(hwnd: HWND) -> bool {
+    const DWMWA_CLOAKED: u32 = 14;
+    let mut cloaked: u32 = 0;
+    let hr = unsafe {
+        DwmGetWindowAttribute(
+            hwnd,
+            DWMWA_CLOAKED,
+            &mut cloaked as *mut u32 as *mut c_void,
+            4,
+        )
+    };
+    hr == 0 && cloaked != 0
+}
+
 pub fn fullscreen_monitor(own_pid: u32) -> Option<RECT> {
     let hwnd = foreground_window();
     if hwnd == 0 || unsafe { IsWindowVisible(hwnd) } == 0 || unsafe { IsIconic(hwnd) } != 0 {
+        return None;
+    }
+    // 被 DWM 藏起来的窗口（cloaked）在屏幕上根本看不见，哪怕它把自己报成整屏。Win11 的
+    // “输入体验”（输入法/表情面板的宿主）就是这样：每次被前台带动都报 (0,0)-(2560,1440)，实测
+    // cloaked=2（被 shell 藏起来），照全屏算会让卡片每隔几秒消失又回来一次。
+    if dwm_cloaked(hwnd) {
         return None;
     }
     if is_zoomed(hwnd) {
