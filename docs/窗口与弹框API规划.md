@@ -530,6 +530,27 @@ P2 里 `closeOnBlur` / `closeOnOutsideClick` / `modal` 三条走的是窗口失�
 
 顺手记一条容易踩的：tao 的 `set_skip_taskbar` 不是去改 `WS_EX_TOOLWINDOW`，而是走 `ITaskbarList::DeleteTab` / `AddTab`，所以「不进任务栏」的窗口扩展样式里照样有 `WS_EX_APPWINDOW`（`0x40000`）——拿 `TOOLWINDOW` 位判断「有没有任务栏按钮」是错的。
 
+### 真机返修第十轮：无边框窗口一透明，底下露出系统标题条
+
+组件把无边框窗口的页面做成半透明，窗口背后那条系统标题条（标题字 + 最小化 + 关闭）就透出来了；弹框那边把「无边框 + 直角 + 92% 透明」的 `opacity` 调到 `0.2`，同一个现象。页面不透明的时候完全看不出来，所以前面几轮都没碰到。
+
+根因不在页面，也不在 DWM 的圆角或非客户区设置，而在 `GWL_STYLE` 里还留着边框位。`build_custom` 的次序本来是 `keep_frame_polished → drop_frame → fit_client → polish_frame`，`drop_frame` 会把 `WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | MINIMIZEBOX | MAXIMIZEBOX | WS_BORDER` 全部摘掉并补 `WS_POPUP`；可窗口是 `with_visible(false)` 建的，真正亮出来那一刻走的是 tao 的 `set_visible(true)`，而 tao 的 window-flags 差分会以 `WindowState::to_window_styles()` 重写一遍 `GWL_STYLE`（`window_state.rs:244` 起）：那份样式无条件带 `WS_CAPTION | WS_SYSMENU`，再按 `resizable` / 最小化 / 最大化补三个位。于是显示之后读回来的样式是 `0x14CF0000`——一扇标准的带边框窗口，建窗时摘掉的边框白摘了。
+
+DWM 就照「有边框」这扇窗口去合成：整窗玻璃帧（`DwmExtendFrameIntoClientArea(-1)`）里会画一条系统标题条，压在页面的客户区底下。页面不透明时它被盖住；页面上只要有 alpha（半透明底、整窗 `opacity`），它就透出来。这一条 `DWMWA_NCRENDERING_POLICY = DWMNCRP_DISABLED` 管不住——真机实测把它再设一遍、甚至连玻璃帧都撤掉（`DwmExtendFrameIntoClientArea(0,0,0,0)`），标题条照样在；`WM_NCCALCSIZE` 返回 0 也没用。
+
+修法：把「摘边框」这件事挂到 frame change 上。`polished_proc` 处理 `WM_NCCALCSIZE`（`wp != 0`）时先 `strip_frame(hwnd)` 再返回 0——只改 `GWL_STYLE`，不再 `SetWindowPos`，避免在一次 frame change 里套另一次。tao 的每一次 flags 差分最后都会 `SetWindowPos(SWP_FRAMECHANGED)`，所以 `set_visible`、`restore`、`setResizable`、`setAlwaysOnTop` 之后合成用的都已经是干净的 `WS_POPUP`。顺带把 `drop_frame` 里的样式位提成 `WS_FRAME_BITS` 常量，和 `strip_frame` 共用一份。
+
+真机验收（2560×1440，`cargo build --release` 后重启宿主，用户自己改的半透明 `square.html` 已部署）：
+
+| 对象 | 修前 | 修后 |
+|---|---|---|
+| 直角子窗 `style` | `0x14CF0000`（含 `WS_CAPTION`） | `0x94000000`（`WS_POPUP`） |
+| 直角子窗右上角 | 系统 `— □ ×` 压在红条上，标题字隐约透出 | 只剩页面自己画的那个 `×` |
+| 弹框（`show_on_ready` 路径） | — | `0x94000000`，`opacity: 0.2` 时四角之外没有任何系统痕迹 |
+| 直角子窗区域 | `2` | 仍是 `2`（`SIMPLEREGION`），四角 1:1 放大皆 90° |
+
+顺带记两条：① `GWL_STYLE` 要给 `0x14CF0000` 这种读法解码，`0x00C00000` 是 `WS_BORDER + WS_DLGFRAME`（合起来就是 `WS_CAPTION`），别只看 `WS_SYSMENU`；② 事后补改样式（`SetWindowLongPtr` + `SWP_FRAMECHANGED` + `RedrawWindow`）不会把已经合成过一次的标题条擦掉，必须让 DWM 从「隐藏 → 显示」重新合成一帧——所以修法只能放在 frame change 里，而不是显示之后补一刀。
+
 ### 还没做的
 
 1. `hello-widget` 模板示例：仓库里没有这个模板组件，指南里的示例段落已经覆盖同一份代码，是否要新建一个模板组件需要先定它放宿主仓库还是 Hub。
