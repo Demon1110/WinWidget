@@ -169,8 +169,6 @@ where
         .map(|(item, action)| (item.id, action.clone()))
         .collect();
     let map = std::sync::Arc::new(std::sync::Mutex::new(actions_map));
-    let hotkey_map: std::sync::Arc<std::sync::Mutex<Vec<(i32, String)>>> =
-        std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
 
     std::thread::spawn(move || {
         let class_name = w::wide(TRAY_CLASS);
@@ -226,23 +224,8 @@ where
             w::Shell_NotifyIconW(NIM_ADD, &mut data);
         }
 
-        for (index, (action, keys)) in hotkeys.iter().enumerate() {
-            if keys.trim().is_empty() {
-                continue;
-            }
-            if let Some((mods, vk)) = parse_hotkey(keys) {
-                let id = 100 + index as i32;
-                let ok = unsafe { w::RegisterHotKey(hwnd, id, mods, vk) } != 0;
-                if ok {
-                    hotkey_map.lock().unwrap().push((id, action.clone()));
-                } else {
-                    crate::core::logging::warn(&format!(
-                        "Hotkey {keys} for '{action}' could not be registered"
-                    ));
-                }
-            }
-        }
-
+        let hotkey_map =
+            std::sync::Arc::new(std::sync::Mutex::new(register_hotkeys(hwnd, &hotkeys)));
         let ctx = TrayCtx {
             menu: menu.clone(),
             map: map.clone(),
@@ -306,22 +289,8 @@ where
                                 w::UnregisterHotKey(hwnd, id);
                             }
                         }
-                        for (index, (action, keys)) in list.iter().enumerate() {
-                            if keys.trim().is_empty() {
-                                continue;
-                            }
-                            if let Some((mods, vk)) = parse_hotkey(keys) {
-                                let id = 100 + index as i32;
-                                let ok = unsafe { w::RegisterHotKey(hwnd, id, mods, vk) } != 0;
-                                if ok {
-                                    hotkey_map.lock().unwrap().push((id, action.clone()));
-                                } else {
-                                    crate::core::logging::warn(&format!(
-                                        "Hotkey {keys} for '{action}' could not be registered"
-                                    ));
-                                }
-                            }
-                        }
+                        let mut fresh = register_hotkeys(hwnd, &list);
+                        hotkey_map.lock().unwrap().append(&mut fresh);
                     }
                     TrayIn::Quit => {
                         let mut data = zero_icon_data();
@@ -475,6 +444,39 @@ fn icon_for(exe: &str) -> w::HICON {
 
 pub fn hotkey_ok(keys: &str) -> bool {
     parse_hotkey(keys).is_some()
+}
+
+/// 注册一组快捷键，返回真正注册成功的 `(id, action)`。
+///
+/// 用户配的组合被别的程序占了（`Ctrl+Alt+W` 就很常见）时，先给同一个键加 Shift 再试一次：
+/// 多一个修饰键几乎总能挤出一个空位，比让这条快捷键彻底失效、每轮启动都只留一行 warn 好。
+/// 两次都不行才是真的没法用，那条 warn 里会写清楚。
+fn register_hotkeys(hwnd: w::HWND, hotkeys: &[(String, String)]) -> Vec<(i32, String)> {
+    let mut out = Vec::new();
+    for (index, (action, keys)) in hotkeys.iter().enumerate() {
+        if keys.trim().is_empty() {
+            continue;
+        }
+        let Some((mods, vk)) = parse_hotkey(keys) else {
+            continue;
+        };
+        let id = 100 + index as i32;
+        if unsafe { w::RegisterHotKey(hwnd, id, mods, vk) } != 0 {
+            out.push((id, action.clone()));
+            continue;
+        }
+        if unsafe { w::RegisterHotKey(hwnd, id, mods | MOD_SHIFT, vk) } != 0 {
+            out.push((id, action.clone()));
+            crate::core::logging::warn(&format!(
+                "Hotkey {keys} for '{action}' is taken by another app; Shift+{keys} is used instead"
+            ));
+        } else {
+            crate::core::logging::warn(&format!(
+                "Hotkey {keys} for '{action}' could not be registered, and neither could Shift+{keys}"
+            ));
+        }
+    }
+    out
 }
 
 pub fn parse_hotkey(keys: &str) -> Option<(u32, u32)> {

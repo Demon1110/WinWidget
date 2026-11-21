@@ -2048,9 +2048,15 @@ impl App {
             return;
         }
         let message = match &active {
+            // 带上窗口类名和标题：卡片突然整片消失时，第一件想知道的事就是"它把谁当成了全屏"，
+            // 一行日志里说清楚比事后猜便宜得多。
             Some(r) => format!(
-                "Full-screen app on ({}, {})-({}, {}): cards there hidden",
-                r.left, r.top, r.right, r.bottom
+                "Full-screen app on ({}, {})-({}, {}): cards there hidden [{}]",
+                r.left,
+                r.top,
+                r.right,
+                r.bottom,
+                crate::platform::win32::foreground_label()
             ),
             None => "Full-screen app gone: cards shown".to_string(),
         };
