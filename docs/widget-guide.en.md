@@ -813,6 +813,8 @@ widget.dialog.toast({ content: "Saved", icon: "success" });
 | `modal` | `false` | the parent window stops taking input while open |
 | `anchor` / `offset` | — | `"card"` under the card (flips above when there is no room), `"cursor"` at the pointer, `"screen"` centred; `offset: [dx, dy]` nudges it |
 
+`frame` and `rounded` share the corners: with the native frame (`frame: true`) the client area is a rectangle and `rounded` only concerns the window shell; a framed window is always opaque (the glass frame and per-pixel transparency do not mix, and the title stays on the caption bar alone), so `opacity` becomes whole-window alpha. Frameless, `rounded: false` is drawn square by the page and `opacity` is also applied there, leaving the desktop visible outside the corners.
+
 ### Several windows: `widget.windows`
 
 | Method | Does |

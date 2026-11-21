@@ -394,6 +394,21 @@ document.getElementById("save").onclick = async () => {
 | P2 配置矩阵 | ✅ | `3121d51` | `autoClose` 宿主兜底、`closeOnBlur`、`closeOnOutsideClick`、`modal`、`anchor`/`offset` |
 | P3 文档与示例 | ✅ | `b53fb66` | 三语指南新增「弹框与多窗口」整章 |
 | P3 desktop-reminder 迁移 | ✅ | Hub `b14c963` + 宿主 `1a3f75b` | 提醒弹窗改走 `widget.dialog.confirm`，删掉 `alert.html/css/js`；宿主放行 `x`/`y`/`center`，给了坐标就不再默认居中 |
+| 真机返修：外观与模态 | ✅ | 本批 | 见下节 |
+
+### 真机返修：三个缺陷
+
+测试台 `simples/simples-dialog` 在真机上点出了三处问题，根因与改法：
+
+| 现象 | 根因 | 改法 |
+|---|---|---|
+| `modal` 关掉后父卡片一点就响系统提示音 | `win32::enable_window` 的参数极性写反：`on=true` 传 0（禁用）、`on=false` 传 1（启用），于是关窗时反而把父窗口禁用了 | 改成 `if on { 1 } else { 0 }`；验证用 `IsWindowEnabled` 直读父卡片：模态期间 `False`，关掉后 `True` |
+| `frame:true` + `rounded:false` + `opacity:0.92` 仍然圆角、也不透明 | ① 宿主只认 `roundedCorners`，弹框传的是 `rounded`，要求被丢掉；② 带边框的顶层窗口默认吃 DWM 圆角；③ 页面不读 `opacity`，而玻璃帧又叠不了整窗 alpha | 窗口层两个键都认；`frame && !rounded` 只调 `set_round_corner(false)`（不走 `polish_frame`，否则原生标题栏被一起关掉）；`frame:true` 归一成不透光窗口，`opacity` 走整窗 alpha，页面侧只在透明窗口里叠 `opacity` |
+| 圆角弹窗四角有小尖尖 | 逐像素透明的窗口又被 DWM 裁了一刀圆角，和页面自画的圆角错位 | 透明窗口一律 `dwm_round = rounded && !transparent`，圆角只由页面画（与卡片同一套做法） |
+
+另外两点顺带修掉：`set_visible` 会按 tao 缓存的样式重写扩展样式，把 `WS_EX_LAYERED` 抹掉，所以创建时的整窗透明度改成「显示之后」再设一次，并在页面 `ready` 与 `win.show` 时补回；`frame:true` 不再同时写两行标题（原生标题栏有标题时页面标题默认关掉）。
+
+真机复测（2560×1440）：方框那条四角 90 度、`GetLayeredWindowAttributes` 读到 `alpha=235`（0.92）；无边框直角那条压在浏览器窗口上能看到底色透出来（把 `opacity` 临时改 0.4 时整块明显变淡，说明页面侧生效）；默认圆角那条四角平滑、圆角外是桌面，没有白尖；模态期间父卡片 `IsWindowEnabled=False`，点「确定」后回到 `True`，再点卡片能正常弹框。
 
 P2 里 `closeOnBlur` / `closeOnOutsideClick` / `modal` 三条走的是窗口失焦与 `EnableWindow`，需要在真机上点一下别处才能看到效果，验证留到有交互的会话；`autoClose` 与 `anchor` 已在真机上量过坐标与关闭原因。
 
