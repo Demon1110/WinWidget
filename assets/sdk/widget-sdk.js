@@ -300,6 +300,28 @@
     };
   }
   on("media", (s) => { for (const fn of [...mediaListeners]) { try { fn(s); } catch (e) { console.error(e); } } });
+
+  // ── raw input ──────────────────────────────────────────────
+  // 只回键码与坐标，不回字符。多少人在订、要不要键、要不要鼠标，都在这张表里合。
+  const inputSubs = new Set();
+  function syncInput() {
+    const subs = [...inputSubs];
+    const keys = subs.some((s) => s.keys);
+    const mouse = subs.some((s) => s.mouse);
+    if (!keys && !mouse) return call("input.unsubscribe");
+    const throttle = Math.min(...subs.map((s) => s.throttle));
+    return call("input.subscribe", { keys, mouse, throttle });
+  }
+  function dispatchInput(batch) {
+    for (const s of [...inputSubs]) {
+      const part = { seq: batch.seq, t: batch.t, dropped: batch.dropped || 0 };
+      if (s.keys) part.keys = batch.keys || [];
+      if (s.mouse) part.mouse = batch.mouse || [];
+      if (!part.keys && !part.mouse) continue;
+      try { s.cb(part); } catch (e) { console.error(e); }
+    }
+  }
+  on("input", dispatchInput);
   /** Where playback is now, in ms: the reported position moves on by itself while playing. */
   function mediaPosition(s) {
     if (!s || !s.available) return 0;
@@ -1167,6 +1189,32 @@
       adapters: () => call("system.adapters"),
       /** One ping: { ok, ms, status, address }. At most once a second per widget. */
       ping: (host, options) => call("system.ping", { host, timeout: (options && options.timeout) || 1500 }),
+      /**
+       * The process table, `{ total, items: [{ pid, name, cpu, memory, started, path? }] }`.
+       * `sort` is "cpu" | "memory" | "name", `limit` is capped at 100. Needs "system.read";
+       * the `path` on each row additionally needs "shell.launch".
+       */
+      processes: (options) =>
+        call("system.processes", {
+          sort: (options && options.sort) || "cpu",
+          limit: (options && options.limit) || 20,
+        }),
+      /** Listening sockets by default: { items: [{ proto, local, localPort, remote, remotePort, state, pid }] }. */
+      ports: (options) =>
+        call("system.ports", {
+          protocol: (options && options.protocol) || "all",
+          listening: options && options.listening === false ? false : true,
+        }),
+      /** Read-only display inventory: { hdrReadable, items: [{ device, width, height, refresh, primary, hdrSupported, hdrEnabled, bitsPerColor }] }. */
+      displays: () => call("system.displays"),
+      /** Starts Windows' screensaver, or opens its settings page. Needs "system.write". */
+      screensaver: (action) => call("system.screensaver", { action: action || "start" }),
+    }),
+
+    /** Saved WiFi profiles; needs "system.read" (plaintext keys also need "system.write"). */
+    wifi: Object.freeze({
+      /** { supported, items: [{ ssid, auth, cipher, hasKey, key?, revealed? }] }. */
+      profiles: () => call("wifi.profiles"),
     }),
 
     /** The speakers' volume (0–100) and mute; needs the "audio" permission. */
@@ -1308,6 +1356,39 @@
         }),
       /** Deletes the cached program; the next run downloads it again. */
       remove: (name) => call("tool.remove", { name }),
+    }),
+
+    /**
+     * Raw key / mouse events. Needs the "input.read" permission.
+     *
+     * `subscribe({ keys, mouse, throttle }, cb)` hands each batch to `cb` as
+     * `{ seq, t, dropped, keys?: [{ vk, scan, down, at }], mouse?: [{ x, y, kind, button?, delta?, at }] }`.
+     * Only virtual-key codes and coordinates: no characters, so a password cannot be rebuilt from it.
+     */
+    input: Object.freeze({
+      subscribe: (options, cb) => {
+        const o = typeof options === "function" ? {} : options || {};
+        const fn = typeof options === "function" ? options : cb;
+        const sub = {
+          keys: !!o.keys,
+          mouse: !!o.mouse,
+          throttle: Math.max(8, Math.min(100, Number(o.throttle) || 16)),
+          cb: typeof fn === "function" ? fn : () => {},
+        };
+        inputSubs.add(sub);
+        syncInput()
+          .then((s) => s && dispatchInput({ seq: 0, t: Date.now(), keys: [], mouse: [], dropped: 0 }))
+          .catch((e) => console.error("widget.input.subscribe:", e.message));
+        return () => {
+          inputSubs.delete(sub);
+          syncInput().catch(() => {});
+        };
+      },
+      /** Drops every subscription of this page at once. */
+      unsubscribe: () => {
+        inputSubs.clear();
+        return call("input.unsubscribe");
+      },
     }),
 
     /** The Windows clipboard; needs the "clipboard" permission. */

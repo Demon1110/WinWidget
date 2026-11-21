@@ -78,6 +78,9 @@ pub enum Ev {
         pointer: bool,
         escape: bool,
     },
+    /// 一批原始键鼠事件（`input.subscribe` 用）。钩子线程按 8 ms 一起交上来，事件循环再按
+    /// 每个订阅者自己的节流间隔分发，页面看到的是一批一条消息。
+    Raw(Value),
     /// The active Windows virtual desktop changed; cards assigned to other desktops are hidden.
     Desktop(String),
     /// A delayed follow-up nudge for wallpaper effect windows: right after a switch WebView2

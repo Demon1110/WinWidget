@@ -30,6 +30,11 @@ const OWNS: &[&str] = &[
     "system.ping",
     "system.platform",
     "system.theme",
+    "system.processes",
+    "system.ports",
+    "system.displays",
+    "system.screensaver",
+    "wifi.profiles",
     "paths.named",
     "notify.show",
     "notify.cancel",
@@ -139,6 +144,48 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
             }
             let answer = next_light.unwrap_or(current_light);
             Ok(Reply::Now(json!(if answer { "light" } else { "dark" })))
+        }
+        // ── narrow system reads and the one controlled write (C-class widgets) ────────────────
+        // Reading the process table is `system.read`; the executable path on each row needs
+        // `shell.info` too, so a widget cannot map every pid to a program on disk for free.
+        "system.processes" => {
+            ctx.require("system.read")?;
+            let sort = jstr(p, "sort").unwrap_or_else(|| "cpu".into());
+            let limit = jnum(p, "limit").unwrap_or(20.0).clamp(1.0, 100.0) as usize;
+            let expose_path = ctx.allowed("shell.launch");
+            ctx.spawn_value(move || crate::platform::sysprobe::processes(&sort, limit, expose_path));
+            Ok(Reply::Later)
+        }
+        "system.ports" => {
+            ctx.require("system.read")?;
+            let protocol = jstr(p, "protocol").unwrap_or_else(|| "all".into());
+            let listening = p.get("listening").and_then(|v| v.as_bool()).unwrap_or(true);
+            let remote = p.get("remote").and_then(|v| v.as_bool()).unwrap_or(false);
+            ctx.spawn_value(move || crate::platform::sysprobe::ports(&protocol, listening, remote));
+            Ok(Reply::Later)
+        }
+        // Display inventory is read-only on purpose: HDR on/off changes how everything on screen
+        // looks, so that switch stays in Windows' settings app, where the user owns it.
+        "system.displays" => {
+            ctx.require("system.read")?;
+            ctx.spawn_value(|| crate::platform::displays::displays());
+            Ok(Reply::Later)
+        }
+        // Plaintext profiles need `system.write` on top of `system.read`; the answer says
+        // `revealed` so the control center can keep showing that a key is on screen. A
+        // parameter cannot widen this: the permission alone decides.
+        "wifi.profiles" => {
+            ctx.require("system.read")?;
+            let reveal = ctx.allowed("system.write");
+            ctx.spawn_value(move || crate::platform::sysprobe::wifi_profiles(reveal));
+            Ok(Reply::Later)
+        }
+        "system.screensaver" => {
+            ctx.require("system.write")?;
+            let action = jstr(p, "action").unwrap_or_else(|| "start".into());
+            Ok(Reply::Now(
+                crate::platform::sysprobe::screensaver(&action).map_err(BridgeError::new)?,
+            ))
         }
         // utools.isDev / isWindows / isMacOS / isLinux / isDarkColors answered by the host, so the
         // compatibility layer never has to guess from the user agent.

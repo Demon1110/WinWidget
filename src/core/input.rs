@@ -5,7 +5,7 @@
 //! type into it. The same three steps happen here, in that order.
 
 use crate::core::api::{Ctx, Reply};
-use crate::core::util::{jstr, BridgeError, BridgeResult};
+use crate::core::util::{jbool, jnum, jstr, BridgeError, BridgeResult};
 use crate::platform::win32 as w;
 use serde_json::{json, Value};
 
@@ -15,6 +15,8 @@ const OWNS: &[&str] = &[
     "input.pasteImage",
     "input.typeString",
     "input.startDrag",
+    "input.subscribe",
+    "input.unsubscribe",
 ];
 
 pub fn call(ctx: &mut Ctx, method: &str, p: &Value) -> Option<BridgeResult<Reply>> {
@@ -86,6 +88,42 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
         "input.startDrag" => Err(BridgeError::new(
             "startDrag is not available: dragging a file out needs an OLE drag source window",
         )),
+        // 订阅原始键鼠事件。只回键码与坐标，不回字符：能拼出密码的是字符流，不是键码。
+        "input.subscribe" => {
+            ctx.require("input.read")?;
+            let keys = jbool(p, "keys").unwrap_or(false);
+            let mouse = jbool(p, "mouse").unwrap_or(false);
+            let throttle = jnum(p, "throttle").unwrap_or(16.0).clamp(8.0, 100.0) as u64;
+            let instance = ctx.instance.to_string();
+            if !keys && !mouse {
+                ctx.app.input_subs.remove(&instance);
+                ctx.app.refresh_input_wanted();
+                return Ok(Reply::Now(json!({
+                    "keys": false, "mouse": false, "throttle": throttle
+                })));
+            }
+            ctx.app.input_subs.insert(
+                instance,
+                crate::runtime::app::InputSub {
+                    keys,
+                    mouse,
+                    throttle,
+                    pending_keys: Vec::new(),
+                    pending_mouse: Vec::new(),
+                    last_tx: 0,
+                    seq: 0,
+                },
+            );
+            ctx.app.refresh_input_wanted();
+            Ok(Reply::Now(json!({
+                "keys": keys, "mouse": mouse, "throttle": throttle
+            })))
+        }
+        "input.unsubscribe" => {
+            ctx.app.input_subs.remove(ctx.instance);
+            ctx.app.refresh_input_wanted();
+            Ok(Reply::Now(Value::Null))
+        }
         other => Err(BridgeError::new(format!("unknown method '{other}'"))),
     }
 }

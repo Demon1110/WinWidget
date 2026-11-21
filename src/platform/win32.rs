@@ -78,8 +78,17 @@ pub const WH_KEYBOARD_LL: i32 = 13;
 /// 全局低级鼠标钩子，同上。
 pub const WH_MOUSE_LL: i32 = 14;
 pub const WM_SYSKEYDOWN: u32 = 0x0104;
+pub const WM_SYSKEYUP: u32 = 0x0105;
 pub const WM_KEYDOWN: u32 = 0x0100;
+pub const WM_KEYUP: u32 = 0x0101;
 pub const WM_LBUTTONDOWN: u32 = 0x0201;
+pub const WM_LBUTTONUP: u32 = 0x0202;
+pub const WM_MOUSEMOVE: u32 = 0x0200;
+pub const WM_RBUTTONDOWN: u32 = 0x0204;
+pub const WM_RBUTTONUP: u32 = 0x0205;
+pub const WM_MBUTTONDOWN: u32 = 0x0207;
+pub const WM_MBUTTONUP: u32 = 0x0208;
+pub const WM_MOUSEWHEEL: u32 = 0x020A;
 
 pub const GWLP_WNDPROC: i32 = -4;
 /// `GWLP_HWNDPARENT`: the owner of a top-level window, or the parent of a child window.
@@ -774,24 +783,172 @@ pub fn sample_escape() {
     }
 }
 
+/// 低级钩子拿到的键鼠结构，字段顺序照 Windows SDK。
+#[repr(C)]
+struct KbdLlHook {
+    vk: u32,
+    scan: u32,
+    flags: u32,
+    time: u32,
+    extra: usize,
+}
+
+#[repr(C)]
+struct MsLlHook {
+    x: i32,
+    y: i32,
+    mouse_data: u32,
+    flags: u32,
+    time: u32,
+    extra: usize,
+}
+
+/// 一批原始事件最多攒这么多，超了丢最旧的；`dropped` 如实告诉页面丢了多少。
+const RAW_CAP: usize = 256;
+
+/// 是否有页面订阅了键 / 鼠。钩子一直在，但没人订阅时回调立刻返回，不做任何入队。
+static WANT_KEYS: AtomicBool = AtomicBool::new(false);
+static WANT_MOUSE_RAW: AtomicBool = AtomicBool::new(false);
+
+/// 钩子回调里只入队，别的什么都不做：低级钩子的回调一旦超过系统的 `LowLevelHooksTimeout`
+/// 就会被静默摘掉，这里连 JSON 都不拼。
+static KEY_Q: Mutex<Vec<(u32, u32, bool, i64)>> = Mutex::new(Vec::new());
+static MOUSE_Q: Mutex<Vec<(i32, i32, &'static str, &'static str, i32, i64)>> = Mutex::new(Vec::new());
+
+fn push_key(vk: u32, scan: u32, down: bool) {
+    if let Ok(mut q) = KEY_Q.lock() {
+        if q.len() >= RAW_CAP {
+            q.remove(0);
+        }
+        q.push((vk, scan, down, crate::core::util::now_ms()));
+    }
+}
+
+fn push_mouse(x: i32, y: i32, kind: &'static str, button: &'static str, delta: i32) {
+    if let Ok(mut q) = MOUSE_Q.lock() {
+        if q.len() >= RAW_CAP {
+            q.remove(0);
+        }
+        q.push((x, y, kind, button, delta, crate::core::util::now_ms()));
+    }
+}
+
+/// 页面那边订阅 / 退订时同步这两面旗。旗子落下时顺手清队，免得退订期间攒的事件
+/// 在下次订阅的第一批里冒出来。
+pub fn set_input_wanted(keys: bool, mouse: bool) {
+    WANT_KEYS.store(keys, Ordering::Relaxed);
+    WANT_MOUSE_RAW.store(mouse, Ordering::Relaxed);
+    if !keys {
+        if let Ok(mut q) = KEY_Q.lock() {
+            q.clear();
+        }
+    }
+    if !mouse {
+        if let Ok(mut q) = MOUSE_Q.lock() {
+            q.clear();
+        }
+    }
+}
+
+/// 取走攒下的原始事件，拼成一批交给事件循环。没人订阅或没攒到东西时返回 `None`。
+pub fn pump_input() -> Option<serde_json::Value> {
+    let (want_keys, want_mouse) = (
+        WANT_KEYS.load(Ordering::Relaxed),
+        WANT_MOUSE_RAW.load(Ordering::Relaxed),
+    );
+    if !want_keys && !want_mouse {
+        return None;
+    }
+    let mut keys: Vec<(u32, u32, bool, i64)> = Vec::new();
+    let mut mice: Vec<(i32, i32, &'static str, &'static str, i32, i64)> = Vec::new();
+    if want_keys {
+        if let Ok(mut q) = KEY_Q.lock() {
+            keys.append(&mut *q);
+        }
+    }
+    if want_mouse {
+        if let Ok(mut q) = MOUSE_Q.lock() {
+            mice.append(&mut *q);
+        }
+    }
+    if keys.is_empty() && mice.is_empty() {
+        return None;
+    }
+    let keys_json: Vec<serde_json::Value> = keys
+        .into_iter()
+        .map(|(vk, scan, down, at)| {
+            serde_json::json!({ "vk": vk, "scan": scan, "down": down, "at": at })
+        })
+        .collect();
+    let mouse_json: Vec<serde_json::Value> = mice
+        .into_iter()
+        .map(|(x, y, kind, button, delta, at)| {
+            let mut v = serde_json::json!({ "x": x, "y": y, "kind": kind, "at": at });
+            if !button.is_empty() {
+                v["button"] = serde_json::json!(button);
+            }
+            if delta != 0 {
+                v["delta"] = serde_json::json!(delta);
+            }
+            v
+        })
+        .collect();
+    Some(serde_json::json!({
+        "t": crate::core::util::now_ms(),
+        "keys": keys_json,
+        "mouse": mouse_json,
+    }))
+}
+
 unsafe extern "system" fn mouse_hook(code: i32, w: usize, l: isize) -> isize {
-    if code >= 0 && w as u32 == WM_LBUTTONDOWN {
+    let msg = w as u32;
+    if code >= 0 && msg == WM_LBUTTONDOWN {
         PRESS_MS.store(crate::core::util::now_ms(), Ordering::Relaxed);
         RAW_INPUT.fetch_or(RAW_POINTER, Ordering::Relaxed);
+    }
+    if code >= 0 && WANT_MOUSE_RAW.load(Ordering::Relaxed) {
+        let m = &*(l as *const MsLlHook);
+        match msg {
+            WM_MOUSEMOVE => push_mouse(m.x, m.y, "move", "", 0),
+            WM_LBUTTONDOWN => push_mouse(m.x, m.y, "down", "left", 0),
+            WM_LBUTTONUP => push_mouse(m.x, m.y, "up", "left", 0),
+            WM_RBUTTONDOWN => push_mouse(m.x, m.y, "down", "right", 0),
+            WM_RBUTTONUP => push_mouse(m.x, m.y, "up", "right", 0),
+            WM_MBUTTONDOWN => push_mouse(m.x, m.y, "down", "middle", 0),
+            WM_MBUTTONUP => push_mouse(m.x, m.y, "up", "middle", 0),
+            WM_MOUSEWHEEL => push_mouse(m.x, m.y, "wheel", "", (m.mouse_data >> 16) as i16 as i32),
+            _ => {}
+        }
     }
     CallNextHookEx(0, code, w, l)
 }
 
-/// 装上低级鼠标钩子。钩子只在安装它的线程里回调，所以必须配一个消息循环；
+unsafe extern "system" fn key_hook(code: i32, w: usize, l: isize) -> isize {
+    if code >= 0 && WANT_KEYS.load(Ordering::Relaxed) {
+        let k = &*(l as *const KbdLlHook);
+        let down = matches!(w as u32, WM_KEYDOWN | WM_SYSKEYDOWN);
+        push_key(k.vk, k.scan, down);
+    }
+    CallNextHookEx(0, code, w, l)
+}
+
+/// 钩子的安装结果。键盘那一头单独报，装不上时宿主只能降级（Esc 靠高频采样）。
+pub struct HookStatus {
+    pub mouse: bool,
+    pub keys: bool,
+}
+
+/// 装上低级键鼠钩子。钩子只在安装它的线程里回调，所以必须配一个消息循环；
 /// 这个线程会一直跑到进程退出，钩子不必显式摘除。
-pub fn start_input_hooks() -> bool {
-    let (tx, rx) = std::sync::mpsc::channel::<bool>();
+pub fn start_input_hooks() -> HookStatus {
+    let (tx, rx) = std::sync::mpsc::channel::<(bool, bool)>();
     std::thread::spawn(move || unsafe {
         // 低级钩子在别的进程里跑不起来，hMod 必须是本进程的模块句柄。
         let module = GetModuleHandleW(std::ptr::null());
         let mouse = SetWindowsHookExW(WH_MOUSE_LL, Some(mouse_hook), module, 0);
-        let _ = tx.send(mouse != 0);
-        if mouse == 0 {
+        let keys = SetWindowsHookExW(WH_KEYBOARD_LL, Some(key_hook), module, 0);
+        let _ = tx.send((mouse != 0, keys != 0));
+        if mouse == 0 && keys == 0 {
             return;
         }
         let mut msg = MSG::default();
@@ -800,8 +957,10 @@ pub fn start_input_hooks() -> bool {
             DispatchMessageW(&msg);
         }
     });
-    rx.recv_timeout(std::time::Duration::from_millis(200))
-        .unwrap_or(false)
+    let (mouse, keys) = rx
+        .recv_timeout(std::time::Duration::from_millis(200))
+        .unwrap_or((false, false));
+    HookStatus { mouse, keys }
 }
 
 pub fn progman() -> HWND {

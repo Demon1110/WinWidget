@@ -56,6 +56,18 @@ pub struct PendingNote {
     pub instance: String,
 }
 
+/// 一个页面订阅的原始键鼠事件。宿主按 `throttle` 把攒下的事件合成一批推过去：
+/// 钩子那头是 8 ms 一采，这里决定多久发一次消息，页面不用自己攒。
+pub struct InputSub {
+    pub keys: bool,
+    pub mouse: bool,
+    pub throttle: u64,
+    pub pending_keys: Vec<Value>,
+    pub pending_mouse: Vec<Value>,
+    pub last_tx: i64,
+    pub seq: u64,
+}
+
 pub struct App {
     pub store: ConfigStore,
     pub catalog: crate::model::catalog::Catalog,
@@ -77,6 +89,8 @@ pub struct App {
     pub want_control: bool,
     pub edit_mode: bool,
     pub sampling: HashMap<String, (Vec<String>, u64)>,
+    /// 页面订阅的键鼠事件，按实例 id 索引（`input.subscribe`）。
+    pub input_subs: HashMap<String, InputSub>,
     pub audio_subs: HashSet<String>,
     pub media_subs: HashSet<String>,
     pub monitor: crate::runtime::monitor::Monitor,
@@ -192,6 +206,7 @@ impl App {
             want_control: true,
             edit_mode: false,
             sampling: HashMap::new(),
+            input_subs: HashMap::new(),
             audio_subs: HashSet::new(),
             media_subs: HashSet::new(),
             monitor,
@@ -1551,6 +1566,88 @@ impl App {
             audio: !self.audio_subs.is_empty(),
             media,
         });
+    }
+
+    /// 一批原始键鼠事件到了：按每个订阅者自己的节流间隔攒着，够点就发一条。
+    /// 卡片已经关掉的订阅在这里顺手清掉，钩子也就在没人订阅时停下。
+    pub fn dispatch_input(&mut self, batch: &Value) {
+        let live: Vec<String> = self.input_subs.keys().cloned().collect();
+        for id in live {
+            if !self.windows.contains_key(&id) {
+                self.input_subs.remove(&id);
+            }
+        }
+        if self.input_subs.is_empty() {
+            crate::platform::win32::set_input_wanted(false, false);
+            return;
+        }
+        let keys_in = batch
+            .get("keys")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+        let mouse_in = batch
+            .get("mouse")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+        let now = crate::core::util::now_ms();
+        let mut outbox: Vec<(String, Value)> = Vec::new();
+        for (id, sub) in self.input_subs.iter_mut() {
+            if sub.keys {
+                sub.pending_keys.extend(keys_in.iter().cloned());
+            }
+            if sub.mouse {
+                sub.pending_mouse.extend(mouse_in.iter().cloned());
+            }
+            if now - sub.last_tx < sub.throttle as i64 {
+                continue;
+            }
+            if sub.pending_keys.is_empty() && sub.pending_mouse.is_empty() {
+                continue;
+            }
+            // 一批上限 256 条，多出来的直接丢，`dropped` 让页面知道这次不全。
+            let mut dropped = 0usize;
+            if sub.pending_keys.len() > 256 {
+                dropped += sub.pending_keys.len() - 256;
+                let cut = sub.pending_keys.len() - 256;
+                sub.pending_keys.drain(0..cut);
+            }
+            if sub.pending_mouse.len() > 256 {
+                dropped += sub.pending_mouse.len() - 256;
+                let cut = sub.pending_mouse.len() - 256;
+                sub.pending_mouse.drain(0..cut);
+            }
+            sub.seq += 1;
+            let seq = sub.seq;
+            let payload = Value::Object({
+                let mut m = Map::new();
+                m.insert("seq".into(), Value::from(seq));
+                m.insert("t".into(), Value::from(now));
+                m.insert(
+                    "keys".into(),
+                    Value::Array(std::mem::take(&mut sub.pending_keys)),
+                );
+                m.insert(
+                    "mouse".into(),
+                    Value::Array(std::mem::take(&mut sub.pending_mouse)),
+                );
+                m.insert("dropped".into(), Value::from(dropped));
+                m
+            });
+            sub.last_tx = now;
+            outbox.push((id.clone(), payload));
+        }
+        for (id, payload) in outbox {
+            self.event_to(&id, "input", payload);
+        }
+    }
+
+    /// 订阅变化后重新算钩子该不该收：任何一项有人要就开，全没人要就停。
+    pub fn refresh_input_wanted(&mut self) {
+        let keys = self.input_subs.values().any(|s| s.keys);
+        let mouse = self.input_subs.values().any(|s| s.mouse);
+        crate::platform::win32::set_input_wanted(keys, mouse);
     }
 
     pub fn dispatch_sample(&mut self, data: &Value) {

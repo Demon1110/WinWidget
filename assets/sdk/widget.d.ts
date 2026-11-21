@@ -26,7 +26,38 @@ declare namespace WinWidget {
     | "tool.exec"
     | "file.read"
     | "file.write"
+    | "input.read"
+    | "system.read"
+    | "system.write"
     | `network:${string}`;
+
+  /** One key transition. Virtual-key codes only; the character is deliberately not provided. */
+  interface InputKey {
+    vk: number;
+    scan: number;
+    down: boolean;
+    at: number;
+  }
+
+  /** One mouse event. `kind` is move / down / up / wheel. */
+  interface InputMouse {
+    x: number;
+    y: number;
+    kind: "move" | "down" | "up" | "wheel";
+    button?: "left" | "right" | "middle";
+    delta?: number;
+    at: number;
+  }
+
+  /** A throttled batch of raw input, one host message per batch. */
+  interface InputBatch {
+    seq: number;
+    t: number;
+    /** How many events were dropped because the batch hit its 256-event cap. */
+    dropped: number;
+    keys?: InputKey[];
+    mouse?: InputMouse[];
+  }
 
   interface PathInfo {
     path: string;
@@ -487,6 +518,50 @@ declare namespace WinWidget {
       adapters(): Promise<{ online: boolean; adapters: NetworkAdapter[] }>;
       /** One ping (ICMP echo). At most once a second per widget; timeout 200–5000 ms, default 1500. */
       ping(host: string, options?: { timeout?: number }): Promise<PingResult>;
+      /** The process table, heaviest first by default. Needs "system.read"; rows carry `path` only with "shell.launch" too. */
+      processes(options?: { sort?: "cpu" | "memory" | "name"; limit?: number }): Promise<{
+        total: number;
+        items: { pid: number; name: string; cpu: number; memory: number; started: number; path?: string }[];
+      }>;
+      /** Socket table, listening ports by default. Needs "system.read". */
+      ports(options?: { protocol?: "tcp" | "tcp6" | "udp" | "all"; listening?: boolean }): Promise<{
+        items: {
+          proto: "tcp" | "tcp6" | "udp" | "udp6";
+          local: string;
+          localPort: number;
+          remote: string;
+          remotePort: number;
+          state: string;
+          pid: number;
+        }[];
+      }>;
+      /**
+       * Read-only display inventory. `hdrEnabled` is `null` when Windows refuses the advanced-colour
+       * query (older builds); changing HDR stays in the Settings app. Needs "system.read".
+       */
+      displays(): Promise<{
+        hdrReadable: boolean;
+        items: {
+          device: string;
+          width: number;
+          height: number;
+          refresh: number;
+          primary: boolean;
+          hdrSupported: boolean | null;
+          hdrEnabled: boolean | null;
+          bitsPerColor: number | null;
+        }[];
+      }>;
+      /** Starts the screensaver or opens its settings page. Needs "system.write". */
+      screensaver(action?: "start" | "settings"): Promise<{ ok: boolean }>;
+    };
+
+    /** Saved WiFi profiles. Needs "system.read"; plaintext keys also need "system.write". */
+    wifi: {
+      profiles(): Promise<{
+        supported: boolean;
+        items: { ssid: string; auth: string; cipher: string; hasKey: boolean; key?: string; revealed?: boolean }[];
+      }>;
     };
 
     /** The speakers' volume and mute. Needs the "audio" permission. */
@@ -620,6 +695,22 @@ declare namespace WinWidget {
       run(name: string, options?: ToolRunOptions): Promise<ToolRunResult>;
       /** Deletes the cached program and its sidecar. It is downloaded again on the next run. */
       remove(name: string): Promise<{ name: string; removed: boolean }>;
+    };
+
+    /** Raw key and mouse events. Needs the "input.read" permission. */
+    input: {
+      /**
+       * Each batch arrives as `{ seq, t, dropped, keys?, mouse? }`.
+       * `keys` carries `{ vk, scan, down, at }` only — no characters, so text such as a password
+       * cannot be rebuilt from it. Returns an unsubscribe function.
+       */
+      subscribe(
+        options: { keys?: boolean; mouse?: boolean; throttle?: number },
+        cb: (batch: InputBatch) => void,
+      ): () => void;
+      subscribe(cb: (batch: InputBatch) => void): () => void;
+      /** Drops every subscription this page holds. */
+      unsubscribe(): Promise<null>;
     };
 
     /** The Windows clipboard. Needs the "clipboard" permission. */

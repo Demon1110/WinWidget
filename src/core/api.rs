@@ -70,6 +70,16 @@ impl<'a> Ctx<'a> {
         }
     }
 
+    /// The same test as [`Ctx::require`] without the refusal: used where a permission widens an
+    /// answer instead of unlocking it (a process row's executable path needs `shell.info`).
+    pub fn allowed(&self, permission: &str) -> bool {
+        self.manifest.declares(permission)
+            && self
+                .allowed
+                .iter()
+                .any(|p| p.eq_ignore_ascii_case(permission))
+    }
+
     /// The permission is declared and the user allowed it, or the call is refused with the line to
     /// add to `widget.json`.
     pub fn require(&self, permission: &str) -> BridgeResult<()> {

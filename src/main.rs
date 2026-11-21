@@ -147,8 +147,26 @@ fn main() {
         // 「点窗口外面就关」就只能靠宿主自己看键。按下由低级键鼠钩子记下（一次十几毫秒的
         // 快速点按也不会漏），这个线程只负责把攒下的按下投递回事件循环。
         let proxy = app.proxy.clone();
-        if !platform::win32::start_input_hooks() {
+        let hooks = platform::win32::start_input_hooks();
+        if !hooks.mouse || !hooks.keys {
             logging::warn("输入钩子装不上，closeOnEsc / closeOnBlur / closeOnOutsideClick 会失效");
+        }
+        if !hooks.keys {
+            logging::warn("键盘钩子装不上：input.subscribe 的按键事件会一直是空的");
+        }
+        {
+            // 原始键鼠事件的上传通道。钩子回调只管入队，这个线程每 8 ms 把攒下的交回事件
+            // 循环；没人订阅时 `pump_input` 直接返回 None，线程空转成本就是一次原子读。
+            let proxy = app.proxy.clone();
+            std::thread::spawn(move || loop {
+                std::thread::sleep(Duration::from_millis(8));
+                let Some(batch) = platform::win32::pump_input() else {
+                    continue;
+                };
+                if !app::post(&proxy, Ev::Raw(batch)) {
+                    return;
+                }
+            });
         }
         std::thread::spawn(move || loop {
             // 10ms 一回：Esc 的按下靠这个采样，鼠标按下由钩子直接置位。
@@ -198,6 +216,10 @@ fn main() {
             }
             Event::UserEvent(Ev::Reply { win, body }) => {
                 app.send_to(&win, &body);
+                *control = ControlFlow::Wait;
+            }
+            Event::UserEvent(Ev::Raw(batch)) => {
+                app.dispatch_input(&batch);
                 *control = ControlFlow::Wait;
             }
             Event::UserEvent(Ev::Sample(value)) => {

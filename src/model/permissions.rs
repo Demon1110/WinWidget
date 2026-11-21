@@ -5,7 +5,7 @@
 use crate::core::config::AppConfig;
 use crate::model::manifest::Manifest;
 
-pub const KNOWN: [&str; 17] = [
+pub const KNOWN: [&str; 20] = [
     "system",
     "bluetooth",
     "notify",
@@ -14,6 +14,13 @@ pub const KNOWN: [&str; 17] = [
     "clipboard",
     "screen",
     "input",
+    // 读系统的键鼠事件（`input.subscribe`）。方向与 `input`（往系统里打字）相反，
+    // 风险独立，所以单独一项。
+    "input.read",
+    // 只读系统信息：进程、端口、WiFi 配置。
+    "system.read",
+    // 受控的系统写操作：启动屏保一类，逐项列明。
+    "system.write",
     "schedule",
     "sharp",
     "ubrowser",
