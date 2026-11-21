@@ -27,7 +27,7 @@
   --w-danger: #ff6b5e;
   --w-border: rgba(255, 255, 255, 0.10);
   --w-rule: rgba(255, 255, 255, 0.09);
-  /* 卡片那圈 1px 内描边单独一个变量：没有卡片底的主题（`backgroundOpacity: 0`）要能单独关掉它，
+  /* 卡片那圈 1px 内描边单独一个变量：它要跟着底板一起淡出（薄底变淡、底为 0 时直接没有），
      而不牵连输入框、分隔线用的 --w-border */
   --w-card-ring: var(--w-border);
   --w-track: rgba(255, 255, 255, 0.09);
@@ -121,8 +121,9 @@ button { font: inherit; color: inherit; }
 .w-input::placeholder { color: var(--w-fg-muted); }
 .w-input:focus { border-color: color-mix(in srgb, var(--w-accent) 70%, transparent); }
 
-/* A scrolling box with no visible scrollbar: keep the wheel/touch scroll, hide the chrome. */
-.w-scroll-none { scrollbar-width: none; }
+/* A scrolling box with no visible scrollbar: keep the wheel/touch scroll, hide the chrome.
+   只走 `::-webkit-scrollbar`：见下面那条注释，`scrollbar-width` 在这台机器上会把滚动条换成
+   系统那套（一动还会冒出上下箭头），藏起来也照样先换了皮。 */
 .w-scroll-none::-webkit-scrollbar { display: none; }
 
 /* 滚动条：默认那套灰白滑块跟任何主题都打架（尤其在玻璃、纸卡上），统一换成一条细的、跟着
@@ -192,17 +193,20 @@ html:not([data-theme="paper"]) select { color-scheme: dark; }
   transform: rotate(45deg);
 }
 
-/* Resize grip, added by the SDK when the widget is resizable. */
+/* Resize grip, added by the SDK when the widget is resizable.
+   热区只留右下那个三角形（`clip-path` 会一起裁掉命中区）：整块方形热区会把卡片末尾那一小块
+   内容、以及贴边滚动条最底下一截全吃掉——那里明明看得见，点下去却什么也不发生。 */
 .fw-resize {
   position: absolute;
-  right: 4px;
-  bottom: 4px;
-  width: 12px;
-  height: 12px;
+  right: 3px;
+  bottom: 3px;
+  width: 14px;
+  height: 14px;
   cursor: nwse-resize;
   opacity: 0;
   transition: opacity 0.15s;
   z-index: 2147483647;
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
   background:
     linear-gradient(135deg, transparent 45%, var(--w-fg-muted) 45%, var(--w-fg-muted) 55%, transparent 55%,
                     transparent 70%, var(--w-fg-muted) 70%, var(--w-fg-muted) 80%, transparent 80%);

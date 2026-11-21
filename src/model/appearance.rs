@@ -128,6 +128,9 @@ pub fn page_css(
     (theme, user)
 }
 
+/// 底板透明度低于这个值，那圈 1px 内描边就开始跟着变淡，到这个值以上完全不变。
+const RING_SOLID_AT: f64 = 0.4;
+
 fn num(d: &Map<String, Value>, key: &str, def: f64) -> f64 {
     d.get(key).and_then(|v| v.as_f64()).unwrap_or(def)
 }
@@ -174,10 +177,23 @@ fn css(
             &format!("rgba({r},{g},{b},{})", crate::core::util::fmt_num(op)),
         );
         var("bg-solid", &format!("rgb({r},{g},{b})"));
-        // 没有卡片底的主题（「玻璃上的字」把 backgroundOpacity 设成 0）不该再画那圈 1px 内描边：
-        // 描边是给卡片立的边，卡片都不存在了，它只是平白在玻璃上加一道线。
-        if op <= 0.0 {
-            var("card-ring", "transparent");
+        // 那圈 1px 内描边是给卡片「立边」用的，所以它得跟着底板一起淡出：底板只剩一层雾（半透
+        // 明）时还画一道实线，卡片看着像贴了张透明卡在玻璃上；底板彻底看不见（「玻璃上的字」把
+        // backgroundOpacity 设成 0）时那道线更是无源之水。`RING_SOLID_AT` 以上一律不动，所以
+        // 常规卡片（0.62、0.8）的像素一个不差，只有薄底才逐级变淡。
+        if op < RING_SOLID_AT {
+            if op <= 0.0 {
+                var("card-ring", "transparent");
+            } else {
+                let weight = (op / RING_SOLID_AT * 100.0).round().clamp(1.0, 99.0);
+                var(
+                    "card-ring",
+                    &format!(
+                        "color-mix(in srgb,var(--w-border) {}%,transparent)",
+                        crate::core::util::fmt_num(weight)
+                    ),
+                );
+            }
         }
     }
     if layer.contains_key("textColor") {
