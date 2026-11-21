@@ -198,7 +198,7 @@ const CASES = [
         width: 380,
         height: 180,
         rounded: false,
-        opacity: 0.2,
+        opacity: 0.9,
       }),
   ],
   [
