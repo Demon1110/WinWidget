@@ -38,25 +38,14 @@
     </style>
   </head>
   <body style="border: 1px solid var(--w-line, rgba(0, 255, 55, 0.6));">
-    <div class="bar" id="bar">
+    <div class="bar" id="bar" data-ww-bleed data-ww-drag>
       <strong>直角子窗</strong>
-      <button type="button" id="close" title="关闭">×</button>
+      <button type="button" id="close" data-ww-close="square-x" title="关闭">×</button>
     </div>
     <div class="body">
       <p>窗口无边框、透光，四角 90 度。</p>
       <p>窗口这层是 <code>rounded:false</code> → 宿主整扇 <code>clip_square</code>；页面这层没有任何 <code>border-radius</code>。</p>
       <span class="tag">90°</span>
     </div>
-    <script>
-      document.getElementById("bar").addEventListener("mousedown", (e) => {
-        if (e.button !== 0) return;
-        if (e.target.closest && e.target.closest("button")) return;
-        e.preventDefault();
-        widget.window.startDrag();
-      });
-      document.getElementById("close").addEventListener("click", () => {
-        widget.window.close("square-x");
-      });
-    </script>
   </body>
 </html>
