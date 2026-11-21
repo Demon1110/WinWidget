@@ -106,6 +106,8 @@ pub struct App {
     /// The virtual desktop id seen on the previous `sync_desktop`, so a switch can be acted on
     /// exactly once instead of on every poll.
     last_desktop: Option<String>,
+    /// 输入脉冲的计数，只用来给「直角窗口区域复查」分频（10ms 一个脉冲，20 个约 200ms）。
+    square_ticks: u32,
 }
 
 fn same_area(
@@ -210,6 +212,7 @@ impl App {
             fullscreen_ticks: 0,
             fullscreen_area: None,
             last_desktop: None,
+            square_ticks: 0,
         };
         app.boot_defaults();
         app.start_tray();
@@ -984,6 +987,30 @@ impl App {
         }
     }
 
+    /// 直角窗口（`frame:false` + `rounded:false`）的形状是 win32 区域裁出来的，而 DWM 在第一次
+    /// 合成、重获焦点、重建边框时都会把那块矩形换成它自己的圆角区域，窗口两个上角于是又圆回去。
+    /// 输入脉冲每 10ms 来一次，这里每 20 个（约 200ms）复查一遍：区域形状不对就重新贴，已贴好的
+    /// 窗口一次 `GetWindowRgn` 就过，代价可以忽略。
+    pub fn repair_square_clips(&mut self) {
+        self.square_ticks = self.square_ticks.wrapping_add(1);
+        if !self.square_ticks.is_multiple_of(20) {
+            return;
+        }
+        let mut repaired = 0;
+        for win in self.customs.values() {
+            if !win.square || win.destroyed {
+                continue;
+            }
+            if !crate::platform::win32::square_clipped(win.hwnd()) {
+                win.repair_clip();
+                repaired += 1;
+            }
+        }
+        if repaired > 0 {
+            crate::core::logging::info(&format!("square clip restored on {repaired} window(s)"));
+        }
+    }
+
     /// Esc 刚按下：带 `closeOnEsc` 的窗口收起来。窗口没拿到焦点时页面听不到键盘，只能宿主代劳。
     pub fn escape_pressed(&mut self) {
         let ids: Vec<u32> = self
@@ -1174,6 +1201,9 @@ impl App {
             if win.show_on_ready {
                 win.show_on_ready = false;
                 win.window.set_visible(true);
+                // 显示这一下会让 DWM 重新合成这扇窗，把它原来贴的矩形区域换成圆角形状，直角窗口
+                // 得上两角于是又圆了回来——亮出来之后立刻补一次。
+                win.repair_clip();
                 // 页面把自己停在「未显示」等这一声：先亮窗口，再让它从第一帧播入场动画。
                 // 顺序反了会看到完整画面先出现、动画再从半透明重播一遍。
                 let _ = win

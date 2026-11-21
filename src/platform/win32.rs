@@ -432,6 +432,8 @@ extern "system" {
     pub fn CreateRectRgn(x1: i32, y1: i32, x2: i32, y2: i32) -> isize;
     /// 给窗口贴一个 win32 区域（坐标系是窗口客户区），窗口从此只在那块形状里可见。
     pub fn SetWindowRgn(hwnd: HWND, region: isize, redraw: i32) -> i32;
+    /// 读窗口当前的区域：0 = 它压根没有区域，2 = 一整块矩形，3 = 被切成多块的复杂形状。
+    pub fn GetWindowRgn(hwnd: HWND, region: isize) -> i32;
     pub fn CreateDIBSection(
         dc: isize,
         info: *const BITMAPINFO,
@@ -1012,6 +1014,10 @@ pub fn fit_client(hwnd: HWND, x: i32, y: i32, w: i32, h: i32) {
 /// few pixels of the *default* rounding on its own. Asking for square corners on such a window
 /// still leaves that sliver behind on screen — the page paints a 90° corner and the shell trims
 /// it back — so the only thing that actually overrides it is an explicit window region.
+///
+/// 贴上去不等于一直留着：DWM 第一次合成这扇窗口（显示的那一下）以及之后每次重建边框，都会把
+/// 这块矩形换成它自己那套圆角形状。所以建窗时贴一次不够，窗口显示之后要再贴一次，
+/// 见 `window_category::build_custom` 与 `App::repair_square_clips`。
 pub fn clip_square(hwnd: HWND) {
     unsafe {
         let mut cr = RECT::default();
@@ -1031,6 +1037,27 @@ pub fn clip_square(hwnd: HWND) {
         if SetWindowRgn(hwnd, region, 1) == 0 {
             let _ = DeleteObject(region);
         }
+    }
+}
+
+/// True while the window still carries the plain rectangle `clip_square` put on it.
+///
+/// DWM rewrites a frameless glass window's region the first time it composites it, and again on
+/// every frame rebuild: the rectangle is swapped for the window's default rounded shape, which
+/// arrives here as a *complex* region. That is why a window that asked for square corners still
+/// shows its two top corners rounded while the bottom two stay square — the page's own pixels are
+/// 90° everywhere, only the shell shape is clipped. Callers that want the rectangle back ask this
+/// first, so a healthy window is never handed the same region twice.
+pub fn square_clipped(hwnd: HWND) -> bool {
+    const SIMPLEREGION: i32 = 2;
+    unsafe {
+        let region = CreateRectRgn(0, 0, 0, 0);
+        if region == 0 {
+            return false;
+        }
+        let kind = GetWindowRgn(hwnd, region);
+        let _ = DeleteObject(region);
+        kind == SIMPLEREGION
     }
 }
 

@@ -187,6 +187,17 @@ impl CustomWin {
         }
     }
 
+    /// 直角窗口的形状是区域裁出来的，而 DWM 会在合成/重建边框时把区域换成圆角形状。宿主每隔
+    /// 一小段输入脉冲复查一次，形状不对就重新贴，免得窗口重获焦点后又悄悄圆回去。
+    pub fn repair_clip(&self) {
+        if !self.square || self.destroyed {
+            return;
+        }
+        if !w::square_clipped(self.window.hwnd()) {
+            self.reclip();
+        }
+    }
+
     fn scale(&self) -> f64 {
         let scale = self.window.scale_factor();
         if scale > 0.0 {
@@ -516,6 +527,12 @@ pub fn build_custom(
             w::show_no_activate(hwnd);
         } else {
             window.set_visible(true);
+            // 显示这一下就是 DWM 第一次给这扇窗口合成帧，它顺手把建窗时贴上去的矩形区域换成了
+            // 自己那套默认圆角（`DONOTROUND` 只管它自己画的边框，管不住玻璃帧的合成形状）。
+            // 结果就是直角窗口的两个上角又圆了回来、下面两角却是方的，所以这里必须再贴一次。
+            if !frame && !rounded {
+                w::clip_square(hwnd);
+            }
         }
     }
     if let Some(opacity) = alpha {

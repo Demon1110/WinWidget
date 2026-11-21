@@ -244,6 +244,7 @@ fn main() {
                 if escape {
                     app.escape_pressed();
                 }
+                app.repair_square_clips();
                 *control = ControlFlow::Wait;
             }
             Event::UserEvent(Ev::NudgeWallpaper) => {
