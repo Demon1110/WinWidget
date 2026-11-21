@@ -33,9 +33,12 @@
 
   // 逐像素透明的窗口叠不了整窗 alpha（会把玻璃帧顶掉），所以透明度在页面上做；
   // 不透光的窗口由宿主对整窗设置，这里再叠一次就变成两重淡。
+  // 淡的必须是整扇弹框面（底板 + 内容）：底板画在 body 上，base.css 的
+  // `body { opacity: var(--w-opacity) }` 就是给这一档准备的；把 opacity 写在 `#dlg` 上
+  // 只会让里面那层内容变淡，底板一动不动，看起来就是「只有字虚了」。
   const opacity = Number(cfg.opacity);
   if (cfg.transparent === true && Number.isFinite(opacity) && opacity > 0 && opacity < 1) {
-    dlg.style.opacity = String(opacity);
+    root.style.setProperty("--w-opacity", String(opacity));
   }
 
   // ── 入场：等宿主把窗口亮出来，再从第一帧放动画 ─────────────────
