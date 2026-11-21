@@ -5,7 +5,7 @@
 use crate::core::config::AppConfig;
 use crate::model::manifest::Manifest;
 
-pub const KNOWN: [&str; 15] = [
+pub const KNOWN: [&str; 17] = [
     "system",
     "bluetooth",
     "notify",
@@ -23,6 +23,10 @@ pub const KNOWN: [&str; 15] = [
     "shell.drop",
     // Downloading a declared CLI tool into the widget's bin folder and running it.
     "tool.exec",
+    // Reading any file by absolute path, and writing one. Kept apart so a picture tool can save
+    // its result without also being able to open what `shell.launch` can.
+    "file.read",
+    "file.write",
 ];
 
 pub fn is_known(p: &str) -> bool {

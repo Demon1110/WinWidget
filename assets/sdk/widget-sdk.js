@@ -72,6 +72,17 @@
     return String(image);
   }
 
+  /** What `file.write` accepts: { base64 }, { text }, a data: URL, or a plain string (text). */
+  function filePayload(data) {
+    if (data && typeof data === "object") {
+      if (data.base64 != null) return { base64: String(data.base64) };
+      if (data.dataUrl != null) return { dataUrl: String(data.dataUrl) };
+      if (data.text != null) return { text: String(data.text) };
+    }
+    const text = String(data ?? "");
+    return text.startsWith("data:") ? { dataUrl: text } : { text };
+  }
+
   function emit(event, data) {
     const set = handlers.get(event);
     if (!set) return;
@@ -1192,6 +1203,28 @@
       info: (key, path) => call("files.info", { key, path: typeof path === "string" ? path : path.path }),
       /** Opens a folder dialog and saves the choice in setting `key` → path or null. */
       pick: (key) => call("files.pick", { key }),
+    }),
+
+    /**
+     * Reading and writing files by absolute path — what a page needs to turn a picture into
+     * something else and save it. Needs the "file.read" / "file.write" permissions.
+     */
+    file: Object.freeze({
+      /** read(path) → { path, name, size, modified, base64 }; 64 MB at most. */
+      read: (path) => call("file.read", { path: String(path) }),
+      /** The file as text (UTF-8, undecodable bytes replaced), or rejects when it is too big. */
+      readText: (path) => call("file.readText", { path: String(path) }),
+      /** write(path, data) → { path, name, size, existed }; `data` is text, base64 or a data: URL. */
+      write: (path, data) => call("file.write", { path: String(path), ...filePayload(data) }),
+      /** The same, for text only. */
+      writeText: (path, text) => call("file.write", { path: String(path), text: String(text ?? "") }),
+      /** list(dir, { recursive }) → { folder, name, files: [{ path, name, size, modified, isDir }], more }. */
+      list: (dir, options) =>
+        call("file.list", { dir: String(dir), recursive: !!(options && options.recursive) }),
+      /** info(path) → { path, name, dir, ext, size, modified, exists, isDir, isFile }. */
+      info: (path) => call("file.info", { path: String(path) }),
+      /** Is there a file (not a folder) at this path? */
+      exists: (path) => call("file.exists", { path: String(path) }),
     }),
 
     /**

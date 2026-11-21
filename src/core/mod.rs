@@ -8,6 +8,7 @@
 //! - `screen`     屏幕 — displays, DIP/pixel conversion, screen pictures
 //! - `input`      输入 — paste/type into the window the user came from
 //! - `clipboard`  复制 — text, files and pictures on the clipboard
+//! - `fileio`     檔案 — reading and writing the files a page names (`file.read` / `file.write`)
 //! - `db`         数据库 — documents and attachments per widget
 //! - `ai`         AI 能力 — reserved
 //! - `schedule`   定时任务 — cron style schedules
@@ -34,6 +35,7 @@ pub mod db;
 pub mod events;
 pub mod features;
 pub mod ffmpeg;
+pub mod fileio;
 pub mod img;
 pub mod input;
 pub mod logging;

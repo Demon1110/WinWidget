@@ -16,7 +16,17 @@ declare namespace WinWidget {
   type Layer = "desktop" | "normal" | "top";
 
   /** Declared in widget.json "permissions"; third-party widgets also need the user's OK. */
-  type Permission = "system" | "notify" | "audio" | "media" | "shell.open" | "shell.launch" | "tool.exec" | `network:${string}`;
+  type Permission =
+    | "system"
+    | "notify"
+    | "audio"
+    | "media"
+    | "shell.open"
+    | "shell.launch"
+    | "tool.exec"
+    | "file.read"
+    | "file.write"
+    | `network:${string}`;
 
   interface PathInfo {
     path: string;
@@ -227,6 +237,31 @@ declare namespace WinWidget {
     modified: number;
     /** The original file on the widget's own origin; widget.files.url(file, { width }) gives a smaller copy. */
     url: string;
+  }
+
+  /** One row of widget.file.list(): an absolute path, folders included. */
+  interface FileEntry {
+    path: string;
+    name: string;
+    size: number;
+    /** Last changed, ms since 1970. */
+    modified: number;
+    isDir: boolean;
+  }
+
+  /** What widget.file.info() says about a path, whether or not it exists. */
+  interface FileInfo {
+    path: string;
+    name: string;
+    /** The folder it sits in; "" for a drive root. */
+    dir: string;
+    /** Lower case, without the dot: "png"; "" when it has none. */
+    ext: string;
+    size: number;
+    modified: number;
+    exists: boolean;
+    isDir: boolean;
+    isFile: boolean;
   }
 
   interface AudioState {
@@ -499,6 +534,25 @@ declare namespace WinWidget {
       info(settingKey: string, file: FolderFile | string): Promise<{ taken: number | null; width: number; height: number }>;
       /** Opens a folder dialog and saves the choice in the setting → the path, or null if cancelled. */
       pick(settingKey: string): Promise<string | null>;
+    };
+
+    /**
+     * Reading and writing files by absolute path — what a page needs to turn a picture into
+     * something else and save it. Needs the "file.read" / "file.write" permissions.
+     */
+    file: {
+      /** 64 MB at most; `base64` is the whole file, ready for a data: URL. */
+      read(path: string): Promise<{ path: string; name: string; size: number; modified: number; base64: string }>;
+      /** UTF-8 text; bytes it cannot decode are replaced instead of failing the read. */
+      readText(path: string): Promise<string>;
+      /** `data` is text, raw base64, or a data: URL; missing folders are created. */
+      write(path: string, data: string | { text?: string; base64?: string; dataUrl?: string }): Promise<{ path: string; name: string; size: number; existed: boolean }>;
+      writeText(path: string, text: string): Promise<{ path: string; name: string; size: number; existed: boolean }>;
+      /** Six levels deep, at most 5000 entries, hidden names skipped; `more` means "not all of it". */
+      list(dir: string, options?: { recursive?: boolean }): Promise<{ folder: string; name: string; files: FileEntry[]; more: boolean }>;
+      info(path: string): Promise<FileInfo>;
+      /** True when there is a file (not a folder) at this path. */
+      exists(path: string): Promise<boolean>;
     };
 
     /**

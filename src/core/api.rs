@@ -143,6 +143,7 @@ pub type Handler = fn(&mut Ctx, &str, &Value) -> Option<BridgeResult<Reply>>;
 pub const CHAIN: &[(&str, Handler)] = &[
     ("window", crate::runtime::window_category::call),
     ("system", crate::core::system::call),
+    ("file", crate::core::fileio::call),
     ("screen", crate::core::screen::call),
     ("input", crate::core::input::call),
     ("clipboard", crate::core::clipboard::call),

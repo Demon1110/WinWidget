@@ -1093,8 +1093,12 @@ By default a widget can only show its own content: it can't go online, can't rea
 | `ubrowser` | `utools.ubrowser`: fetching pages (users see a clear warning when allowing it) |
 | `shell.launch` | `widget.shell.launch`, `openWith`, `rename`, `pick`, `save`, `reveal`, `trash`, `info`, `paths`, `fileIcon`: opening programs and files, opening a link with a chosen program, renaming files in place, choosing files, choosing where to save, showing a file in Explorer, moving it to the recycle bin, reading names and icons (users see a clear warning when allowing it) |
 | `tool.exec` | `widget.tool.*`: downloading the CLI programs declared in `tools`, checking their SHA-256 when declared, and running them (users see a clear warning when allowing it; the download hosts need `network:` too) |
+| `file.read` | `widget.file.read`, `readText`, `info`, `exists`, `list`: reading a file by absolute path (users see a clear warning when allowing it) |
+| `file.write` | `widget.file.write`, `writeText`: writing a file by absolute path, creating missing folders (users see a clear warning when allowing it) |
 
 Reading a folder needs no permission: the widget can read only the pictures in the folder the user chose in its settings. See [`widget.files`](#a-folder-the-user-chose-widgetfiles).
+
+`file.read` / `file.write` are any absolute path, which is why they are two separate permissions: a tool that saves a picture (an `.ico` builder, say) asks for these two alone instead of `shell.launch`.
 
 **Who allows them:**
 
@@ -1627,6 +1631,13 @@ Anything returning a Promise can be awaited; "sync" means it returns immediately
 | `widget.files.url(file, {width})` | — | sync | picture URL, optionally a thumbnail |
 | `widget.files.info(key, path)` | — | Promise | size, taken-at |
 | `widget.files.pick(key)` | — | Promise | folder dialog, saved into the setting |
+| `widget.file.read(path)` | `file.read` | Promise | read a file; `base64` goes straight into a `data:` URL; 64 MB at most |
+| `widget.file.readText(path)` | `file.read` | Promise | read it as text, replacing bytes it cannot decode |
+| `widget.file.list(dir, {recursive})` | `file.read` | Promise | folder listing with `isDir`, size and change time |
+| `widget.file.info(path)` | `file.read` | Promise | `exists` / `isDir` / `ext` / `size` |
+| `widget.file.exists(path)` | `file.read` | Promise | is there a file at this path |
+| `widget.file.write(path, data)` | `file.write` | Promise | write text, base64 or a `data:` URL, creating missing folders |
+| `widget.file.writeText(path, text)` | `file.write` | Promise | text only |
 | `widget.recycleBin.query` | built-in | Promise | Recycle Bin: answers at once from the last count, `items` of -1 means it is still counting; also `age` / `scanning` / `emptying` / `done` / `total`. Counting is expensive (136 s on a 59 GB bin), so it is cached, never done on the spot |
 | `widget.recycleBin.empty` | built-in | Promise | Returns immediately (the emptying runs in the background); follow it through `done` / `total` from `query` |
 | `widget.recycleBin.open` | built-in | Promise | Opens the Recycle Bin window |
