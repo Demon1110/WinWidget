@@ -38,7 +38,7 @@
 <body>
   <div class="bar" data-ww-drag>
     <strong>按住这条标题就拖</strong>
-    <button type="button" id="close" data-ww-nodrag title="关闭">×</button>
+    <button type="button" data-ww-close="grip-x" title="关闭">×</button>
   </div>
   <div class="body">
     <div class="zone" data-ww-drag>
@@ -47,11 +47,7 @@
     <div class="zone plain">
       <b>这块没标</b> — 按住拖不动，文字能正常选中。
     </div>
-    <div class="zone plain">页面里没有任何 <code>startDrag</code> 调用，全靠属性约定。</div>
+    <div class="zone plain">页面里没有任何 <code>startDrag</code> / <code>close</code> 调用，全靠属性约定。</div>
   </div>
-  <script>
-    // 只有关闭要一行 JS；拖拽全靠 data-ww-drag。
-    document.getElementById("close").addEventListener("click", () => widget.window.close("grip-x"));
-  </script>
 </body>
 </html>
