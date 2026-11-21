@@ -494,6 +494,25 @@ P2 里 `closeOnBlur` / `closeOnOutsideClick` / `modal` 三条走的是窗口失�
 
 两处为了看得清而调整的地方：覆盖框底色从 12% 抬到 62%——12% 时卡片上的字和框里的字叠在一起没法读；`rawHtml` 那条弹框给了 `x: 240, y: 260`——弹框是玻璃底，默认居中会正好压在明亮的编辑器窗口上，透出来的字比正文还清楚。
 
+### 真机返修第八轮：直角子窗的上两角又圆了回来
+
+测试台的「无边框 + 直角（`rounded: false`）」开出来的窗口，**两个上角是圆的、两个下角是方的**，而同一轮的 `dialog.alert`（有无边框、直角与否）四角都是干净的 90 度。
+
+| 观察（2560×1440，`GetWindowRgn` 读真实区域） | 结论 |
+|---|---|
+| 刚开出来的直角子窗 `GetWindowRgn` = `3`（`COMPLEXREGION`，多块拼出来的圆角形状），而 `DwmGetWindowAttribute(33)` 已经是 `1`（`DONOTROUND`） | `DONOTROUND` 只管 DWM 自己画的边框，管不住「客户区被扩展玻璃铺满」的窗口最终被裁成什么形状 |
+| 对同一个 hwnd 手动 `SetWindowRgn(CreateRectRgn(0,0,320,220))`，区域立刻变成 `2`（`SIMPLEREGION`），画面四角也当场变 90 度；之后点它激活、等 2 秒仍然是 `2` | 区域本身管用，问题只在「建窗时贴的那块没留住」 |
+| 同一时刻的弹框（`直角无边框` 380×149）区域一直是 `2` | 弹框的形状由内置页自己画，壳这一层没有再插一手，所以看不出差别 |
+
+根因：`build_custom` 里 `clip_square` 是在 `with_visible(false)` 的窗口上贴的，而窗口**第一次**被 DWM 合成（`set_visible(true)` 那一下）会把这块矩形换成它自己的默认圆角区域——页面画的是 90 度，壳把上两角又裁圆了一圈，下面两角因为不在 DWM 的圆角算子里所以仍是方的。
+
+改法两层：
+
+1. `build_custom` 在 `set_visible(true)` 之后按 `!frame && !rounded` 再 `clip_square` 一次；`mark_custom_loaded` 里等到页面 `ready` 才亮的窗口同样补一次。
+2. 宿主自检兜底：`platform::win32::square_clipped` 读 `GetWindowRgn` 判断区域还是不是一个整矩形，`App::repair_square_clips` 挂在 10ms 输入脉冲上、每 20 个脉冲（约 200ms）复查一次，形状被换掉就重贴并记一条 `square clip restored on N window(s)`。这样重获焦点、重建边框、DPI 变过之后又悄悄圆回去也能自己纠回来。
+
+真机验收（`cargo build --release` 后重启宿主）：`square.html` 那条从卡片点开，`GetWindowRgn` 读回 `2`、四角 1:1 放大都是直角（页面自带的 1px 描边四个角也是方的），故意点它激活再等 2 秒仍然是 `2`；同一轮里 `直角无边框` 与 `外观全开` 两扇弹框的四角没有变化。
+
 ### 还没做的
 
 1. `hello-widget` 模板示例：仓库里没有这个模板组件，指南里的示例段落已经覆盖同一份代码，是否要新建一个模板组件需要先定它放宿主仓库还是 Hub。
