@@ -50,6 +50,43 @@ const CASES = [
     () => widget.dialog.alert({ title: "保存完成", content: "三份文件已经写进回收站。", icon: "success" }),
   ],
   [
+    "图标：内置 lock + 自定义底色",
+    "icon:\"lock\" · iconColor 换成紫色 · 危险按钮",
+    () =>
+      widget.dialog.confirm({
+        title: "锁一下",
+        content: "头部徽标是内置的锁图标，底色被 iconColor 换成了紫色。",
+        icon: "lock",
+        iconColor: "#8b5cf6",
+        okText: "锁上",
+        cancelText: "算了",
+      }),
+  ],
+  [
+    "图标：组件自己的 icon.svg",
+    "icon:{url} · 用组件包里的图片当 logo",
+    () =>
+      widget.dialog.alert({
+        title: "用自有图标",
+        content: "左上角该是这张蓝色小窗口图，圆形底色没有了。",
+        icon: { url: "icon.svg" },
+        okText: "知道了",
+      }),
+  ],
+  [
+    "图标：内联 SVG",
+    "icon:{svg} · 不落地文件，直接给 SVG 字符串",
+    () =>
+      widget.dialog.alert({
+        title: "自己的 logo",
+        content: "左上角该是这个方块 W，而不是默认的圆徽标。",
+        icon: {
+          svg: '<svg viewBox="0 0 24 24"><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="#7c5cff"/><path d="M6.5 17V8l5.5 5.6L17.5 8v9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/></svg>',
+        },
+        okText: "不错",
+      }),
+  ],
+  [
     "alert 无标题 + 2.5 秒自动关",
     "320 宽 · 不显示标题 · 到点自己消失，reason=timeout",
     () =>
@@ -192,3 +229,4 @@ const runs = CASES.map(([label, hint, fn]) => button(label, hint, runner(label, 
 document.getElementById("clear").addEventListener("click", () => {
   results.innerHTML = "";
 });
+

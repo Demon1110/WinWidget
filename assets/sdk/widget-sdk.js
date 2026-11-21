@@ -926,6 +926,10 @@
     /**
      * alert({ title, content, icon, okText, autoClose, theme, accentColor, width, … })
      * → Promise<{ button, reason }>；关掉窗口（× / Esc / 超时）也算看过。
+     *
+     * `icon` 是左上角那个徽标：内置名（info / success / warn / error / bell / question /
+     * clock / sparkle / lock / trash / heart / star）、`{ svg }` 内联 SVG、`{ url }` 图片、
+     * `{ text }` 一个字符；`""` 不要徽标。底色用 `iconColor` 换。
      */
     alert(options) {
       const opt = typeof options === "string" ? { content: options } : options || {};

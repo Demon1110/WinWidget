@@ -435,6 +435,15 @@ P2 里 `closeOnBlur` / `closeOnOutsideClick` / `modal` 三条走的是窗口失�
 
 `look` 和 `normalize` 同一条规矩：组件坚持要 `frame:true` 就同时把 `transparent` 关掉，免得玻璃帧配标题栏又漏白边。
 
+### 真机返修第四轮：弹框徽标可换、入场动画挪到显示那一帧
+
+| 诉求 | 原来什么样 | 现在怎么做 |
+|---|---|---|
+| 左上角那个圆徽标一个字母，丑，还得能换成组件自己的 logo | 圆底色里印一个字符：`i` `!` `×` `✓` | 内置一小组矢量描的图形（`info` `success` `warn` `error` `bell` `question` `clock` `sparkle` `lock` `trash` `heart` `star`），描在同一个圆徽标上；要自己的 logo 就给 `icon: { svg }`（内联 SVG）、`icon: { url }`（图片，组件包内的相对路径也认，弹框页和组件同源）或 `icon: { text }`（一个字符）；底色用 `iconColor` 换，`icon: ""` 连徽标都不要 |
+| 弹框「啪」一下整块出现，淡入根本看不见 | 入场动画挂在 CSS 上，页面一加载就开始跑；窗口要等页面 ready 才显示，等亮出来时 160ms 早跑完了 | 页面先停在 `opacity: 0` 等一声令：宿主 `set_visible` 之后 `evaluate_script("__fwReveal()")` 才把动画交回给 CSS 从头播；顺序是先亮窗口再叫门，反了会看到完整画面闪一下再重播。另有 1.5s 兜底，避免老宿主/页面单独打开时永远不显示 |
+
+`animationMs` 一并接上了：它现在是真正的动画时长（之前只是个占位字段）。
+
 
 
 迁移后真机量到的结果：弹框落在主屏右上角 `(2164, 16)`、宽 380、高按内容收到 168（原来是写死的 300，一句话提醒下面留白），点「完成」宿主日志记 `win 1: closed (button)`，页面拿到的返回值是 `{"button":"ok","confirmed":true,"reason":"button"}`；弹框出现时前台窗口一直是浏览器，没有抢焦点。

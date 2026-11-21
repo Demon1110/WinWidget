@@ -57,6 +57,7 @@ const KNOWN: &[&str] = &[
     "title",
     "showTitle",
     "icon",
+    "iconColor",
     "content",
     "rawHtml",
     "buttons",
@@ -132,7 +133,7 @@ pub fn normalize(kind: &str, options: &Value) -> Value {
     out.insert("modal".into(), json!(false));
     // toast 不该挡住底下的点击：窗口层面就穿过去。
     out.insert("ignoreMouseEvents".into(), json!(toast));
-    out.insert("icon".into(), json!(""));
+    // 不写 `icon` 的默认值：页面靠「有没有这个键」区分「用默认图标」和「不要图标」。
     if let Some(obj) = options.as_object() {
         for (key, value) in obj {
             if key == "kind" || value.is_null() {
@@ -204,6 +205,24 @@ mod tests {
         // 组件明确要原生边框时按不透光处理，跟 `normalize` 一样
         let framed = look(&json!({ "frame": true }));
         assert_eq!(framed["transparent"], json!(false));
+    }
+
+    #[test]
+    fn the_icon_only_appears_when_the_component_asks() {
+        // 不传 `icon`：配置里就不要这个键，页面据此用默认图标
+        assert!(normalize("alert", &json!({})).get("icon").is_none());
+        // 传空字符串是「明确不要图标」，原样留着
+        assert_eq!(
+            normalize("alert", &json!({ "icon": "" }))["icon"],
+            json!("")
+        );
+        // 自定义徽标和它的底色也照传
+        let cfg = normalize(
+            "confirm",
+            &json!({ "icon": { "url": "data:image/png;base64,AA" }, "iconColor": "#ee00aa" }),
+        );
+        assert_eq!(cfg["icon"]["url"], json!("data:image/png;base64,AA"));
+        assert_eq!(cfg["iconColor"], json!("#ee00aa"));
     }
 
     #[test]

@@ -795,7 +795,8 @@ widget.dialog.toast({ content: "Saved", icon: "success" });
 |---|---|---|
 | `title` / `showTitle` | `""` / `true` | heading; `showTitle: false` keeps only the content |
 | `content` / `rawHtml` | — | plain text (wrapped) or HTML (`rawHtml: true`) |
-| `icon` | `"info"` | `info` `warn` `error` `success`; `""` for none |
+| `icon` | kind-dependent | Badge left of the title: built-in `info` `success` `warn` `error` `bell` `question` `clock` `sparkle` `lock` `trash` `heart` `star`; `{ svg }` inline SVG, `{ url }` image (absolute, `data:` or a path inside the widget package), `{ text }` a single character; `""` hides it |
+| `iconColor` | theme | Badge background, for the widget's own brand colour |
 | `buttons` | by kind | `[{ id, text, kind: "primary" \| "danger" }]`; with custom buttons `button` is the `id` |
 | `okText` / `cancelText` | OK / Cancel | button labels |
 | `danger` | `false` | paints the main button in the danger colour |

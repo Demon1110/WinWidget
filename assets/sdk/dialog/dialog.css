@@ -72,9 +72,32 @@ html.dlg-light {
   color: var(--w-on-accent);
   background: var(--w-accent);
 }
+/* 内置图标是矢量描在圆徽标上，换成自己的 logo 时去掉圆形底色 */
+.dlg-icon > svg { width: 14px; height: 14px; display: block; }
+.dlg-icon[data-wide="true"] { font-size: 12px; letter-spacing: -0.02em; }
+.dlg-icon[data-image="true"],
+.dlg-icon[data-logo="true"] {
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.dlg-icon[data-image="true"] .dlg-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.dlg-icon[data-logo="true"] > svg { width: 22px; height: 22px; }
 .dlg-icon[data-tone="warn"] { background: var(--w-warn); }
 .dlg-icon[data-tone="danger"] { background: var(--w-danger); }
 .dlg-icon[data-tone="success"] { background: #35c077; }
+/* 有色底徽标上的图形一律用白色，别跟着强调色按钮的深色字色走 */
+.dlg-icon[data-tone="warn"],
+.dlg-icon[data-tone="danger"],
+.dlg-icon[data-tone="success"] { color: #fff; }
+.dlg-icon[data-ink="white"] { color: #fff; }
 .dlg-icon[data-empty="true"] { display: none; }
 
 .dlg-x {

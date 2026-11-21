@@ -1127,6 +1127,11 @@ impl App {
             if win.show_on_ready {
                 win.show_on_ready = false;
                 win.window.set_visible(true);
+                // 页面把自己停在「未显示」等这一声：先亮窗口，再让它从第一帧播入场动画。
+                // 顺序反了会看到完整画面先出现、动画再从半透明重播一遍。
+                let _ = win
+                    .webview
+                    .evaluate_script("window.__fwReveal && window.__fwReveal()");
             }
             // Wallpaper windows are child windows behind the icon layer: they never capture the
             // mouse, and the layered click-through style would make their WebView invisible.

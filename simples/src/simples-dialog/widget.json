@@ -6,7 +6,7 @@
     "zh-CN": "widget.dialog 的逐项测试：alert / confirm / prompt / toast / window，以及尺寸、透明度、自动关闭、锚点、模态这些配置。",
     "en": "Step-by-step checks for widget.dialog: alert / confirm / prompt / toast / window, plus size, opacity, auto close, anchor and modal."
   },
-  "version": "0.1.1",
+  "version": "0.1.2",
   "date": "2026-11-21",
   "author": "WinWidget",
   "entry": "index.html",
@@ -25,3 +25,4 @@
   "permissions": [],
   "settings": []
 }
+
