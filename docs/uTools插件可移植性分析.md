@@ -116,14 +116,47 @@
 
 排序建议（按一次投入解锁的数量）：`input.subscribe` > ffmpeg 官方工具包 > `net.serve` > `system.exec` > `ai.chat`。文件读写看起来最基础，但它是 5 个插件的共同门槛，实际优先级应排在 `input.subscribe` 之后、`system.exec` 之前。
 
-## 五、本批落地
+## 五、落地情况
 
-| 组件 id | 名称 | 来源 | 状态 |
+A 类 10 个全部落地，B 类落下 4 个，一共 14 个组件。全部按功能自研重写，不复制原包代码与素材；`node scripts/check.mjs` 全绿（69 个组件）。
+
+| 组件 id | 名称 | 来源 | 说明 |
 | --- | --- | --- | --- |
-| `fake-data` | 假数据 | 姓名身份证虚拟生成器 | 已构建，5.3 KB |
-| `2048` | 数字方块 | 休闲游戏厅 | 已构建，6.1 KB |
-| `avatar` | 丑丑头像 | 丑丑头像 | 已构建，6.5 KB |
+| `fake-data` | 假数据 | 姓名身份证虚拟生成器 | GB 11643 校验位 + Luhn，只在本机生成 |
+| `2048` | 数字方块 | 休闲游戏厅 | 3×3 / 4×4 / 5×5，最高分存 storage |
+| `avatar` | 丑丑头像 | 丑丑头像 | mulberry32 种子出图，按导出尺寸重画 |
+| `arcade` | 游戏厅 | 休闲游戏厅 | 贪吃蛇、打砖块、扫雷三合一，棋盘尺寸随卡片自适应 |
+| `greeting` | 暖心问候 | 暖心问候 | 5 场景 × 3 语气手写句库，非模型现编 |
+| `offwork` | 下班有数 | 下班有数 | 上下班时间可配，周末直接标休息 |
+| `json-edit` | JSON 整理 | JSON 编辑器 | 排版 / 压行 / 行列定位报错，粘贴即用 |
+| `benchmark` | 人类基准 | 人类基准测试 | 反应速度五轮取平均 + 数字记忆 |
+| `screen-test` | 屏幕检测 | 屏幕检测师 | 纯色 / 灰阶 / 坏点 / 色带 / 字级 |
+| `palette` | 色卡 | 色感 + 颜色助手 | 屏幕取色、深浅 / 协调 / 三角配色，内含 7 套 ColorBrewer |
+| `code-card` | 代码截图 | 代码截图 | 自写 tokenizer，出 PNG 进剪贴板 |
+| `shooter` | 无限重载 | 无限重载 | 竖版射击，三条命，难度随时间加档 |
+| `worktime` | 工时日历 | 牛马工时日历 + 班日钟 | 节假日调休按年拉 holiday-cn 并缓存，可切双休 / 大周 / 单休 |
+| `ascii-art` | 字块艺术 | ASCII艺术字符 | 系统字体渲染后降采样成字符，不用 .flf 字体 |
 
-三个都按 Hub 规范写了 `widget.json` / `index.html` / `main.js` / `style.css` / `icon.svg`，主题沿用 base.css 变量，`node scripts/check.mjs` 全绿（58 个组件）。预览图暂缺，构建只报 warning。
+没做的三个 B 类：
 
-A 类剩余可做：`screen-test`（屏幕检测师）、`shooter`（无限重载）、`greeting`（暖心问候）、`json-edit`（JSON 编辑器）、`palette`（色感）、`benchmark`（人类基准测试）、`offwork`（下班有数）；休闲游戏厅里另外三款（贪吃蛇 / 打砖块 / 扫雷）可各开独立 id。
+- `ico-maker`（ico嗷嗷匠）：ICO 编码本身能在页面里写完，卡在**没有 `file.read` / `file.write`**，读不了源图、也存不下 .ico。等宿主补文件读写。
+- `copybook`（小学匠字帖）：数据可用（见下节），但每个汉字一份笔画 JSON，按需从 cdn.jsdelivr.net 取；这次没排进来，留作下一批。
+- `guandan`（掼蛋）：12MB 卡牌与动画是作者原创美术，无法复用，重画成本高于收益。
+
+## 六、可以放心复用的第三方资源
+
+按「授权清晰、能再分发」筛过一遍，以下都是白名单：
+
+| 资源 | 用途 | 授权 | 现用在哪 |
+| --- | --- | --- | --- |
+| holiday-cn（NateScarlet） | 中国大陆法定节假日、调休与补班，整理自国务院公告 | MIT | `worktime` 按年取 `{year}.json`，缓存到 storage |
+| ColorBrewer 色板 | 配色方案 | 作者 Cynthia Brewer 声明可自由使用；d3-scale-chromatic 以 Apache-2.0 收录 | `palette` 内嵌 Set1 / Dark2 / Paired / Blues / Greens / OrRd / PuBuGn |
+| viridis | 连续色阶 | matplotlib 出品，CC0 | `palette` 内嵌 6 色采样 |
+| hanzi-writer-data | 汉字笔画路径 | Arphic Public License，允许再分发（需随附授权文本） | 下一批 `copybook` 用，按字现取 |
+| OFL 字体（JetBrains Mono、思源黑体等） | 若要打包等宽或中文字体 | SIL OFL 1.1，可嵌入再分发 | 目前一律不打包，走系统字体 |
+| Tabler / Lucide 图标 | 图标 | MIT / ISC | 未使用，当前 13 个图标都是自己画的 SVG |
+
+**不能用**：各插件自带的 logo、截图、UI 素材、掼蛋的卡牌美术；以及没标注授权的「中国传统色」整理表——那张表来源混杂，要用就自己从公开色值重排一份。
+
+顺带说清两处刻意的取舍：`ascii-art` 不用 FIGlet 的 `.flf` 字体（各款授权不统一，且原包带 307 个文件），改成用系统字体渲染再降采样；`code-card` 不引 highlight.js / Prism，自写几十行 tokenizer，省体积也免掉再分发声明。
+
