@@ -202,6 +202,42 @@ const CASES = [
       }),
   ],
   [
+    "底板半透明 + 文字清晰",
+    "backgroundOpacity 只淡底板（这里是 35%），文字和按钮照样清楚；底色也单独换成深蓝",
+    () =>
+      widget.dialog.alert({
+        title: "磨砂面板",
+        content: "底板 35% 不透明、底色换成深蓝，字仍然是实的；整窗 opacity 保持 1，所以内容不跟着虚。",
+        width: 380,
+        backgroundColor: "rgba(18, 26, 48, 1)",
+        backgroundOpacity: 0.35,
+      }),
+  ],
+  [
+    "只换底板底色",
+    "backgroundColor 单独用：底板换成暖棕、仍是不透明的，字和按钮一点没动",
+    () =>
+      widget.dialog.alert({
+        title: "换了底板",
+        content: "只有底板颜色变了，不透明度还是 1；跟主题给的烟灰色应该明显不同。",
+        width: 380,
+        backgroundColor: "#3A2E22",
+      }),
+  ],
+  [
+    "底板 35% + 整窗 60%",
+    "两个旋钮各调各的：底板 35% 只淡底板，整窗 60% 再把整扇面（含字）一起淡",
+    () =>
+      widget.dialog.alert({
+        title: "两档叠着调",
+        content: "底板是 35% 的深蓝，整窗又按 60% 淡了一层：底板更透，字也跟着虚一点，但底板和字是两回事。",
+        width: 380,
+        backgroundColor: "rgba(18, 26, 48, 1)",
+        backgroundOpacity: 0.35,
+        opacity: 0.6,
+      }),
+  ],
+  [
     "modal 模态",
     "弹出来时父卡片点不动，关掉立刻恢复",
     () =>

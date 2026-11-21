@@ -4,12 +4,17 @@
 
 html, body { height: 100%; }
 
+/* 底板色分两级：`--w-plate-base` 是这块面本身的颜色（主题给的 `--w-bg`，`backgroundColor` 可换、
+   light 主题也换），`--w-plate` 是最终拿去画的那一版；`backgroundOpacity` 只把后者的 alpha 折算，
+   不动子元素，所以字始终是实的。整窗的 `opacity` 走 `base.css` 的 `--w-opacity`，两者互不干扰。 */
+:root { --w-plate-base: var(--w-bg); }
+
 body {
   /* base.css 把 body 当成卡片本体画（有 padding 和 1px 描边），弹框也一样用这块面。 */
   padding: 0;
   display: flex;
   flex-direction: column;
-  background: var(--w-bg);
+  background: var(--w-plate, var(--w-plate-base));
   border-radius: calc(var(--w-radius) / var(--w-size-scale));
 }
 
@@ -18,9 +23,10 @@ body[data-square="true"],
 body[data-square="true"] .dlg { border-radius: 0; }
 
 html.dlg-light body {
-  background: #f4f6f8;
   color: #1a1d21;
-  box-shadow: inset 0 0 0 calc(1px / var(--w-size-scale)) rgba(0, 0, 0, 0.12);
+}
+html.dlg-light {
+  --w-plate-base: #f4f6f8;
 }
 html.dlg-light {
   --w-fg: #1a1d21;

@@ -83,6 +83,7 @@ const KNOWN: &[&str] = &[
     "rounded",
     "transparent",
     "backgroundColor",
+    "backgroundOpacity",
     "opacity",
     "accentColor",
     "theme",
@@ -165,6 +166,8 @@ pub fn normalize(kind: &str, options: &Value) -> Value {
     out.insert("frame".into(), json!(false));
     out.insert("rounded".into(), json!(true));
     out.insert("transparent".into(), json!(true));
+    // `backgroundColor` 兼着窗口背景刷：透明窗口就该给个全透明的值。页面把「全透明」当成
+    // 「没给」，底板回落到主题的 `--w-bg`，所以这个默认值不会把底板一起抹掉。
     out.insert("backgroundColor".into(), json!("rgba(0,0,0,0)"));
     out.insert("theme".into(), json!("inherit"));
     out.insert(
@@ -206,6 +209,11 @@ pub fn normalize(kind: &str, options: &Value) -> Value {
         if options.get("showTitle").is_none() {
             out.insert("showTitle".into(), json!(false));
         }
+    }
+    // 底板不透明度是给页面用的（0–1），跟着 `opacity` 一样收口到合法区间，
+    // 免得组件传个 35 之类的值把页面算出一层奇怪的遮罩。
+    if let Some(v) = out.get("backgroundOpacity").and_then(Value::as_f64) {
+        out.insert("backgroundOpacity".into(), json!(v.clamp(0.0, 1.0)));
     }
     Value::Object(out)
 }
@@ -276,6 +284,32 @@ mod tests {
         );
         assert_eq!(cfg["icon"]["url"], json!("data:image/png;base64,AA"));
         assert_eq!(cfg["iconColor"], json!("#ee00aa"));
+    }
+
+    #[test]
+    fn the_panel_colour_and_its_own_opacity_are_separate_knobs() {
+        // 底板底色和底板不透明度各自独立：`opacity` 管整扇面，这两个只管底板那一层。
+        let cfg = normalize(
+            "alert",
+            &json!({ "backgroundColor": "#101216", "backgroundOpacity": 1.4 }),
+        );
+        assert_eq!(cfg["backgroundColor"], json!("#101216"));
+        assert_eq!(cfg["backgroundOpacity"], json!(1.0));
+        // 负数收口到 0，没传就不写这个键（页面用默认 1）
+        assert_eq!(
+            normalize("alert", &json!({ "backgroundOpacity": -2 }))["backgroundOpacity"],
+            json!(0.0)
+        );
+        assert!(normalize("alert", &json!({}))
+            .get("backgroundOpacity")
+            .is_none());
+        // 整窗 `opacity` 和底板不透明度互不影响
+        let both = normalize(
+            "alert",
+            &json!({ "opacity": 0.9, "backgroundOpacity": 0.35 }),
+        );
+        assert_eq!(both["opacity"], json!(0.9));
+        assert_eq!(both["backgroundOpacity"], json!(0.35));
     }
 
     #[test]

@@ -933,6 +933,10 @@
      *
      * 有原生边框（`frame: true`）时，标题栏左上角那个小图标用 `windowIcon`：组件包内的
      * 相对路径或 `data:` 位图（SVG 不行，Windows 要像素）。
+     *
+     * 底板和整窗分开调：`backgroundColor` 换底板底色、`backgroundOpacity` 只淡底板（文字
+     * 保持清晰），`opacity` 淡的是整扇面（底板 + 内容），三者互不影响，底板最终透明度是
+     * `opacity × backgroundOpacity`。全透明的 `backgroundColor` 当没给，底板跟主题。
      */
     alert(options) {
       const opt = typeof options === "string" ? { content: options } : options || {};

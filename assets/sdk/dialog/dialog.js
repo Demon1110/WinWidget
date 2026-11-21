@@ -22,6 +22,33 @@
   const body = document.body;
   const root = document.documentElement;
 
+  /** 取底板色用：全透明（`transparent` / alpha 0）当没给，免得把「窗口透明」当成「底板透明」。 */
+  function plateColor(value) {
+    if (typeof value !== "string") return "";
+    const s = value.trim();
+    if (!s) return "";
+    const low = s.toLowerCase();
+    if (low === "transparent" || low === "none") return "";
+    const hex = low.match(/^#([0-9a-f]{3,8})$/);
+    if (hex) {
+      const h = hex[1];
+      if (h.length === 4 && h.charAt(3) === "0") return "";
+      if (h.length === 8 && h.slice(6) === "00") return "";
+      return s;
+    }
+    const fn = low.match(/^rgba?\(([^)]+)\)$/);
+    if (fn) {
+      const parts = fn[1].split(/[,\/]/).map((x) => x.trim());
+      if (parts.length >= 4) {
+        const a = parts[3].endsWith("%")
+          ? Number.parseFloat(parts[3]) / 100
+          : Number.parseFloat(parts[3]);
+        if (!(a > 0)) return "";
+      }
+    }
+    return s;
+  }
+
   dlg.dataset.kind = kind;
   if (kind === "toast") body.dataset.toast = "true";
   // 有原生边框时客户区是矩形，圆角由窗口负责；无边框时由 `rounded` 说了算。
@@ -29,6 +56,24 @@
   if (cfg.theme === "light" || cfg.theme === "dark") root.classList.add("dlg-" + cfg.theme);
   if (typeof cfg.accentColor === "string" && cfg.accentColor) {
     root.style.setProperty("--w-accent", cfg.accentColor);
+  }
+
+  // 底板和整窗分开调：`backgroundColor` 换底板色，`backgroundOpacity` 只折算底板的 alpha
+  // （用 `color-mix` 把颜色和透明混合，只影响这一层绘制），文字和按钮始终是实的；
+  // 整窗的 `opacity` 淡的是整扇面，两者互不影响——底板最终 alpha = 原来的 alpha × backgroundOpacity。
+  // 注意 `backgroundColor` 还兼着窗口背景刷的活儿，宿主会给它一个 `rgba(0,0,0,0)` 的默认值；
+  // 那是「窗口透明」，不是「底板要透明」，这种全透明的值一律当成没给，底板回落到主题色。
+  const plate = plateColor(cfg.backgroundColor);
+  if (plate) root.style.setProperty("--w-plate-base", plate);
+  if (cfg.backgroundOpacity != null) {
+    const bgOpacity = Number(cfg.backgroundOpacity);
+    if (Number.isFinite(bgOpacity) && bgOpacity >= 0 && bgOpacity < 1) {
+      const pct = Math.round(bgOpacity * 100 * 100) / 100;
+      root.style.setProperty(
+        "--w-plate",
+        `color-mix(in srgb, var(--w-plate-base) ${pct}%, transparent)`,
+      );
+    }
   }
 
   // 逐像素透明的窗口叠不了整窗 alpha（会把玻璃帧顶掉），所以透明度在页面上做；
