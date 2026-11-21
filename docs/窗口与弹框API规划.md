@@ -701,6 +701,26 @@ C[body 背景]   = rgba(0, 0, 0, 0)
 
 **验证状态**：`cargo test` 101 passed / 2 ignored、`clippy --all-targets -D warnings` 全绿、`fmt` 无改写、`node simples\pack.mjs` 两个组件包重打。真机像素回归这一轮**没做完**——构建并重启宿主时这台机器已经进了锁屏（`LogonUI` 在跑，全屏检测把它记成了 `Windows.UI.Core.CoreWindow|Windows 默认锁屏界面`），卡片按 `pause_on_fullscreen` 整片隐去，截屏只能拿到锁屏壁纸。解锁后要补的三项：把位三角形命中区（点卡片右下角内容仍生效）、自建窗口拖拽放大（`grip.html` 那扇 340×200 拖成 380×240）、全跑汇总表。
 
+### 真机返修第十七轮：双击把位铺满与还原
+
+把位能拖了之后，用户接着要的是 Windows 上那套老习惯：双击把它铺满，再双击回到原样。
+
+**不交给系统的 `WS_MAXIMIZE`。** 那会给窗口补 `WS_MAXIMIZEBOX` 并把状态记进 `WINDOWPLACEMENT`，无边框自绘窗口的圆角（`DWMWA_WINDOW_CORNER_PREFERENCE`）与直角窗口的矩形区域（`SetWindowRgn`）都会跟着变样——上一轮刚为这两样东西返修过。所以矩形自己算：
+
+- 目标尺寸 = 当前显示器的工作区（`monitor_work_area`，已经扣掉任务栏）；
+- 创建时给了 `maxWidth` / `maxHeight` 就往下夹，给了 `minWidth` / `minHeight` 就往上抬（按 DPI 折算成物理像素）；
+- 被夹小了就居中摆在工作区里，不贴左上角——否则看起来既不像铺满也不像居中。
+
+**来回切靠的是记下来的原矩形。** `CustomWin` 加一个 `restore: Option<w::RECT>`：`Some` 就是此刻铺满，再双击一次按它还原。改完矩形统一走 `apply_custom_rect`（改外层矩形 → `fit_view` 让 WebView2 跟上 → 给页面发 `win.maximized`），和拖把时那条 `winbounds` 路径是同一段收尾。
+
+**铺满状态按把位先还原。** 不这么办的话，拖拽起点是整屏尺寸，指针才动几像素窗口就瞬间缩掉一大块。所以 `start_custom_resize` 进门先看 `restore`，是 `Some` 就先还原成原来那扇再起循环。
+
+**入口。** SDK 在 `.fw-resize` 上加了 `dblclick`（捕获阶段），发 `window.maximize`；`custom_notify` 接住转给 `toggle_custom_maximize`，不能放大的窗口（弹框、壁纸层）直接返回。卡片也能收到这条消息，但卡片的大小归组件清单，宿主当没发生——不会在日志里留一条未知消息。
+
+**回归单测。** `tests/maximize.rs` 五条，钉的是算术：工作区原样、`max` 夹住并居中、`min` 比工作区还大时仍保底、DPI 2.0 下的折算、`max` 比 `min` 还小时保住 floor（不能缩成负尺寸）。
+
+**验证状态**：`cargo test --test maximize` 5 passed，`clippy` / `fmt` / 全量 `cargo test` 见下文。真机这一轮和上一轮一样没验——机器仍在锁屏，双击把位（`grip.html` 340×200 → 铺满 → 还原）要等解锁后补。
+
 ### 还没做的
 
 1. `hello-widget` 模板示例：仓库里没有这个模板组件，指南里的示例段落已经覆盖同一份代码，是否要新建一个模板组件需要先定它放宿主仓库还是 Hub。

@@ -1003,7 +1003,7 @@ WinWidget handles these for you:
 
 - **Dragging**: press anywhere on the card and drag to move the widget. Buttons, links and inputs don't start a drag; add `data-no-drag` to anything else that shouldn't.
 - **Right-click** shows the WinWidget widget menu. Add `data-no-menu` where you want to handle right-clicks yourself.
-- **Resizing**: unless `size.resizable` is `false`, there's a grip in the bottom-right corner.
+- **Resizing**: unless `size.resizable` is `false`, there's a grip in the bottom-right corner. In a window the widget opened itself, double-clicking that grip fills the screen and double-clicking again restores the old size; the host computes the rectangle itself, so rounded corners and square clipping stay intact. Cards have no such state.
 - **Locking**: a locked widget can't be moved or resized; check `widget.locked` or `html[data-locked]`.
 
 ---

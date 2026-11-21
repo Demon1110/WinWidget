@@ -962,7 +962,7 @@ html[data-locked=&quot;true&quot;] #next { display: none; }</code></pre></div>
 <ul class="plain">
 <li><strong>拖动</strong>：在卡片任何地方按住拖动，就能移动组件。按钮、链接、输入框不会触发拖动；其他元素不想被拖动时，加上 <code>data-no-drag</code>。</li>
 <li><strong>右键</strong>：显示 WinWidget 的组件菜单。某个区域要自己处理右键时，加上 <code>data-no-menu</code>。</li>
-<li><strong>缩放</strong>：<code>size.resizable</code> 不是 <code>false</code> 时，右下角会有缩放手把。</li>
+<li><strong>缩放</strong>：<code>size.resizable</code> 不是 <code>false</code> 时，右下角会有缩放手把。在自己开的窗口里，手把上双击一下会铺满屏幕，再双击回到原来那扇（矩形由宿主算，圆角与直角裁切都不受影响；卡片没有这回事）。</li>
 <li><strong>锁定</strong>：用户锁定组件后不能拖动和缩放；你可以用 <code>widget.locked</code> 和 <code>html[data-locked]</code> 知道。</li>
 </ul>
 <hr class="sep">
@@ -1929,7 +1929,7 @@ html[data-locked=&quot;true&quot;] #next { display: none; }</code></pre></div>
 <ul class="plain">
 <li><strong>拖動</strong>：在卡片任何地方按住拖動，就能移動組件。按鈕、連結、輸入框不會觸發拖動；其他元素不想被拖動時，加上 <code>data-no-drag</code>。</li>
 <li><strong>右鍵</strong>：顯示 WinWidget 的組件選單。某個區域要自己處理右鍵時，加上 <code>data-no-menu</code>。</li>
-<li><strong>縮放</strong>：<code>size.resizable</code> 不是 <code>false</code> 時，右下角會有縮放手把。</li>
+<li><strong>縮放</strong>：<code>size.resizable</code> 不是 <code>false</code> 時，右下角會有縮放手把。在自己開的視窗裡，手把上雙擊一下會鋪滿螢幕，再雙擊回到原來那扇（矩形由宿主算，圓角與直角裁切都不受影響；卡片沒有這回事）。</li>
 <li><strong>鎖定</strong>：用戶鎖定組件後不能拖動和縮放；你可以用 <code>widget.locked</code> 和 <code>html[data-locked]</code> 知道。</li>
 </ul>
 <hr class="sep">
@@ -2896,7 +2896,7 @@ html[data-locked=&quot;true&quot;] #next { display: none; }</code></pre></div>
 <ul class="plain">
 <li><strong>Dragging</strong>: press anywhere on the card and drag to move the widget. Buttons, links and inputs don&#x27;t start a drag; add <code>data-no-drag</code> to anything else that shouldn&#x27;t.</li>
 <li><strong>Right-click</strong> shows the WinWidget widget menu. Add <code>data-no-menu</code> where you want to handle right-clicks yourself.</li>
-<li><strong>Resizing</strong>: unless <code>size.resizable</code> is <code>false</code>, there&#x27;s a grip in the bottom-right corner.</li>
+<li><strong>Resizing</strong>: unless <code>size.resizable</code> is <code>false</code>, there&#x27;s a grip in the bottom-right corner. In a window the widget opened itself, double-clicking that grip fills the screen and double-clicking again restores the old size; the host computes the rectangle itself, so rounded corners and square clipping stay intact. Cards have no such state.</li>
 <li><strong>Locking</strong>: a locked widget can&#x27;t be moved or resized; check <code>widget.locked</code> or <code>html[data-locked]</code>.</li>
 </ul>
 <hr class="sep">
