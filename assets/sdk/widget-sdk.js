@@ -400,9 +400,10 @@
   // 也不会先被拖一下再关。
   document.addEventListener("click", (e) => {
     const el = e.target.closest && e.target.closest("[data-ww-close]");
-    if (!el) return;
-    e.preventDefault();
-    closeSelf(el.getAttribute("data-ww-close") || "api");
+    if (el) {
+      e.preventDefault();
+      closeSelf(el.getAttribute("data-ww-close") || "api");
+    }
   }, true);
 
   /** 关掉当前窗口：自定义窗口走 `win.close`（能带原因），卡片走 `window.close`（收起）。 */
