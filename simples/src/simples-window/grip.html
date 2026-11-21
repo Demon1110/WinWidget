@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>约定拖拽</title>
+  <style>
+    html, body { margin: 0; height: 100%; }
+    body {
+      box-sizing: border-box;
+      display: flex; flex-direction: column;
+      border-radius: 14px;
+      overflow: hidden;
+      background: var(--w-bg-solid, #12161a);
+      color: var(--w-fg, #e9eef2);
+      font: 13px/1.5 system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    /* 光标和"按住不选字"由 base.css 的 [data-ww-drag] 统一给，这里一个字都不写 */
+    .bar {
+      flex: none;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 10px;
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .bar strong { font-weight: 600; }
+    .bar button { border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; opacity: 0.75; }
+    .body { flex: 1 1 auto; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; }
+    .zone {
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.04);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+      font-size: 12px;
+    }
+    .zone b { font-weight: 600; }
+    .plain { background: rgba(255, 255, 255, 0.02); }
+  </style>
+</head>
+<body>
+  <div class="bar" data-ww-drag>
+    <strong>按住这条标题就拖</strong>
+    <button type="button" id="close" data-ww-nodrag title="关闭">×</button>
+  </div>
+  <div class="body">
+    <div class="zone" data-ww-drag>
+      <b>这块也标了 data-ww-drag</b> — 按住它任意位置同样能拖整窗。
+    </div>
+    <div class="zone plain">
+      <b>这块没标</b> — 按住拖不动，文字能正常选中。
+    </div>
+    <div class="zone plain">页面里没有任何 <code>startDrag</code> 调用，全靠属性约定。</div>
+  </div>
+  <script>
+    // 只有关闭要一行 JS；拖拽全靠 data-ww-drag。
+    document.getElementById("close").addEventListener("click", () => widget.window.close("grip-x"));
+  </script>
+</body>
+</html>

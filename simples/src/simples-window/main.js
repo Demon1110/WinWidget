@@ -159,6 +159,24 @@ const CASES = [
     },
   ],
   [
+    "约定拖拽（data-ww-drag）",
+    "按住标题条拖动整个窗口；按 × 只关闭不拖；没标的块拖不动",
+    async () => {
+      const w = widget.windows.open({
+        html: "grip.html",
+        key: "grip",
+        title: "约定拖拽",
+        width: 340,
+        height: 200,
+        frame: false,
+        transparent: true,
+        draggable: true,
+      });
+      await w.loaded;
+      return { id: w.id };
+    },
+  ],
+  [
     "无边框 + 直角（rounded:false）",
     "四角应干净 90 度：窗口层整扇裁直，页面也没有 border-radius；按住顶栏仍能拖",
     async () => {
