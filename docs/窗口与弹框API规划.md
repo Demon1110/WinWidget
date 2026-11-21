@@ -412,6 +412,21 @@ document.getElementById("save").onclick = async () => {
 
 P2 里 `closeOnBlur` / `closeOnOutsideClick` / `modal` 三条走的是窗口失焦与 `EnableWindow`，需要在真机上点一下别处才能看到效果，验证留到有交互的会话；`autoClose` 与 `anchor` 已在真机上量过坐标与关闭原因。
 
+### 真机返修第二轮：「无边框 + 直角」上圆下直
+
+第一轮修完再看「无边框 + 直角 + 92% 透明」这条，弹框是**上圆下直**：左上、右上各带一道约 4px 的弧，左下、右下是 90 度。
+
+| 环节 | 实测 | 结论 |
+|---|---|---|
+| 页面侧 | 在真机上临时把 `document.body.dataset.square` 与 `getComputedStyle` 打到弹框正文：`sq=true tl=0px bl=0px dlgtl=0px`，`innerHeight` 与 body 高都是 149 | 页面四角确实是 0，`data-square` 生效 |
+| 窗口侧 | 对同一个 hwnd 重新 `DwmSetWindowAttribute(33, DONOTROUND)`（返回 0，成功）后像素不变 | `DONOTROUND` 对「客户区被扩展玻璃铺满」的无边框窗口不生效 |
+| 定形 | 对同一个 hwnd `SetWindowRgn` 贴一个整矩形区域 | 弧立刻消失，四角变 90 度 |
+
+所以那 4px 不是页面画的、也不是我们要求的，是 DWM 留在玻璃壳上的默认圆角——属于疏漏。修法是：无边框 + `rounded:false` 的窗口在 `fit_client` 之后补一次 `win32::clip_square`（`CreateRectRgn(0,0,w,h)` + `SetWindowRgn`），并把「要不要裁」记进 `CustomWin::square`，`setSize` / `setBounds` / 最大化 / `setFullScreen` 之后各重贴一次（区域是按尺寸定死的，窗口一变旧区域就会把新长出来的部分裁掉）。
+
+复测（2560×1440，`target\release`）：左上 `y=630` 那一行从 `x=1090` 起就是页面 1px 描边，四角全 90 度；同一构建下默认圆角的 alert 仍是 16px 圆角（`y=650..666` 逐行内收 16px），没有被误裁。
+
+
 迁移后真机量到的结果：弹框落在主屏右上角 `(2164, 16)`、宽 380、高按内容收到 168（原来是写死的 300，一句话提醒下面留白），点「完成」宿主日志记 `win 1: closed (button)`，页面拿到的返回值是 `{"button":"ok","confirmed":true,"reason":"button"}`；弹框出现时前台窗口一直是浏览器，没有抢焦点。
 
 还没做的一件（不阻塞使用）：

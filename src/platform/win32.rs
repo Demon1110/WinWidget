@@ -415,6 +415,8 @@ extern "system" {
     pub fn SelectObject(dc: isize, object: isize) -> isize;
     pub fn DeleteObject(object: isize) -> i32;
     pub fn CreateRectRgn(x1: i32, y1: i32, x2: i32, y2: i32) -> isize;
+    /// 给窗口贴一个 win32 区域（坐标系是窗口客户区），窗口从此只在那块形状里可见。
+    pub fn SetWindowRgn(hwnd: HWND, region: isize, redraw: i32) -> i32;
     pub fn CreateDIBSection(
         dc: isize,
         info: *const BITMAPINFO,
@@ -919,6 +921,35 @@ pub fn fit_client(hwnd: HWND, x: i32, y: i32, w: i32, h: i32) {
             h + pad_h,
             SWP_NOZORDER | SWP_NOACTIVATE,
         );
+    }
+}
+
+/// Cuts the window down to a plain rectangle.
+///
+/// `DWMWA_WINDOW_CORNER_PREFERENCE = DONOTROUND` only speaks about the frame shell DWM would
+/// otherwise draw; a frameless window whose client area is filled by the extended glass keeps a
+/// few pixels of the *default* rounding on its own. Asking for square corners on such a window
+/// still leaves that sliver behind on screen — the page paints a 90° corner and the shell trims
+/// it back — so the only thing that actually overrides it is an explicit window region.
+pub fn clip_square(hwnd: HWND) {
+    unsafe {
+        let mut cr = RECT::default();
+        if GetClientRect(hwnd, &mut cr) == 0 {
+            return;
+        }
+        let (w, h) = (cr.right - cr.left, cr.bottom - cr.top);
+        if w <= 0 || h <= 0 {
+            return;
+        }
+        let region = CreateRectRgn(0, 0, w, h);
+        if region == 0 {
+            return;
+        }
+        // A region handed to `SetWindowRgn` belongs to the window afterwards; freeing it here would
+        // leave the window pointing at released memory. Only a failed call leaves it ours.
+        if SetWindowRgn(hwnd, region, 1) == 0 {
+            let _ = DeleteObject(region);
+        }
     }
 }
 

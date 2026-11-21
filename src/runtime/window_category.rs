@@ -162,6 +162,9 @@ pub struct CustomWin {
     /// `set_visible` 会按自己缓存的样式重写扩展样式，把 `WS_EX_LAYERED` 抹掉，所以这里记着，
     /// 每次显示或页面就绪后再补一次；逐像素透明的窗口不记（透明度由页面叠）。
     pub alpha: Option<f64>,
+    /// 无边框且要求直角的窗口靠 win32 区域裁成矩形（见 `win32::clip_square`）。区域是按窗口尺
+    /// 寸定死的，窗口一改大小就得重贴，所以记着这个开关，`setSize` / `setBounds` 里补一次。
+    pub square: bool,
     /// Mounted as a child of the shell's wallpaper host, below the desktop icons. Such a window
     /// must never go through tao's window-flags diff (set_visible/set_ignore_cursor_events/
     /// set_fullscreen/set_outer_position), which would rewrite its style back to WS_POPUP.
@@ -171,6 +174,14 @@ pub struct CustomWin {
 impl CustomWin {
     pub fn hwnd(&self) -> w::HWND {
         self.window.hwnd()
+    }
+
+    /// 直角无边框窗口的矩形区域是按窗口尺寸定死的，任何改变尺寸的操作（`setSize`、最大化、
+    /// 全屏）都得重贴一次，否则窗口长出去的那部分会被旧区域裁掉。
+    fn reclip(&self) {
+        if self.square {
+            w::clip_square(self.window.hwnd());
+        }
     }
 
     fn scale(&self) -> f64 {
@@ -362,6 +373,11 @@ pub fn build_custom(
         w::drop_frame(hwnd);
         w::fit_client(hwnd, px, py, to_px(width), to_px(height));
         w::polish_frame(hwnd, dwm_round);
+        // 无边框 + 直角：DWM 不认 `DONOTROUND`，玻璃帧自己还留着几个像素的默认圆角。页面画的是
+        // 90°，所以那几像素只能靠区域裁掉，否则四角里就有一两个"偷偷"圆回来。
+        if !rounded {
+            w::clip_square(hwnd);
+        }
     } else if !rounded {
         // 有系统边框时圆角由 Windows 默认加在整扇窗口上：要求直角就得单独说一声。这里不能走
         // `polish_frame`——它顺手关掉非客户区渲染，会把用户要的原生标题栏一起抹掉。
@@ -502,6 +518,7 @@ pub fn build_custom(
 
     Ok(CustomWin {
         wallpaper,
+        square: !frame && !rounded,
         id,
         key: jstr(&o, "key").unwrap_or_default(),
         kind: jstr(&o, "kind").unwrap_or_else(|| "window".into()),
@@ -1389,6 +1406,7 @@ fn invoke(app: &mut App, id: u32, m: &str, p: &Value) -> BridgeResult<Reply> {
             let height = jnum(p, "height").unwrap_or(0.0).max(1.0);
             if let Some(win) = app.customs.get(&id) {
                 win.window.set_inner_size(LogicalSize::new(width, height));
+                win.reclip();
             }
             Value::Null
         }
@@ -1418,6 +1436,7 @@ fn invoke(app: &mut App, id: u32, m: &str, p: &Value) -> BridgeResult<Reply> {
                     from_dip(ny, scale),
                 ));
                 win.window.set_inner_size(LogicalSize::new(nw, nh));
+                win.reclip();
             }
             Value::Null
         }
@@ -1467,12 +1486,14 @@ fn invoke(app: &mut App, id: u32, m: &str, p: &Value) -> BridgeResult<Reply> {
         "maximize" => {
             if let Some(win) = app.customs.get(&id) {
                 win.window.set_maximized(true);
+                win.reclip();
             }
             Value::Null
         }
         "unmaximize" => {
             if let Some(win) = app.customs.get(&id) {
                 win.window.set_maximized(false);
+                win.reclip();
             }
             Value::Null
         }
@@ -1518,6 +1539,7 @@ fn invoke(app: &mut App, id: u32, m: &str, p: &Value) -> BridgeResult<Reply> {
                 } else {
                     win.window.set_fullscreen(None);
                 }
+                win.reclip();
             }
             Value::Null
         }
