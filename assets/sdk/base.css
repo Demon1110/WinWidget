@@ -197,6 +197,15 @@ html[data-locked="true"] .fw-resize { display: none; }
 [data-ww-drag]:active { cursor: grabbing; }
 [data-ww-drag] [data-ww-nodrag] { user-select: text; }
 
+/* 通栏：标了 data-ww-bleed 的元素（一般是自绘标题条）上边和左右都贴到窗口边，
+   body 的 --w-padding 就只剩内容区在用，标题条不再被四边夹在中间；
+   顶部圆角 inherit 自 body，圆角窗上不会冒出两个方角。 */
+[data-ww-bleed] {
+  margin: calc(var(--w-padding) * -1) calc(var(--w-padding) * -1) 0;
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+}
+
 /* Arrange mode: a dashed outline with the widget's name and size. */
 .fw-edit-label { display: none; }
 html[data-edit="true"] body { outline: 1.5px dashed color-mix(in srgb, var(--w-accent) 80%, transparent); outline-offset: -1.5px; }
