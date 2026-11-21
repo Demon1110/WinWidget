@@ -52,7 +52,9 @@ pub fn look(options: &Value) -> Value {
     Value::Object(out)
 }
 
-/// 组件可以设置的键。不在表里的键一律忽略：弹框配置是公开协议，别让它顺手改窗口层。
+/// 组件可以设置的键。不在表里的键一律忽略：弹框配置是公开协议，只留组件真用得上的那些。
+/// `alwaysOnTop` / `skipTaskbar` 这两项属于窗口层，但弹框的默认值（都在）就是压在别人头上、
+/// 不进任务栏，偶尔真有「让它当个正常窗口」的需求，所以放开——默认值仍由宿主给。
 const KNOWN: &[&str] = &[
     "title",
     "showTitle",
@@ -93,6 +95,8 @@ const KNOWN: &[&str] = &[
     "closeOnOutsideClick",
     "autoClose",
     "draggable",
+    "alwaysOnTop",
+    "skipTaskbar",
     "modal",
     "anchor",
     "offset",
@@ -168,7 +172,8 @@ pub fn normalize(kind: &str, options: &Value) -> Value {
         json!(if toast { "none" } else { "fade" }),
     );
     out.insert("fitContent".into(), json!(true));
-    // 行为：置顶、不进任务栏、Esc 可关；toast 不抢焦点也不自动占满屏幕。
+    // 行为：默认置顶、默认不进任务栏（这两项组件可以覆盖成 false），Esc 可关；toast 不抢焦点
+    // 也不自动占满屏幕。
     out.insert("alwaysOnTop".into(), json!(true));
     out.insert("skipTaskbar".into(), json!(true));
     out.insert("resizable".into(), json!(false));
@@ -312,6 +317,25 @@ mod tests {
         let plain = normalize("alert", &json!({}));
         assert!(plain.get("closeOnBlur").is_none());
         assert!(plain.get("closeOnOutsideClick").is_none());
+    }
+
+    #[test]
+    fn the_window_layer_defaults_can_be_overridden() {
+        // 默认：置顶、不进任务栏
+        let plain = normalize("alert", &json!({}));
+        assert_eq!(plain["alwaysOnTop"], json!(true));
+        assert_eq!(plain["skipTaskbar"], json!(true));
+        // 组件明确说要置顶/要任务栏按钮，就照它说的办
+        let cfg = normalize(
+            "alert",
+            &json!({ "alwaysOnTop": false, "skipTaskbar": false }),
+        );
+        assert_eq!(cfg["alwaysOnTop"], json!(false));
+        assert_eq!(cfg["skipTaskbar"], json!(false));
+        // `dialog.window` 走同一份白名单，外观层也认这两项
+        let custom = look(&json!({ "skipTaskbar": false, "alwaysOnTop": false }));
+        assert_eq!(custom["skipTaskbar"], json!(false));
+        assert_eq!(custom["alwaysOnTop"], json!(false));
     }
 
     #[test]
