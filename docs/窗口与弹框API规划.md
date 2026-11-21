@@ -569,6 +569,45 @@ DWM 就照「有边框」这扇窗口去合成：整窗玻璃帧（`DwmExtendFra
 
 另外推翻上一轮的一条旁证：把 `opacity` 改 0.4 时「整块明显变淡」并不能证明页面侧生效，那时淡的也只是内容层；而在弹框 hwnd 上手工注入 `SetLayeredWindowAttributes(..., LWA_ALPHA)` 得到的「整窗均匀变淡」是窗口级 alpha 的假象，两种都不能当页面侧 `opacity` 的证据。
 
+### 真机返修第十二轮：底板颜色和底板不透明度要能各调各的
+
+用户接着上一轮问：能不能给弹框加「背景不透明度」和「背景颜色」两个配置项，跟 `opacity` 各自独立——既要能只淡底板、让文字保持清晰，也要能单独换底板底色。`backgroundColor` 早就写在 `KNOWN` 里，但页面从来没消费过它（只落到窗口背景刷，透明窗口还会被 `clear_background_brush` 清掉），等于空转键；`backgroundOpacity` 是这一轮新加的。
+
+三档语义定成互不干扰的一层套一层：
+
+| 键 | 管哪一层 | 落在哪儿 |
+|---|---|---|
+| `opacity` | 整扇面（底板 + 内容） | `documentElement` 的 `--w-opacity`，`base.css` 的 `body { opacity: var(--w-opacity) }` |
+| `backgroundOpacity` | 只淡底板，字保持实心 | 把底板色的 alpha 折算掉：`color-mix(in srgb, var(--w-plate-base) N%, transparent)` |
+| `backgroundColor` | 只换底板底色 | `documentElement` 的 `--w-plate-base` |
+
+两个都给时底板最终 alpha 天然是 `原来的 alpha × backgroundOpacity`，再被整窗 `opacity` 乘一次，和文档里写的相乘关系一致；因为只折算颜色本身的 alpha，子元素（字、按钮、描边）一点不受影响。
+
+中间试过一版更「正统」的写法：把底板挪到 `body::before`、`body` 改成 `background: none`，`backgroundOpacity` 写 `--w-bg-opacity`，靠伪元素的 `opacity` 淡整层。显式传色那条用例真机是通的（面板 `#7C909E`，预算 `#7E919D`），但**不传 `backgroundColor` 的默认弹框底板整层消失**（画面只剩字和按钮，桌面直接透进来）。查了 served CSS 是新版、`--w-bg-opacity` 没有别处定义、`.dlg` 也没有背景去盖它，仍未解释；于是改用上面那版「`body` 就是底板 + 两级变量」，风险更小。
+
+改完默认弹框底板**还是**没有。真机取证的办法是给 `dialog.js` 临时加一段把计算样式写进正文的探针（验完即删），读回来的值把问题钉死了：
+
+```
+A[--w-bg]      = rgba(16, 18, 22, 0.6x)   ← 主题色，正常
+B[--w-plate-base] = rgba(0, 0, 0, 0)      ← 底板色是「全透明」
+C[body 背景]   = rgba(0, 0, 0, 0)
+```
+
+根因不在 CSS 变量链，而在 `src\runtime\dialog.rs`：`normalize` 给 `backgroundColor` 塞的默认值就是 `"rgba(0,0,0,0)"`——那是**窗口背景刷**（透明窗口当然要刷成全透明），页面却把它当成「底板色」，于是底板被刷成透明。所以第一版里 `body::before` 的 `background: var(--w-bg)` 之所以「不生效」，也是同一个原因：`--w-bg` 早就被这个默认值替换掉了，跟伪元素无关。
+
+修法：`dialog.js` 里加一层判断，把**全透明**的值（`transparent`、`#RGBA` 的 alpha 为 0、`#RRGGBB00`、`rgba(...)` 第四位为 0）一律当成「没给」，底板回落到主题的 `--w-bg`；只有给到不透明的颜色才换底板。`dialog.rs` 的默认值保持 `"rgba(0,0,0,0)"` 不动（窗口背景刷需要它），并在 `normalize` 里补了注释说明这层分工，免得下次又有人把它当底板色。另外 `normalize` 收口 `backgroundOpacity` 到 0–1，新增单测 `the_panel_colour_and_its_own_opacity_are_separate_knobs` 覆盖 1.4→1.0、-2→0.0、不传不写键、和 `opacity` 并存。
+
+真机验收（2560×1440，`cargo build --release` 后重启宿主，测试台三条用例）：
+
+| 用例 | 传的参数 | 面板采样 | 预算 | 结论 |
+|---|---|---|---|---|
+| `alert 默认` | 都不传 | 主题烟灰（62%，`#3A3E44` 一带） | 同左 | 底板回来了，字清楚 |
+| 只换底板底色 | `backgroundColor:"#3A2E22"` | `#3A2E22` | `#3A2E22` | 逐像素等于给的值，alpha 1 |
+| 底板半透明 + 文字清晰 | `rgba(18,26,48,1)` + `backgroundOpacity: 0.35` | `#7C909E` | 0.35×：`#7E919D` | 35% 深蓝，字和按钮是实的 |
+| 底板 35% + 整窗 60% | 再加 `opacity: 0.6` | `#B1B9C0` | 0.21×纳底 ≈ `#B1B9C0` | 两档相乘，底板更透、整扇面也淡 |
+
+一条方法论修正：上一轮把这轮前半段的「默认弹框底板消失」怀疑成 DWM 合成错乱（反复 `Stop-Process -Force` 后确实见过卡片被洗白、抓到别的程序窗口内容）。这次在有探针的情况下确认它是真缺陷，与合成无关；不过「洗白」现象仍然存在，验收一律用「干净重启 + 一次只验一条」的口径。
+
 ### 还没做的
 
 1. `hello-widget` 模板示例：仓库里没有这个模板组件，指南里的示例段落已经覆盖同一份代码，是否要新建一个模板组件需要先定它放宿主仓库还是 Hub。

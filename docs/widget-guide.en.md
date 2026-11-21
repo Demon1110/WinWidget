@@ -810,7 +810,8 @@ widget.dialog.toast({ content: "Saved", icon: "success" });
 | `width` / `height` | 380 / follows content | window width; height follows the content by default |
 | `fitContent` / `maxHeight` | `true` / 620 | grow with the content, up to `maxHeight` |
 | `frame` / `rounded` / `transparent` | `false` / `true` / `true` | chrome |
-| `backgroundColor` | transparent | pass `"#101216"` for a solid surface |
+| `backgroundColor` | from the theme | colour of the dialog plate (`"#101216"`, `rgba(...)`); it only repaints the plate, never the text or buttons. A fully transparent value counts as "not given" and the plate falls back to the theme colour |
+| `backgroundOpacity` | `1` | plate opacity 0–1: fades the plate alone and keeps the text crisp; independent of `opacity` (whole panel), and the two multiply when both are given |
 | `accentColor` | from the theme | accent for buttons and icon |
 | `theme` | `"inherit"` | `inherit` follows the card; `light` / `dark` force one |
 | `animation` | `fade` | `fade` `scale` `slide` `none` |
@@ -822,6 +823,8 @@ widget.dialog.toast({ content: "Saved", icon: "success" });
 | `anchor` / `offset` | — | `"card"` under the card (flips above when there is no room), `"cursor"` at the pointer, `"screen"` centred; `offset: [dx, dy]` nudges it |
 
 `frame` and `rounded` share the corners: with the native frame (`frame: true`) the client area is a rectangle and `rounded` only concerns the window shell; a framed window is always opaque (the glass frame and per-pixel transparency do not mix, and the title stays on the caption bar alone), so `opacity` becomes whole-window alpha. Frameless, `rounded: false` is drawn square by the page and `opacity` is also applied there, leaving the desktop visible outside the corners. There the page fades the **whole panel** — the plate and its contents fade together and the desktop shows through the panel; it is not just the text turning faint. Under the hood that means raising `--w-opacity` (`base.css` paints `body` as the card body itself, and `body { opacity: var(--w-opacity) }` covers this case).
+
+If you only want a frosted plate with crisp text, leave `opacity` alone and use the two plate keys instead: `backgroundColor` repaints the plate and `backgroundOpacity` fades the plate on its own. Under the hood the plate colour is two variables — `--w-plate-base` (the plate's own colour) and `--w-plate` (what actually gets painted) — and `backgroundOpacity` uses `color-mix` so only the colour's own alpha shrinks; children are untouched. Pass both and the plate's final alpha is `opacity × backgroundOpacity`. A fully transparent `backgroundColor` (`transparent`, `rgba(0,0,0,0)`, …) counts as "not given" and the plate falls back to the theme colour — the host also uses that same key as the window background brush, whose default is fully transparent.
 
 ### Several windows: `widget.windows`
 
