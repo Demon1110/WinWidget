@@ -481,10 +481,11 @@ P2 里 `closeOnBlur` / `closeOnOutsideClick` / `modal` 三条走的是窗口失�
 
 ### 真机返修第七轮：测试台补「透明与鼠标穿透」「HTML 内容」用例
 
-「透明 / 鼠标穿透 / 内容支持 HTML」这三条此前只在文档里写着，测试台里没有能点的例子。补了三行用例和两个新页面：
+「透明 / 鼠标穿透 / 内容支持 HTML」这三条此前只在文档里写着，测试台里没有能点的例子；顺带补一条直角窗口的对照。一共四条用例、三个新页面：
 
 | 用例 | 页面 | 期望 |
 |---|---|---|
+| 无边框 + 直角（`rounded: false`） | `square.html` | 四角 90 度：窗口层 `clip_square` 整扇裁直，页面不写 `border-radius`；按住顶栏仍能拖 |
 | 透明 + 鼠标穿透（8 秒自关） | `overlay.html` | `transparent: true` + `ignoreMouseEvents: true`，除虚线框外像素全透明；点框内任意位置事件落到下面的卡片，框里的计数一直是 0；`autoClose` 8 秒自己关 |
 | 弹框正文吃 HTML（rawHtml） | 内置弹框页 | 同一个 `content` 加 `rawHtml: true` 后按标签渲染（加粗、`ul` 列表、行内 `color`）；不加就原样当文字 |
 | 弹框整页 HTML（dialog.window） | `rich.html` | 每一像素由组件页面画，外观仍是弹框（无边框、圆角、淡入）；点「就用它」交回 `button=apply` |

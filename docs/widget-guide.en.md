@@ -646,6 +646,7 @@ win.on("closed", () => widget.log("window closed"));
 | `resizable` | `true` | Can the edges be dragged |
 | `closable` | `true` | With `false` it cannot be closed, not even by `window.close()` |
 | `frame` | `true` | `false` removes the frame; corners follow `roundedCorners` |
+| `roundedCorners` / `rounded` | `true` | Round the corners; `false` gives square ones. On a frameless window the host clips the whole window to a rectangle — keep the page free of `border-radius` too |
 | `alwaysOnTop` | `false` | Stay above other windows |
 | `skipTaskbar` | `false` | Keep out of the taskbar |
 | `opacity` | 1 | 0–1, whole window |
