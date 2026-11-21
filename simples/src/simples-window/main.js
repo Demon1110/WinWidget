@@ -333,6 +333,7 @@ const runAll = async () => {
   runBtn.disabled = true;
   for (const [label, , fn] of auto) {
     runBtn.dataset.case = `全跑中 ${report.length + 1}/${auto.length}`;
+    runBtn.querySelector(".case-label").textContent = runBtn.dataset.case;
     const startedAt = performance.now();
     try {
       report.push({ ok: true, ms: 0, label, payload: await fn() });
