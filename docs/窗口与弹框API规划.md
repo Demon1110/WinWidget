@@ -608,6 +608,31 @@ C[body 背景]   = rgba(0, 0, 0, 0)
 
 一条方法论修正：上一轮把这轮前半段的「默认弹框底板消失」怀疑成 DWM 合成错乱（反复 `Stop-Process -Force` 后确实见过卡片被洗白、抓到别的程序窗口内容）。这次在有探针的情况下确认它是真缺陷，与合成无关；不过「洗白」现象仍然存在，验收一律用「干净重启 + 一次只验一条」的口径。
 
+### 真机返修第十三轮：给自绘标题条约定一个拖拽写法（`data-ww-drag`）
+
+用户这轮的诉求不是修缺陷，而是定约：既然窗口测试台里「title 那个 HTML 元素就能拖」，那能不能把这件事做成一条约定语法——只要照约定写，自定义标题就自动能拖，不必每页写一遍 `mousedown` + `startDrag`；而且要足够特别，别跟现成的写法撞车。
+
+名字定为 `data-ww-drag`（可拖区）与 `data-ww-nodrag`（区内豁免）。选它的理由就是「撞不上」：`-webkit-app-region: drag` 是 Electron 私有值，WebView2 根本不认；`draggable="true"` 是 HTML5 拖放，拖的是内容不是窗口；`data-drag` 被 jQuery UI、SortableJS、vee-validate 一大票库占着；`ww` 是 WinWidget 独占的前缀。
+
+落地只改了两处 SDK 资产，没有动 Rust：
+
+- `assets\sdk\widget-sdk.js`：在原本就存在的那个 document 级捕获阶段 `mousedown` 里插一段判断。命中 `[data-ww-drag]` 就 `preventDefault()` + `beginDrag()`，后者对自定义窗口发 `call("win.startDrag")`（宿主转 `WM_NCLBUTTONDOWN/HTCAPTION`，走系统的 `SC_MOVE`），对卡片发它原有的自绘拖动。原来 `NO_DRAG` 里补了 `[data-ww-nodrag]`，所以把位里的按钮/输入框/链接照旧归页面。
+- `assets\sdk\base.css`：`[data-ww-drag]` 统一给 `cursor: grab` 和「按住不选字」，`[data-ww-drag] [data-ww-nodrag]` 把 `user-select` 还给文字。页面一个字都不用写。
+- 边界：只对组件自己开的窗口生效（`boot.windowType === "custom"`），且要 `draggable: true` 才真的动——闸在宿主侧，页面改不了；卡片本来就整张能拖，不需要也不接受把位。
+
+测试台新增 `grip.html` 与用例「约定拖拽（data-ww-drag）」：标题条整块标了把位、里面的 × 标了 `data-ww-nodrag`、正文里一块标了把位、一块没标。页面里除了一行关闭用的 `widget.window.close`，没有任何拖拽代码。
+
+真机验收（2560×1440，`cargo build --release` 后干净重启，逐条只验一次）：
+
+| 手势 | 起点相对窗口 | 位移 | 实测 |
+|---|---|---|---|
+| 按标题条拖 | `+70,+30` | `+140,-90` | `1212,409` → `1352,319`，精确相等 |
+| 按正文里标了把位的那块拖 | `+60,+80` | `-100,+60` | `1352,319` → `1252,379`，精确相等 |
+| 按没标的那块拖 | `+60,+130` | `+80,+40` | 停在 `1252,379`，一动没动（反向对照） |
+| 点 × | `+303,+42` | — | 位置不变，日志 `win 2: closed (api)`，页面 click 照常触发 |
+
+一条方法论修正：这轮前几次判定「拖不动」「× 点不着」都是假缺陷。`custom` 窗口**第一次被点击时会被挪到一个存下来的位置**（实测 `286,286` → `1212,409`），我按上一次 `GetWindowRect` 算出来的坐标就全落到空处了；`ww_ui.ps1` 里那个 `Click` 还会在 `mouseup` 之后把光标还原，一旦碰上系统拖动循环，等于替窗口补了一记位移，更加混淆。可靠的姿势是：先 `TapAt`（按下→松开→光标留在原地）让窗口落定，再**重新枚举**取 `GetWindowRect`，紧跟着在同一次调用里算坐标、做手势、再取一次 rect。跨调用缓存坐标必然踩空。
+
 ### 还没做的
 
 1. `hello-widget` 模板示例：仓库里没有这个模板组件，指南里的示例段落已经覆盖同一份代码，是否要新建一个模板组件需要先定它放宿主仓库还是 Hub。

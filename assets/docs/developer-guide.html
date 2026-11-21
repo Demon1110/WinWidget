@@ -887,11 +887,24 @@ widget.windows.closeAll({ kind: &quot;settings&quot; });</code></pre></div>
 <p>同一个 <code>key</code> 再 <code>open</code> 一次不会多开，而是把已有的那个叫到前面、回同一个 handle。旧写法 <code>utools.createBrowserWindow</code> 照旧可用，它等同 <code>widget.windows.open</code>。</p>
 <h3 id="窗口自己widgetwindow">窗口自己：<code>widget.window</code></h3>
 <p>在卡片里指卡片，在窗口里指这个窗口：</p>
-<div class="table-wrap"><table><thead><tr><th>方法</th><th>说明</th></tr></thead><tbody><tr><td><code>getSize()</code> / <code>setSize(w, h)</code></td><td>内容尺寸（CSS 像素）</td></tr><tr><td><code>getBounds()</code> / <code>setBounds({ x, y, width, height })</code></td><td>位置加尺寸</td></tr><tr><td><code>getPosition()</code> / <code>setPosition(x, y)</code></td><td>位置</td></tr><tr><td><code>focus()</code></td><td>叫到前面</td></tr><tr><td><code>setAlwaysOnTop(bool)</code> / <code>isAlwaysOnTop()</code></td><td>置顶</td></tr><tr><td><code>setOpacity(0–1)</code></td><td>透明度（卡片是逐像素透明，改的是内容）</td></tr><tr><td><code>setTitle(text)</code></td><td>窗口标题</td></tr><tr><td><code>startDrag()</code></td><td>无边框窗口的拖曳：在自绘标题列按下时调用</td></tr><tr><td><code>close()</code> / <code>hide()</code> / <code>show()</code> / <code>isVisible()</code></td><td>收起与显示</td></tr></tbody></table></div>
-<div class="code"><pre><code class="lang-js">// 无边框面板的自绘标题列
+<div class="table-wrap"><table><thead><tr><th>方法</th><th>说明</th></tr></thead><tbody><tr><td><code>getSize()</code> / <code>setSize(w, h)</code></td><td>内容尺寸（CSS 像素）</td></tr><tr><td><code>getBounds()</code> / <code>setBounds({ x, y, width, height })</code></td><td>位置加尺寸</td></tr><tr><td><code>getPosition()</code> / <code>setPosition(x, y)</code></td><td>位置</td></tr><tr><td><code>focus()</code></td><td>叫到前面</td></tr><tr><td><code>setAlwaysOnTop(bool)</code> / <code>isAlwaysOnTop()</code></td><td>置顶</td></tr><tr><td><code>setOpacity(0–1)</code></td><td>透明度（卡片是逐像素透明，改的是内容）</td></tr><tr><td><code>setTitle(text)</code></td><td>窗口标题</td></tr><tr><td><code>startDrag()</code></td><td>无边框窗口的拖曳：在自绘标题列按下时调用（标了 <code>data-ww-drag</code> 就轮不到你写它）</td></tr><tr><td><code>close()</code> / <code>hide()</code> / <code>show()</code> / <code>isVisible()</code></td><td>收起与显示</td></tr></tbody></table></div>
+<div class="code"><pre><code class="lang-js">// 要自己管手势（长按、双击最大化、拖到某处才拖）时才需要这一段
 document.querySelector(&quot;.panel-head&quot;).addEventListener(&quot;mousedown&quot;, (e) =&gt; {
   if (e.button === 0) widget.window.startDrag();
 });</code></pre></div>
+<p>**约定写法：<code>data-ww-drag</code>**</p>
+<p>给任意元素标上 <code>data-ww-drag</code>，它连同整棵子树就是一块拖曳把位，按下即拖整窗，页面不用挂 <code>mousedown</code>：</p>
+<div class="code"><pre><code class="lang-html">&lt;div class=&quot;bar&quot; data-ww-drag&gt;
+  &lt;strong&gt;我的标题&lt;/strong&gt;
+  &lt;button data-ww-nodrag&gt;×&lt;/button&gt;
+&lt;/div&gt;</code></pre></div>
+<ul class="plain">
+<li>子树里标 <code>data-ww-nodrag</code> 的，以及 <code>button</code> / <code>input</code> / <code>textarea</code> / <code>select</code> / <code>a[href]</code> / <code>[contenteditable]</code>，按下时仍归页面——点 × 不会变成拖曳，输入框照旧能聚焦。</li>
+<li><code>cursor: grab</code> 和“按住不选字”由 <code>base.css</code> 统一给，不用自己写。</li>
+<li>只对组件自己开的窗口生效，且要以 <code>draggable: true</code> 打开：<strong>拖不拖得动由宿主决定，页面改不了这个闸</strong>；没开的窗口里标了也没反应。卡片本来就整张都能拖，不需要（也不会多指一个把位）。</li>
+<li>属性是活的：后插入的元素、<code>dialog.window</code> 里自己渲染的标题列，只要带这个属性就生效，不需要重新绑定。</li>
+</ul>
+<p>为什么用这个而不是常见那几套：<code>-webkit-app-region: drag</code> 是 Electron 私有的，WebView2 不认；<code>draggable=&quot;true&quot;</code> 是 HTML5 拖放，拖的是内容不是窗口；<code>data-drag</code> 被 jQuery UI、SortableJS 一大票库占著。<code>ww</code> 是 WinWidget 专有前缀，撞不上。</p>
 <h3 id="两件要注意的事">两件要注意的事</h3>
 <ul class="plain">
 <li>所有窗口跟卡片共用同一个 origin 与 CSP：不要把它们当成安全边界。</li>
@@ -1837,11 +1850,24 @@ widget.windows.closeAll({ kind: &quot;settings&quot; });</code></pre></div>
 <p>同一個 <code>key</code> 再 <code>open</code> 一次不會多開，而是把已有的那個叫到前面、回同一個 handle。舊寫法 <code>utools.createBrowserWindow</code> 照舊可用，它等同 <code>widget.windows.open</code>。</p>
 <h3 id="視窗自己widgetwindow">視窗自己：<code>widget.window</code></h3>
 <p>在卡片裏指卡片，在視窗裏指這個視窗：</p>
-<div class="table-wrap"><table><thead><tr><th>方法</th><th>說明</th></tr></thead><tbody><tr><td><code>getSize()</code> / <code>setSize(w, h)</code></td><td>內容尺寸（CSS 像素）</td></tr><tr><td><code>getBounds()</code> / <code>setBounds({ x, y, width, height })</code></td><td>位置加尺寸</td></tr><tr><td><code>getPosition()</code> / <code>setPosition(x, y)</code></td><td>位置</td></tr><tr><td><code>focus()</code></td><td>叫到前面</td></tr><tr><td><code>setAlwaysOnTop(bool)</code> / <code>isAlwaysOnTop()</code></td><td>置頂</td></tr><tr><td><code>setOpacity(0–1)</code></td><td>透明度（卡片是逐像素透明，改的是內容）</td></tr><tr><td><code>setTitle(text)</code></td><td>視窗標題</td></tr><tr><td><code>startDrag()</code></td><td>無邊框視窗的拖曳：在自繪標題列按下時呼叫</td></tr><tr><td><code>close()</code> / <code>hide()</code> / <code>show()</code> / <code>isVisible()</code></td><td>收起與顯示</td></tr></tbody></table></div>
-<div class="code"><pre><code class="lang-js">// 無邊框面板的自繪標題列
+<div class="table-wrap"><table><thead><tr><th>方法</th><th>說明</th></tr></thead><tbody><tr><td><code>getSize()</code> / <code>setSize(w, h)</code></td><td>內容尺寸（CSS 像素）</td></tr><tr><td><code>getBounds()</code> / <code>setBounds({ x, y, width, height })</code></td><td>位置加尺寸</td></tr><tr><td><code>getPosition()</code> / <code>setPosition(x, y)</code></td><td>位置</td></tr><tr><td><code>focus()</code></td><td>叫到前面</td></tr><tr><td><code>setAlwaysOnTop(bool)</code> / <code>isAlwaysOnTop()</code></td><td>置頂</td></tr><tr><td><code>setOpacity(0–1)</code></td><td>透明度（卡片是逐像素透明，改的是內容）</td></tr><tr><td><code>setTitle(text)</code></td><td>視窗標題</td></tr><tr><td><code>startDrag()</code></td><td>無邊框視窗的拖曳：在自繪標題列按下時呼叫（標了 <code>data-ww-drag</code> 就輪不到你寫它）</td></tr><tr><td><code>close()</code> / <code>hide()</code> / <code>show()</code> / <code>isVisible()</code></td><td>收起與顯示</td></tr></tbody></table></div>
+<div class="code"><pre><code class="lang-js">// 要自己管手勢（長按、雙擊最大化、拖到某處才拖）時才需要這一段
 document.querySelector(&quot;.panel-head&quot;).addEventListener(&quot;mousedown&quot;, (e) =&gt; {
   if (e.button === 0) widget.window.startDrag();
 });</code></pre></div>
+<p>**約定寫法：<code>data-ww-drag</code>**</p>
+<p>給任意元素標上 <code>data-ww-drag</code>，它連同整棵子樹就是一塊拖曳把位，按下即拖整窗，頁面不用掛 <code>mousedown</code>：</p>
+<div class="code"><pre><code class="lang-html">&lt;div class=&quot;bar&quot; data-ww-drag&gt;
+  &lt;strong&gt;我的標題&lt;/strong&gt;
+  &lt;button data-ww-nodrag&gt;×&lt;/button&gt;
+&lt;/div&gt;</code></pre></div>
+<ul class="plain">
+<li>子樹裡標 <code>data-ww-nodrag</code> 的，以及 <code>button</code> / <code>input</code> / <code>textarea</code> / <code>select</code> / <code>a[href]</code> / <code>[contenteditable]</code>，按下時仍歸頁面——點 × 不會變成拖曳，輸入框照舊能聚焦。</li>
+<li><code>cursor: grab</code> 和「按住不選字」由 <code>base.css</code> 統一給，不用自己寫。</li>
+<li>只對組件自己開的視窗生效，且要以 <code>draggable: true</code> 打開：<strong>拖不拖得動由宿主決定，頁面改不了這個閘</strong>；沒開的視窗裡標了也沒反應。卡片本來就整張都能拖，不需要（也不會多指一個把位）。</li>
+<li>屬性是活的：後插入的元素、<code>dialog.window</code> 裡自己渲染的標題列，只要帶這個屬性就生效，不需要重新綁定。</li>
+</ul>
+<p>為什麼用這個而不是常見那幾套：<code>-webkit-app-region: drag</code> 是 Electron 私有的，WebView2 不認；<code>draggable=&quot;true&quot;</code> 是 HTML5 拖放，拖的是內容不是視窗；<code>data-drag</code> 被 jQuery UI、SortableJS 一大票庫佔著。<code>ww</code> 是 WinWidget 專有前綴，撞不上。</p>
 <h3 id="兩件要注意的事">兩件要注意的事</h3>
 <ul class="plain">
 <li>所有視窗跟卡片共用同一個 origin 與 CSP：不要把它們當成安全邊界。</li>
@@ -2787,11 +2813,24 @@ widget.windows.closeAll({ kind: &quot;settings&quot; });</code></pre></div>
 <p>Opening the same <code>key</code> again does not add a window: it raises the existing one and hands back the same handle. The old <code>utools.createBrowserWindow</code> still works — it is <code>widget.windows.open</code>.</p>
 <h3 id="your-own-window-widgetwindow">Your own window: <code>widget.window</code></h3>
 <p>On a card it means the card; inside a window it means that window:</p>
-<div class="table-wrap"><table><thead><tr><th>Method</th><th>Meaning</th></tr></thead><tbody><tr><td><code>getSize()</code> / <code>setSize(w, h)</code></td><td>content size in CSS pixels</td></tr><tr><td><code>getBounds()</code> / <code>setBounds({ x, y, width, height })</code></td><td>position and size</td></tr><tr><td><code>getPosition()</code> / <code>setPosition(x, y)</code></td><td>position</td></tr><tr><td><code>focus()</code></td><td>raise it</td></tr><tr><td><code>setAlwaysOnTop(bool)</code> / <code>isAlwaysOnTop()</code></td><td>stay above other windows</td></tr><tr><td><code>setOpacity(0–1)</code></td><td>transparency (a card is per-pixel transparent, so this fades its content)</td></tr><tr><td><code>setTitle(text)</code></td><td>window title</td></tr><tr><td><code>startDrag()</code></td><td>drag a frameless window: call it when the user presses your own title bar</td></tr><tr><td><code>close()</code> / <code>hide()</code> / <code>show()</code> / <code>isVisible()</code></td><td>hide and show</td></tr></tbody></table></div>
-<div class="code"><pre><code class="lang-js">// a frameless panel&#x27;s own title bar
+<div class="table-wrap"><table><thead><tr><th>Method</th><th>Meaning</th></tr></thead><tbody><tr><td><code>getSize()</code> / <code>setSize(w, h)</code></td><td>content size in CSS pixels</td></tr><tr><td><code>getBounds()</code> / <code>setBounds({ x, y, width, height })</code></td><td>position and size</td></tr><tr><td><code>getPosition()</code> / <code>setPosition(x, y)</code></td><td>position</td></tr><tr><td><code>focus()</code></td><td>raise it</td></tr><tr><td><code>setAlwaysOnTop(bool)</code> / <code>isAlwaysOnTop()</code></td><td>stay above other windows</td></tr><tr><td><code>setOpacity(0–1)</code></td><td>transparency (a card is per-pixel transparent, so this fades its content)</td></tr><tr><td><code>setTitle(text)</code></td><td>window title</td></tr><tr><td><code>startDrag()</code></td><td>drag a frameless window: call it when the user presses your own title bar (you do not need it once you mark up <code>data-ww-drag</code>)</td></tr><tr><td><code>close()</code> / <code>hide()</code> / <code>show()</code> / <code>isVisible()</code></td><td>hide and show</td></tr></tbody></table></div>
+<div class="code"><pre><code class="lang-js">// only when you want to own the gesture yourself (long press, double-click to maximize, …)
 document.querySelector(&quot;.panel-head&quot;).addEventListener(&quot;mousedown&quot;, (e) =&gt; {
   if (e.button === 0) widget.window.startDrag();
 });</code></pre></div>
+<p>**The convention: <code>data-ww-drag</code>**</p>
+<p>Mark any element with <code>data-ww-drag</code> and that element plus its whole subtree becomes a drag handle: pressing it drags the window, with no <code>mousedown</code> listener in your page at all.</p>
+<div class="code"><pre><code class="lang-html">&lt;div class=&quot;bar&quot; data-ww-drag&gt;
+  &lt;strong&gt;My title&lt;/strong&gt;
+  &lt;button data-ww-nodrag&gt;×&lt;/button&gt;
+&lt;/div&gt;</code></pre></div>
+<ul class="plain">
+<li>Elements marked <code>data-ww-nodrag</code>, and any <code>button</code> / <code>input</code> / <code>textarea</code> / <code>select</code> / <code>a[href]</code> / <code>[contenteditable]</code> inside, keep the press for themselves — clicking × never turns into a drag, fields still take focus.</li>
+<li><code>cursor: grab</code> and &quot;no text selection while dragging&quot; come from <code>base.css</code>; do not write them yourself.</li>
+<li>It only applies inside windows your widget opens, and those must be opened with <code>draggable: true</code>: <strong>whether a window may be dragged is the host&#x27;s decision</strong>, the page cannot flip that gate, and marking elements in a window without it does nothing. A card already drags from anywhere, so it neither needs nor accepts a handle.</li>
+<li>The attribute is live: elements added later, or a title bar you render inside <code>dialog.window</code>, are covered as soon as they carry it — no rebinding.</li>
+</ul>
+<p>Why this attribute rather than the usual suspects: <code>-webkit-app-region: drag</code> is Electron-private and WebView2 ignores it; <code>draggable=&quot;true&quot;</code> is HTML5 drag-and-drop, which drags content rather than the window; <code>data-drag</code> is already taken by jQuery UI, SortableJS and a crowd of others. <code>ww</code> is a WinWidget-only prefix, so it collides with nothing.</p>
 <h3 id="two-things-to-keep-in-mind">Two things to keep in mind</h3>
 <ul class="plain">
 <li>Every window shares the card&#x27;s origin and CSP: do not treat them as a security boundary.</li>

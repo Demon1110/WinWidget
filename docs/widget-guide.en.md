@@ -872,15 +872,33 @@ On a card it means the card; inside a window it means that window:
 | `setAlwaysOnTop(bool)` / `isAlwaysOnTop()` | stay above other windows |
 | `setOpacity(0–1)` | transparency (a card is per-pixel transparent, so this fades its content) |
 | `setTitle(text)` | window title |
-| `startDrag()` | drag a frameless window: call it when the user presses your own title bar |
+| `startDrag()` | drag a frameless window: call it when the user presses your own title bar (you do not need it once you mark up `data-ww-drag`) |
 | `close()` / `hide()` / `show()` / `isVisible()` | hide and show |
 
 ```js
-// a frameless panel's own title bar
+// only when you want to own the gesture yourself (long press, double-click to maximize, …)
 document.querySelector(".panel-head").addEventListener("mousedown", (e) => {
   if (e.button === 0) widget.window.startDrag();
 });
 ```
+
+**The convention: `data-ww-drag`**
+
+Mark any element with `data-ww-drag` and that element plus its whole subtree becomes a drag handle: pressing it drags the window, with no `mousedown` listener in your page at all.
+
+```html
+<div class="bar" data-ww-drag>
+  <strong>My title</strong>
+  <button data-ww-nodrag>×</button>
+</div>
+```
+
+- Elements marked `data-ww-nodrag`, and any `button` / `input` / `textarea` / `select` / `a[href]` / `[contenteditable]` inside, keep the press for themselves — clicking × never turns into a drag, fields still take focus.
+- `cursor: grab` and "no text selection while dragging" come from `base.css`; do not write them yourself.
+- It only applies inside windows your widget opens, and those must be opened with `draggable: true`: **whether a window may be dragged is the host's decision**, the page cannot flip that gate, and marking elements in a window without it does nothing. A card already drags from anywhere, so it neither needs nor accepts a handle.
+- The attribute is live: elements added later, or a title bar you render inside `dialog.window`, are covered as soon as they carry it — no rebinding.
+
+Why this attribute rather than the usual suspects: `-webkit-app-region: drag` is Electron-private and WebView2 ignores it; `draggable="true"` is HTML5 drag-and-drop, which drags content rather than the window; `data-drag` is already taken by jQuery UI, SortableJS and a crowd of others. `ww` is a WinWidget-only prefix, so it collides with nothing.
 
 ### Two things to keep in mind
 
