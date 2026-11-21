@@ -3333,3 +3333,46 @@ pub fn base64_decode(input: &str) -> Option<Vec<u8>> {
     }
     Some(out)
 }
+
+// ── record disposal ────────────────────────────────────────────────────────
+
+/// Everyone else keeps their handle: a bin that is still being written to must not make the
+/// unlink fail just because the writer is open.
+pub const FILE_SHARE_ALL: u32 = 0x0000_0007;
+pub const FILE_ACCESS_DELETE: u32 = 0x0001_0000;
+pub const FILE_ACCESS_READ_ATTRIBUTES: u32 = 0x0000_0080;
+pub const FILE_OPEN_EXISTING: u32 = 3;
+/// Lets the same call open a folder, so empty record folders are unlinked the same way.
+pub const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+/// `FileDispositionInfoEx`: one call asks for the unlink and states how it behaves.
+pub const FILE_DISPOSITION_EX_CLASS: i32 = 21;
+pub const FILE_DISPOSITION_DELETE: u32 = 0x0000_0001;
+/// Unlink now even while the record still has open handles; the space goes when they close.
+pub const FILE_DISPOSITION_POSIX_SEMANTICS: u32 = 0x0000_0002;
+/// A read-only record is deletable as it is; no attribute round trip, no retry.
+pub const FILE_DISPOSITION_IGNORE_READONLY: u32 = 0x0000_0010;
+
+#[repr(C)]
+pub struct FileDispositionInfoEx {
+    pub flags: u32,
+}
+
+#[link(name = "kernel32")]
+extern "system" {
+    pub fn CreateFileW(
+        name: *const u16,
+        access: u32,
+        share: u32,
+        security: *mut core::ffi::c_void,
+        disposition: u32,
+        flags: u32,
+        template: HANDLE,
+    ) -> HANDLE;
+    pub fn SetFileInformationByHandle(
+        file: HANDLE,
+        class: i32,
+        info: *mut core::ffi::c_void,
+        len: u32,
+    ) -> i32;
+    pub fn CloseHandle(handle: HANDLE) -> i32;
+}

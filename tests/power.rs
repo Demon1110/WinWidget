@@ -52,4 +52,9 @@ fn state_answers_without_walking() {
     assert!(started.elapsed() < std::time::Duration::from_millis(200));
     assert_eq!(state["available"], json!(true));
     assert!(state["items"].is_i64());
+    // The card needs to tell "nothing happened" apart from "a few locked files were left behind".
+    assert!(
+        state["failed"].as_i64().is_some_and(|n| n >= 0),
+        "every answer carries the leftover count"
+    );
 }

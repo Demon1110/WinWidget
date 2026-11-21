@@ -28,6 +28,20 @@ static EMPTYING: AtomicBool = AtomicBool::new(false);
 static LOADED: AtomicBool = AtomicBool::new(false);
 /// Bytes removed by the run in progress, and the size the bin had when it started (`-1` unknown).
 static PROGRESS: Mutex<(u64, i64)> = Mutex::new((0, -1));
+/// Items the last run could not delete (locked or read-only leftovers). Reported to the card so a
+/// partly failed empty isn't mistaken for "nothing happened".
+static LEFT: Mutex<i64> = Mutex::new(0);
+
+/// Clears `EMPTYING` however the run ends, including a panic on the worker thread. Without it a
+/// panicked run would leave the card saying 「正在清空…」 forever, with the button disabled and every
+/// later click refused — which reads exactly like "the button does nothing".
+struct EmptyRun;
+
+impl Drop for EmptyRun {
+    fn drop(&mut self) {
+        EMPTYING.store(false, Ordering::SeqCst);
+    }
+}
 
 fn lock<T>(cell: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     cell.lock().unwrap_or_else(|e| e.into_inner())
@@ -48,6 +62,7 @@ pub fn recycle_state() -> Value {
     let scanning = SCANNING.load(Ordering::SeqCst);
     let emptying = EMPTYING.load(Ordering::SeqCst);
     let (done, total) = *lock(&PROGRESS);
+    let failed = *lock(&LEFT);
     if age > FRESH_SECS && !scanning && !emptying {
         start_scan();
     }
@@ -59,6 +74,7 @@ pub fn recycle_state() -> Value {
         "scanning": scanning,
         "emptying": emptying,
         "done": done,
+        "failed": failed,
         "total": if total < 0 { Value::Null } else { json!(total) },
     })
 }
@@ -211,49 +227,49 @@ fn subtree_bytes(root: &Path) -> i64 {
     total
 }
 
-/// Starts emptying on a thread of its own. The shell's own `SHEmptyRecycleBinW` walks every record
-/// through COM, which is why a bin this size takes an age and offers no progress; deleting the
-/// files directly and reporting the bytes as they go is both faster and honest about where it is.
+/// Starts emptying on threads of its own: one per record folder, so a bin spread over two drives
+/// is unlinked on both at once instead of queueing behind one walk. Each record goes in a single
+/// disposition call — unlink now, even under a handle that is still open, read-only ignored —
+/// which is both the fastest path the API offers and the only one that wins against a program
+/// still writing into the bin. `SHEmptyRecycleBinW`, which walks every record through COM, stays
+/// as the last resort for the few leftovers it can still reach.
 pub fn start_empty() -> Result<(), String> {
     if EMPTYING.swap(true, Ordering::SeqCst) {
         return Err("the recycle bin is already being emptied".into());
     }
     let total = lock(&MEASURED).map(|m| m.size).unwrap_or(-1);
     *lock(&PROGRESS) = (0, total);
+    *lock(&LEFT) = 0;
+    crate::core::logging::info(&format!("recycle empty: started (total={total})"));
     std::thread::spawn(|| {
+        let _run = EmptyRun; // clears EMPTYING on the way out, panic or not
+        let mut handles = Vec::new();
+        for (_, sid) in records() {
+            handles.push(std::thread::spawn(move || empty_folder(&sid)));
+        }
         let mut removed = 0u64;
         let mut failed = 0u64;
-        for (_, sid) in records() {
-            let Ok(entries) = std::fs::read_dir(&sid) else {
-                failed += 1;
-                continue;
-            };
-            for entry in entries.flatten() {
-                let path = entry.path();
-                match entry.file_type() {
-                    Ok(kind) if kind.is_dir() => {
-                        purge(&path, &mut removed, &mut failed);
-                        if std::fs::remove_dir(verbatim(&path)).is_err() {
-                            failed += 1;
-                        }
-                    }
-                    Ok(_) => {
-                        let len = entry.metadata().map(|m| m.len()).unwrap_or(0);
-                        if remove_file(&path) {
-                            removed += len;
-                            lock(&PROGRESS).0 = removed;
-                        } else {
-                            failed += 1;
-                        }
-                    }
-                    Err(_) => failed += 1,
+        for handle in handles {
+            match handle.join() {
+                Ok((bytes, misses)) => {
+                    removed += bytes;
+                    failed += misses;
                 }
+                Err(_) => failed += 1,
             }
-            // The folder that held the records must stay: Windows keeps its own `desktop.ini`
-            // there and Explorer expects the per-user folder to exist.
         }
-        if failed > 0 {
-            // Leftovers are almost always read-only or locked files; let the shell finish the job.
+        if failed > 0 && removed == 0 {
+            // Nothing came out at all, so the bin itself is refusing this process (a security
+            // product guarding `$Recycle.Bin` only lets Explorer delete). Handing the whole
+            // batch to the shell would sit there for a minute and a half and achieve nothing.
+            crate::core::logging::warn(&format!(
+                "recycle empty: all {failed} item(s) refused deletion, the bin is locked down"
+            ));
+        } else if failed > 0 {
+            // Only some resisted (locked, odd ACL): let the shell finish those.
+            crate::core::logging::warn(&format!(
+                "recycle empty: {failed} item(s) left to the shell after removing {removed} B"
+            ));
             let flags = 0x0000_0001 | 0x0000_0002; // NOCONFIRMATION | NOPROGRESSUI
             unsafe { w::SHEmptyRecycleBinW(0, std::ptr::null(), flags) };
         }
@@ -269,10 +285,61 @@ pub fn start_empty() -> Result<(), String> {
             *lock(&MEASURED)
         };
         lock(&PROGRESS).0 = removed;
-        EMPTYING.store(false, Ordering::SeqCst);
+        *lock(&LEFT) = failed as i64;
+        crate::core::logging::info(&format!(
+            "recycle empty: finished, removed {removed} B, {failed} item(s) failed"
+        ));
         start_scan(); // lands the card on the real number instead of the guess above
     });
     Ok(())
+}
+
+/// Empties one `<drive>:\$Recycle.Bin\<sid>` folder, answering the bytes removed and the records
+/// that refused. The `$I` index entries go first, so Explorer stops listing them while the payloads
+/// are still being unlinked; the folder itself stays, because Windows keeps its own `desktop.ini`
+/// there and Explorer expects the per-user folder to exist.
+fn empty_folder(sid: &Path) -> (u64, u64) {
+    let mut removed = 0u64;
+    let mut failed = 0u64;
+    let Ok(entries) = std::fs::read_dir(sid) else {
+        return (0, 1);
+    };
+    let mut payloads = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if entry.file_name().to_string_lossy().starts_with("$I") {
+            remove_file(&path);
+        } else {
+            payloads.push(path);
+        }
+    }
+    for path in payloads {
+        drop_path(&path, &mut removed, &mut failed);
+    }
+    (removed, failed)
+}
+
+/// Removes one top-level record: a payload folder is walked through, a file — or a link that only
+/// looks like one — is unlinked as itself.
+fn drop_path(path: &Path, removed: &mut u64, failed: &mut u64) {
+    let Ok(meta) = std::fs::symlink_metadata(verbatim(path)) else {
+        *failed += 1;
+        return;
+    };
+    if meta.is_dir() {
+        purge(path, removed, failed);
+        if std::fs::remove_dir(verbatim(path)).is_err() {
+            *failed += 1;
+        }
+        return;
+    }
+    if remove_file(path) {
+        let len = meta.len();
+        *removed += len;
+        lock(&PROGRESS).0 += len;
+    } else {
+        *failed += 1;
+    }
 }
 
 pub fn purge(dir: &Path, removed: &mut u64, failed: &mut u64) {
@@ -293,7 +360,7 @@ pub fn purge(dir: &Path, removed: &mut u64, failed: &mut u64) {
                 let len = entry.metadata().map(|m| m.len()).unwrap_or(0);
                 if remove_file(&path) {
                     *removed += len;
-                    lock(&PROGRESS).0 = *removed;
+                    lock(&PROGRESS).0 += len;
                 } else {
                     *failed += 1;
                 }
@@ -312,16 +379,56 @@ fn verbatim(path: &Path) -> PathBuf {
     PathBuf::from(format!(r"\\?\{}", text))
 }
 
+/// Unlinks one record in a single call: open it for `DELETE`, then set the disposition with POSIX
+/// semantics — the record goes at once even while another program still holds a handle on it, which
+/// is exactly the state a bin that keeps refilling is in — and with the read-only attribute ignored,
+/// which saves the extra attribute round trip. Plain delete, then attribute clearing, are kept for
+/// file systems that refuse the extended disposition.
 fn remove_file(path: &Path) -> bool {
-    let wide: Vec<u16> = verbatim(path).to_string_lossy().encode_utf16().collect();
+    if posix_unlink(path) {
+        return true;
+    }
     if std::fs::remove_file(verbatim(path)).is_ok() {
         return true;
     }
     // A read-only record refuses the plain delete; clearing the attribute is what Explorer does.
-    let mut with_nul = wide.clone();
-    with_nul.push(0);
-    unsafe { w::SetFileAttributesW(with_nul.as_ptr(), 0x80) }; // FILE_ATTRIBUTE_NORMAL
+    let mut wide: Vec<u16> = verbatim(path).to_string_lossy().encode_utf16().collect();
+    wide.push(0);
+    unsafe { w::SetFileAttributesW(wide.as_ptr(), 0x80) }; // FILE_ATTRIBUTE_NORMAL
     std::fs::remove_file(verbatim(path)).is_ok()
+}
+
+fn posix_unlink(path: &Path) -> bool {
+    let mut wide: Vec<u16> = verbatim(path).to_string_lossy().encode_utf16().collect();
+    wide.push(0);
+    unsafe {
+        let handle = w::CreateFileW(
+            wide.as_ptr(),
+            w::FILE_ACCESS_DELETE | w::FILE_ACCESS_READ_ATTRIBUTES,
+            w::FILE_SHARE_ALL,
+            std::ptr::null_mut(),
+            w::FILE_OPEN_EXISTING,
+            w::FILE_FLAG_BACKUP_SEMANTICS,
+            0,
+        );
+        if handle == 0 || handle == -1 {
+            return false;
+        }
+        let mut info = w::FileDispositionInfoEx {
+            flags: w::FILE_DISPOSITION_DELETE
+                | w::FILE_DISPOSITION_POSIX_SEMANTICS
+                | w::FILE_DISPOSITION_IGNORE_READONLY,
+        };
+        let size = std::mem::size_of::<w::FileDispositionInfoEx>() as u32;
+        let ok = w::SetFileInformationByHandle(
+            handle,
+            w::FILE_DISPOSITION_EX_CLASS,
+            &mut info as *mut _ as *mut std::ffi::c_void,
+            size,
+        );
+        w::CloseHandle(handle);
+        ok != 0
+    }
 }
 
 pub fn recycle_open() -> Result<(), String> {
