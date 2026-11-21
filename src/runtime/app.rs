@@ -436,6 +436,7 @@ impl App {
                 server::WinPage {
                     instance: win.instance.clone(),
                     visible: win.shown,
+                    resizable: win.resizable,
                 },
             );
         }

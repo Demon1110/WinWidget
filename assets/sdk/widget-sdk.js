@@ -483,7 +483,9 @@
       let pending = 0;
       new ResizeObserver(() => { cancelAnimationFrame(pending); pending = requestAnimationFrame(updateSizeScale); }).observe(document.body);
     }
-    if (boot.resizable) {
+    // 只有卡片真的能被拖着改大小：自定义窗口（含弹框）的 `window.resize` 没有意义，宿主会
+    // 直接丢掉，挂上去就是一个点了没反应的右下角把位——光标变了、却什么都不发生。
+    if (boot.resizable && !IS_CUSTOM) {
       const grip = document.createElement("div");
       grip.className = "fw-resize";
       document.body.appendChild(grip);

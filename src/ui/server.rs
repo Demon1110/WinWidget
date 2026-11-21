@@ -38,6 +38,10 @@ pub struct Instance {
 pub struct WinPage {
     pub instance: String,
     pub visible: bool,
+    /// The window really accepts resize. A page cannot infer this from its instance's manifest:
+    /// dialogs are opened with `resizable: false` while their parent card is resizable, and a
+    /// resize grip that does nothing is worse than no grip at all.
+    pub resizable: bool,
 }
 
 #[derive(Default)]
@@ -333,9 +337,10 @@ fn serve_page(
             if let Some(mut parent) =
                 parent_instance.and_then(|name| st.instances.get(&name).cloned())
             {
+                let resizable = page.as_ref().map(|p| p.resizable).unwrap_or(false);
                 parent.boot = match st.dialogs.get(&id).cloned() {
-                    Some(cfg) => dialog_boot(&parent.boot, id, visible, &cfg),
-                    None => custom_boot(&parent.boot, id, visible),
+                    Some(cfg) => dialog_boot(&parent.boot, id, visible, resizable, &cfg),
+                    None => custom_boot(&parent.boot, id, visible, resizable),
                 };
                 instance = Some(parent);
             }
@@ -419,7 +424,7 @@ fn inject_page(html: &str, inst: &Instance) -> String {
 
 /// Turns a card's boot data into a custom window's: same origin, same settings, but the page has to
 /// know which window it is and where it lives.
-fn custom_boot(parent_boot: &str, id: u32, visible: bool) -> String {
+fn custom_boot(parent_boot: &str, id: u32, visible: bool, resizable: bool) -> String {
     let mut value: Value =
         serde_json::from_str(parent_boot).unwrap_or_else(|_| serde_json::json!({}));
     if let Some(obj) = value.as_object_mut() {
@@ -428,14 +433,17 @@ fn custom_boot(parent_boot: &str, id: u32, visible: bool) -> String {
         obj.insert("windowId".into(), serde_json::json!(id));
         obj.insert("parentInstance".into(), instance);
         obj.insert("visible".into(), Value::Bool(visible));
+        // 弹框的父卡片是可缩放的，但弹框自己不是：不覆盖这一项，页面就会挂上一个点了没反应的
+        // 右下角放大把位（SDK 只按 `boot.resizable` 决定要不要挂）。
+        obj.insert("resizable".into(), Value::Bool(resizable));
     }
     value.to_string()
 }
 
 /// A dialog window's boot data: the custom window markers plus the normalized dialog config, so the
 /// builtin page does not need a second round trip to find out what it is meant to draw.
-fn dialog_boot(parent_boot: &str, id: u32, visible: bool, cfg: &Value) -> String {
-    let mut value: Value = serde_json::from_str(&custom_boot(parent_boot, id, visible))
+fn dialog_boot(parent_boot: &str, id: u32, visible: bool, resizable: bool, cfg: &Value) -> String {
+    let mut value: Value = serde_json::from_str(&custom_boot(parent_boot, id, visible, resizable))
         .unwrap_or_else(|_| serde_json::json!({}));
     if let Some(obj) = value.as_object_mut() {
         obj.insert("dialog".into(), cfg.clone());
