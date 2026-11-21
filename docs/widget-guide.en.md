@@ -655,6 +655,9 @@ win.on("closed", () => widget.log("window closed"));
 | `layer` | none | `"desktop"` → above the wallpaper, below every ordinary window; `"wallpaper"` → **below the desktop icons**, as the new wallpaper: icons and apps stay fully visible and clickable. Use this for full-screen effects |
 | `fullscreen` | `false` | Open full screen |
 | `windowIcon` | none | The little icon in the native title bar / taskbar: a path inside the widget package (`"icon.png"`) or a `data:` bitmap — `png`/`ico`/`bmp`/`jpg`/`webp` all work; SVG does not (Windows wants pixels); `false` removes it |
+| `closeOnEsc` | `false` | Close itself on Esc, `reason: "esc"` in the `closed` result. Works even when the window never took focus (the host watches the key, not the page's `keydown`) |
+| `closeOnBlur` | `false` | Close when focus is lost or when the pointer goes down outside, `reason: "blur"`. Cards are `NOACTIVATE`, so a click on the card counts as outside |
+| `closeOnOutsideClick` | `false` | Only the "pressed outside the window" case, `reason: "outside"`; a click inside does not count, and real focus loss does not close it |
 | `webPreferences.preload` | — | **Does not run** (no Node); use `ipcRenderer` below instead |
 
 `movable`, `maximizable`, `minimizable`, `focusable`, `hasShadow`, `titleBarStyle`, `acceptFirstMouse`, `enableLargerThanScreen` and `fullscreenable` are accepted, but Windows may have nothing to map them to; passing them does not fail.

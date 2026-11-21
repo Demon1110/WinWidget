@@ -59,5 +59,7 @@ node simples/pack.mjs --check  # 只核对仓库里的产物是否和源码一�
 | closeAll | 所有子窗关掉，卡片还在 |
 | 卡片自操作 | 卡片抬到最前、置顶、透明度 0.85、右移 24px，再恢复 |
 
-`closeOnBlur` / `closeOnOutsideClick` / `modal` 三条就是 P2 里一直没在真机点过的那几项，
-这套用例主要为了补它们。
+`closeOnBlur` / `closeOnOutsideClick` / `closeOnEsc` 三条是 P2 里最晚才在真机点到的几项，
+2026-11-21 在这次重装宿主后逐条点过：Esc 一下（按下几乎立刻抬起）也能关，`closeOnBlur`
+点卡片即关，`closeOnOutsideClick` 点窗口内部不动、点外面才关。三条的根因与宿主改法记在
+`docs/窗口与弹框API规划.md` 第六轮那节。

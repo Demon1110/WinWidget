@@ -410,7 +410,7 @@ document.getElementById("save").onclick = async () => {
 
 真机复测（2560×1440）：方框那条四角 90 度、`GetLayeredWindowAttributes` 读到 `alpha=235`（0.92）；无边框直角那条压在浏览器窗口上能看到底色透出来（把 `opacity` 临时改 0.4 时整块明显变淡，说明页面侧生效）；默认圆角那条四角平滑、圆角外是桌面，没有白尖；模态期间父卡片 `IsWindowEnabled=False`，点「确定」后回到 `True`，再点卡片能正常弹框。
 
-P2 里 `closeOnBlur` / `closeOnOutsideClick` / `modal` 三条走的是窗口失焦与 `EnableWindow`，需要在真机上点一下别处才能看到效果，验证留到有交互的会话；`autoClose` 与 `anchor` 已在真机上量过坐标与关闭原因。
+P2 里 `closeOnBlur` / `closeOnOutsideClick` / `modal` 三条走的是窗口失焦与 `EnableWindow`，需要在真机上点一下别处才能看到效果，第一轮只验了 `modal`；`autoClose` 与 `anchor` 已在真机上量过坐标与关闭原因。`closeOnBlur` / `closeOnOutsideClick` 与 `closeOnEsc` 的真机验收见第七轮。
 
 ### 真机返修第二轮：「无边框 + 直角」上圆下直
 
@@ -458,6 +458,26 @@ P2 里 `closeOnBlur` / `closeOnOutsideClick` / `modal` 三条走的是窗口失�
 
 
 迁移后真机量到的结果：弹框落在主屏右上角 `(2164, 16)`、宽 380、高按内容收到 168（原来是写死的 300，一句话提醒下面留白），点「完成」宿主日志记 `win 1: closed (button)`，页面拿到的返回值是 `{"button":"ok","confirmed":true,"reason":"button"}`；弹框出现时前台窗口一直是浏览器，没有抢焦点。
+
+### 真机返修第六轮：三个关闭开关真机验收
+
+多窗口测试台（`simples/simples-window`）里 `closeOnEsc` / `closeOnBlur` / `closeOnOutsideClick` 三条点了没反应。分开看是三个不同的坑：
+
+| 现象 | 根因 | 改法 |
+|---|---|---|
+| `closeOnEsc` 一点效果都没有 | `WinFlags.close_on_esc` 只在 `window_category.rs` 建窗时从 `jbool` 读进来，Rust 侧从没读过它；内置弹框页按 Esc 能关，是因为 `dialog.js` 自己监听了 `keydown`，`windows.open` 自绘的页面没有这段 | 宿主侧接手：`platform::win32` 记「Esc 刚按下」，事件循环里 `App::escape_pressed` 把带 `closeOnEsc` 的窗口 `close_custom(id, "esc")` |
+| `closeOnBlur` / `closeOnOutsideClick` 只在真失焦时判 | `main.rs` 的 `Focused(false)` → `custom_blurred` 是唯一入口。卡片是 `NOACTIVATE` 的、自建窗口 `set_visible(true)` 也不抢焦点，点卡片根本不会让子窗失焦，`Focused(false)` 永远不来 | 主键改成「左键按在窗口外面」，`App::pointer_pressed` 统一处理：有 `closeBlur` 给 `"blur"`，否则给 `"outside"`；真失焦那条留着当兜底 |
+| 键怎么听 | 40ms 取态会漏掉一次快速点按；低级键盘钩子装得上、但实测只在第一次回调之后再没动静 | 鼠标按下用 `WH_MOUSE_LL`（精确到每一次按下）；Esc 用 10ms 取态 + 边沿判定，真人按一次至少三四十毫秒，够采样两三次 |
+
+另外两个细节一并处理，否则「点一下才弹出来的窗口」会自己关掉：开窗那一下的按下发生在窗口建出来之前，但事件可能排队排到窗口已经站住之后才被处理；`pointer_pressed` 因此比较按下时刻与窗口的 `created_ms`，早于建窗的按下不算「点了别处」。`closeOnBlur` / `closeOnOutsideClick` 也补进了 `dialog.rs` 的 `KNOWN`，弹框同样能用。
+
+真机验收（2560×1440，`cargo build --release` 后重启宿主）：
+
+| 用例 | 操作 | 结果 |
+|---|---|---|
+| `closeOnEsc` | 点这一行开窗，立刻按一下 Esc（`SendKeys {ESC}`，按下与抬起几乎同时） | 日志 `win 1: closed (esc)`，页面拿到 `{"reason":"esc"}`，耗时 2.2s（含我这边点击后的等待） |
+| `closeOnBlur` | 开窗后点卡片顶部 | 日志 `closed (blur)`，页面拿到 `{"reason":"blur"}` |
+| `closeOnOutsideClick` | 开窗后先点窗口内部（面板空白处），再点卡片 | 点内部不动；点外面后 `closed (outside)`，页面拿到 `{"reason":"outside"}` |
 
 还没做的一件（不阻塞使用）：
 
