@@ -10,7 +10,6 @@ use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use winwidget::platform::files::*;
 
-
 #[test]
 fn every_entry_gets_the_route_the_page_loads_it_from() {
     let mut listing = json!({

@@ -11,7 +11,6 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 use winwidget::model::manifest::*;
 
-
 fn manifest_with_tools(label: &str, tools: &str, permissions: &str) -> (Manifest, PathBuf) {
     let dir =
         std::env::temp_dir().join(format!("winwidget-manifest-{}-{label}", std::process::id()));
