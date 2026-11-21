@@ -198,7 +198,7 @@ const CASES = [
         width: 380,
         height: 180,
         rounded: false,
-        opacity: 0.92,
+        opacity: 0.2,
       }),
   ],
   [
@@ -209,6 +209,17 @@ const CASES = [
         title: "模态确认",
         content: "试着点一下背后的卡片：应该点不动。",
         modal: true,
+      }),
+  ],
+  [
+    "进任务栏 + 不置顶",
+    "skipTaskbar=false 时任务栏该多出一条按钮；alwaysOnTop=false 时点一下背后的卡片就能把它压到后面",
+    () =>
+      widget.dialog.confirm({
+        title: "当个正常窗口",
+        content: "任务栏里应该能看到这一只；点一下背后的卡片，它就会被压到后面去。",
+        skipTaskbar: false,
+        alwaysOnTop: false,
       }),
   ],
   [
