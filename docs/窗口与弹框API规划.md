@@ -513,6 +513,23 @@ P2 里 `closeOnBlur` / `closeOnOutsideClick` / `modal` 三条走的是窗口失�
 
 真机验收（`cargo build --release` 后重启宿主）：`square.html` 那条从卡片点开，`GetWindowRgn` 读回 `2`、四角 1:1 放大都是直角（页面自带的 1px 描边四个角也是方的），故意点它激活再等 2 秒仍然是 `2`；同一轮里 `直角无边框` 与 `外观全开` 两扇弹框的四角没有变化。
 
+### 第九轮：弹框的「置顶」「进任务栏」从写死改成开关
+
+组件侧问过来的：`dialog.alert({ skipTaskbar: false })` 为什么任务栏还是多不出条目。查下来是白名单的问题——`dialog.rs::normalize` 先写死 `alwaysOnTop: true` + `skipTaskbar: true`（第 172–173 行），之后只有白名单 `KNOWN` 里的键才会覆盖回组件给的值，而这两项都不在 `KNOWN` 里，传 `false` 等于没传，弹框一律压在所有窗口上面、也不进任务栏。
+
+改法：把 `alwaysOnTop` / `skipTaskbar` 加进 `KNOWN`，默认值一个都不动。`build_custom` 本来就从选项里读这两项（第 306–307 行），所以宿主这层不用改，`dialog.window` 因为共用同一份白名单也一起认。
+
+真机验收（2560×1440，重启宿主后从任务栏的 UI Automation 名字里读「N 个运行窗口」，并用 `GWL_EXSTYLE` 交叉核对）：
+
+| 状态 | 任务栏 | 扩展样式 |
+|---|---|---|
+| 刚重启、没有任何弹框 | 没有 WinWidget 按钮 | — |
+| `skipTaskbar: false` + `alwaysOnTop: false` 的弹框开着 | `WinWidget — Windows 桌面小组件 - 1 个运行窗口` | `0x40110`（无 `WS_EX_TOPMOST`） |
+| 关掉那只弹框 | 按钮跟着消失 | — |
+| 默认弹框（两个键都不传） | 没有按钮 | `0x40118`（含 `WS_EX_TOPMOST`） |
+
+顺手记一条容易踩的：tao 的 `set_skip_taskbar` 不是去改 `WS_EX_TOOLWINDOW`，而是走 `ITaskbarList::DeleteTab` / `AddTab`，所以「不进任务栏」的窗口扩展样式里照样有 `WS_EX_APPWINDOW`（`0x40000`）——拿 `TOOLWINDOW` 位判断「有没有任务栏按钮」是错的。
+
 ### 还没做的
 
 1. `hello-widget` 模板示例：仓库里没有这个模板组件，指南里的示例段落已经覆盖同一份代码，是否要新建一个模板组件需要先定它放宿主仓库还是 Hub。
