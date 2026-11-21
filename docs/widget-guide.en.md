@@ -894,6 +894,7 @@ Mark any element with `data-ww-drag` and that element plus its whole subtree bec
 ```
 
 - Elements marked `data-ww-nodrag`, and any `button` / `input` / `textarea` / `select` / `a[href]` / `[contenteditable]` inside, keep the press for themselves — clicking × never turns into a drag, fields still take focus.
+- Closing has its own marker: anything marked `data-ww-close` closes its own window on click (on a card that means collapse, the tray can bring it back; in a window it means closing itself). The value is optional and becomes the `reason` on `windows.on("closed")`, defaulting to `api`. It is exempt from dragging too, so it never gets dragged first inside a handle.
 - `cursor: grab` and "no text selection while dragging" come from `base.css`; do not write them yourself.
 - It only applies inside windows your widget opens, and those must be opened with `draggable: true`: **whether a window may be dragged is the host's decision**, the page cannot flip that gate, and marking elements in a window without it does nothing. A card already drags from anywhere, so it neither needs nor accepts a handle.
 - The attribute is live: elements added later, or a title bar you render inside `dialog.window`, are covered as soon as they carry it — no rebinding.
