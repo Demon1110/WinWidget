@@ -426,6 +426,16 @@ P2 里 `closeOnBlur` / `closeOnOutsideClick` / `modal` 三条走的是窗口失�
 
 复测（2560×1440，`target\release`）：左上 `y=630` 那一行从 `x=1090` 起就是页面 1px 描边，四角全 90 度；同一构建下默认圆角的 alert 仍是 16px 圆角（`y=650..666` 逐行内收 16px），没有被误裁。
 
+### 真机返修第三轮：`dialog.window` 的四个白角与开窗白闪
+
+| 现象 | 根因 | 改法 |
+|---|---|---|
+| `dialog.window({ html })` 弹出来是一扇**有系统边框的不透光窗口**，页面自己画的圆角外侧露出四个白角 | 只有内置页面那四种 kind 走 `dialog::normalize`，`window` 这种「页面由组件画」的被当成普通窗口，于是 `frame` 落回 `true`、`transparent` 落回 `false`，页面圆角外面就是 WebView 的默认白底 | 新增 `dialog::look`：只补外观那层默认值（无边框、透光、圆角、透明底、跟随主题），尺寸/位置/交互仍归组件；`window` kind 在 `win.create` 里过一遍 |
+| 弹框出现的一瞬间白屏一下 | 窗口建好立刻 `set_visible`，此时 WebView 还在画自己的白底，页面还没渲染 | 弹框窗口先藏着，页面 `ready` 之后由 `App::mark_custom_loaded` 再亮出来；实测点击到可见约 300ms，期间桌面上什么都不出现，不再是「白框先闪一下」 |
+
+`look` 和 `normalize` 同一条规矩：组件坚持要 `frame:true` 就同时把 `transparent` 关掉，免得玻璃帧配标题栏又漏白边。
+
+
 
 迁移后真机量到的结果：弹框落在主屏右上角 `(2164, 16)`、宽 380、高按内容收到 168（原来是写死的 300，一句话提醒下面留白），点「完成」宿主日志记 `win 1: closed (button)`，页面拿到的返回值是 `{"button":"ok","confirmed":true,"reason":"button"}`；弹框出现时前台窗口一直是浏览器，没有抢焦点。
 

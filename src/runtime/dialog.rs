@@ -20,6 +20,38 @@ pub fn has_builtin_page(kind: &str) -> bool {
     matches!(kind, "alert" | "confirm" | "prompt" | "toast")
 }
 
+/// 是不是「按弹框算」的窗口（含 `window` 这种页面由组件自己画的）。
+pub fn is_dialog(kind: &str) -> bool {
+    KINDS.contains(&kind)
+}
+
+/// 只取外观那一层：`dialog.window` 的页面由组件画，尺寸、位置和交互仍旧归组件说了算，
+/// 所以这里不套 `normalize` 的整份默认值，只把「弹框长什么样」补齐。
+pub fn look(options: &Value) -> Value {
+    let mut out = Map::new();
+    out.insert("kind".into(), json!("window"));
+    out.insert("frame".into(), json!(false));
+    out.insert("rounded".into(), json!(true));
+    out.insert("transparent".into(), json!(true));
+    out.insert("backgroundColor".into(), json!("rgba(0,0,0,0)"));
+    out.insert("theme".into(), json!("inherit"));
+    if let Some(obj) = options.as_object() {
+        for (key, value) in obj {
+            if key == "kind" || value.is_null() {
+                continue;
+            }
+            if KNOWN.contains(&key.as_str()) {
+                out.insert(key.clone(), value.clone());
+            }
+        }
+    }
+    // 和 `normalize` 同一条规矩：要原生边框就别同时要逐像素透明，透明的玻璃帧配标题栏会漏白边。
+    if out.get("frame").and_then(Value::as_bool).unwrap_or(false) {
+        out.insert("transparent".into(), json!(false));
+    }
+    Value::Object(out)
+}
+
 /// 组件可以设置的键。不在表里的键一律忽略：弹框配置是公开协议，别让它顺手改窗口层。
 const KNOWN: &[&str] = &[
     "title",
@@ -158,6 +190,20 @@ mod tests {
         assert_eq!(cfg["x"], json!(120));
         assert_eq!(cfg["y"], json!(28));
         assert_eq!(cfg["center"], json!(false));
+    }
+
+    #[test]
+    fn a_custom_dialog_page_wears_the_dialog_look() {
+        let cfg = look(&json!({ "html": "custom.html", "width": 320, "height": 150 }));
+        assert_eq!(cfg["frame"], json!(false));
+        assert_eq!(cfg["transparent"], json!(true));
+        assert_eq!(cfg["rounded"], json!(true));
+        // 组件自己给的尺寸原样留着，这一层只补外观
+        assert_eq!(cfg["width"], json!(320));
+        assert!(cfg.get("center").is_none());
+        // 组件明确要原生边框时按不透光处理，跟 `normalize` 一样
+        let framed = look(&json!({ "frame": true }));
+        assert_eq!(framed["transparent"], json!(false));
     }
 
     #[test]

@@ -1123,6 +1123,11 @@ impl App {
                 return;
             }
             win.loaded = true;
+            // 弹框窗口建的时候是藏着的：页面已经就绪，这时候亮出来才不会被 WebView 的白底闪一下。
+            if win.show_on_ready {
+                win.show_on_ready = false;
+                win.window.set_visible(true);
+            }
             // Wallpaper windows are child windows behind the icon layer: they never capture the
             // mouse, and the layered click-through style would make their WebView invisible.
             if win.ignore_mouse && !win.wallpaper {

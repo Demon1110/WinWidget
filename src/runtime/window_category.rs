@@ -162,6 +162,9 @@ pub struct CustomWin {
     /// `set_visible` 会按自己缓存的样式重写扩展样式，把 `WS_EX_LAYERED` 抹掉，所以这里记着，
     /// 每次显示或页面就绪后再补一次；逐像素透明的窗口不记（透明度由页面叠）。
     pub alpha: Option<f64>,
+    /// 弹框窗口等到页面 `ready` 再显示：建窗时先把窗口藏起来，WebView 还在画自己的白底，
+    /// 这时候亮出来就是一下白屏。页面一就绪就由 `App::mark_custom_loaded` 负责显示。
+    pub show_on_ready: bool,
     /// 无边框且要求直角的窗口靠 win32 区域裁成矩形（见 `win32::clip_square`）。区域是按窗口尺
     /// 寸定死的，窗口一改大小就得重贴，所以记着这个开关，`setSize` / `setBounds` 里补一次。
     pub square: bool,
@@ -503,7 +506,10 @@ pub fn build_custom(
         w::set_click_through(hwnd, true);
     }
 
-    if show {
+    let show_on_ready = show
+        && !wallpaper
+        && crate::runtime::dialog::is_dialog(&jstr(&o, "kind").unwrap_or_default());
+    if show && !show_on_ready {
         // tao's set_visible runs a window-flags diff that rewrites GWL_STYLE back to WS_POPUP and
         // would tear a wallpaper window off its host. Use the raw ShowWindow for that layer.
         if wallpaper {
@@ -519,6 +525,7 @@ pub fn build_custom(
     Ok(CustomWin {
         wallpaper,
         square: !frame && !rounded,
+        show_on_ready,
         id,
         key: jstr(&o, "key").unwrap_or_default(),
         kind: jstr(&o, "kind").unwrap_or_else(|| "window".into()),
@@ -1119,6 +1126,12 @@ pub fn custom_call(
             options = crate::runtime::dialog::normalize(&kind, &options);
             crate::runtime::dialog::PAGE.to_string()
         } else {
+            // `dialog.window`：页面由组件画，外观归弹框那一套（无边框、透光、圆角），
+            // 否则它会退化成「有系统边框 + 不透光」的普通窗口，页面圆角外的四个角露出
+            // WebView 的白色底。
+            if crate::runtime::dialog::is_dialog(&kind) {
+                options = crate::runtime::dialog::look(&options);
+            }
             req_str(p, "file")?
         };
         let parent = match ctx {
