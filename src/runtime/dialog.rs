@@ -111,6 +111,16 @@ pub fn normalize(kind: &str, options: &Value) -> Value {
             }
         }
     }
+    // 原生边框和逐像素透明不搭：玻璃帧铺满整扇窗口，标题栏会跟着变透明，圆角外还容易出白边。
+    // 有边框就按不透光的普通窗口处理，`opacity` 也就落回宿主那一层的整窗 alpha 上。
+    let framed = out.get("frame").and_then(Value::as_bool).unwrap_or(false);
+    if framed {
+        out.insert("transparent".into(), json!(false));
+        // 原生标题栏已经写着标题了，页面里再来一行就是重复。
+        if options.get("showTitle").is_none() {
+            out.insert("showTitle".into(), json!(false));
+        }
+    }
     Value::Object(out)
 }
 
@@ -148,5 +158,15 @@ mod tests {
         assert_eq!(cfg["x"], json!(120));
         assert_eq!(cfg["y"], json!(28));
         assert_eq!(cfg["center"], json!(false));
+    }
+
+    #[test]
+    fn a_native_frame_means_an_opaque_window_with_one_title() {
+        let cfg = normalize("confirm", &json!({ "frame": true, "title": "外观全开" }));
+        assert_eq!(cfg["transparent"], json!(false));
+        assert_eq!(cfg["showTitle"], json!(false));
+        // 边框窗口仍然可以要求直角，圆角由 DWM 决定
+        let square = normalize("confirm", &json!({ "frame": true, "rounded": false }));
+        assert_eq!(square["rounded"], json!(false));
     }
 }

@@ -13,6 +13,10 @@ body {
   border-radius: calc(var(--w-radius) / var(--w-size-scale));
 }
 
+/* 直角弹框：有原生边框时客户区本来就是矩形，圆角归窗口；无边框时是 `rounded: false` 要的。 */
+body[data-square="true"],
+body[data-square="true"] .dlg { border-radius: 0; }
+
 html.dlg-light body {
   background: #f4f6f8;
   color: #1a1d21;

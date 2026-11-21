@@ -1136,6 +1136,15 @@ impl App {
         if let Some(hwnd) = click_through {
             crate::platform::win32::set_click_through(hwnd, true);
         }
+        // `set_visible` 在建窗时已经跑过一轮，页面就绪后再把创建时要求的整窗透明度补一次，
+        // 免得 tao 改样式时把 layered 位抹掉。
+        let alpha = self
+            .customs
+            .get(&id)
+            .and_then(|win| win.alpha.map(|opacity| (win.hwnd(), opacity)));
+        if let Some((hwnd, opacity)) = alpha {
+            crate::runtime::window_category::set_opacity(hwnd, opacity);
+        }
         let Some(parent) = self.customs.get(&id).map(|win| win.parent.clone()) else {
             return;
         };

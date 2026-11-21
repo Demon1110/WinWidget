@@ -156,6 +156,12 @@ pub struct CustomWin {
     /// The page is gone (destroyed or closed): further calls are refused like Electron's.
     pub destroyed: bool,
     pub ignore_mouse: bool,
+    /// 逐像素透明（玻璃帧）的窗口，透明度由页面自己叠，不走整窗 alpha。
+    pub transparent: bool,
+    /// 创建时要求的整窗透明度（`options.opacity`，只在窗口不透光时才用）。tao 的
+    /// `set_visible` 会按自己缓存的样式重写扩展样式，把 `WS_EX_LAYERED` 抹掉，所以这里记着，
+    /// 每次显示或页面就绪后再补一次；逐像素透明的窗口不记（透明度由页面叠）。
+    pub alpha: Option<f64>,
     /// Mounted as a child of the shell's wallpaper host, below the desktop icons. Such a window
     /// must never go through tao's window-flags diff (set_visible/set_ignore_cursor_events/
     /// set_fullscreen/set_outer_position), which would rewrite its style back to WS_POPUP.
@@ -274,7 +280,10 @@ pub fn build_custom(
     let show = jbool(&o, "show").unwrap_or(true);
     let always_on_top = jbool(&o, "alwaysOnTop").unwrap_or(false);
     let skip_taskbar = jbool(&o, "skipTaskbar").unwrap_or(false);
-    let rounded = jbool(&o, "roundedCorners").unwrap_or(true);
+    // 卡片那套选项用 `roundedCorners`，弹框这套叫 `rounded`；两边都认，省得调用方记两套名字。
+    let rounded = jbool(&o, "roundedCorners")
+        .or_else(|| jbool(&o, "rounded"))
+        .unwrap_or(true);
     let background = jstr(&o, "backgroundColor").unwrap_or_else(|| "rgba(0,0,0,0)".into());
     let mut builder = WindowBuilder::new()
         .with_title(title.clone())
@@ -339,16 +348,24 @@ pub fn build_custom(
         right: px + to_px(width),
         bottom: py + to_px(height),
     };
+    // DWM 的窗口圆角只管「窗口本身」那层壳。逐像素透明的窗口，圆角是页面自己画的，再让 DWM
+    // 去裁一刀就会在圆角外的四角留下白色小尖——卡片早就统一关掉了 DWM 圆角，无边框窗口同理。
+    // 不透光的窗口没有这个问题，圆角交给 DWM 反而更干净。
+    let dwm_round = rounded && !transparent;
     if !frame {
         // Windows keeps a thin caption edge on a top-level window; a frameless window has to mean
         // its client area really is the window rectangle, otherwise a full-screen surface leaves
         // a sliver of the screen uncovered. The frame is pinned away first, while the window still
         // carries the shadow insets, so `fit_client` then sets the outer rectangle straight to the
         // requested size instead of adding those insets back on top of it.
-        w::keep_frame_polished(hwnd, rounded);
+        w::keep_frame_polished(hwnd, dwm_round);
         w::drop_frame(hwnd);
         w::fit_client(hwnd, px, py, to_px(width), to_px(height));
-        w::polish_frame(hwnd, rounded);
+        w::polish_frame(hwnd, dwm_round);
+    } else if !rounded {
+        // 有系统边框时圆角由 Windows 默认加在整扇窗口上：要求直角就得单独说一声。这里不能走
+        // `polish_frame`——它顺手关掉非客户区渲染，会把用户要的原生标题栏一起抹掉。
+        w::set_round_corner(hwnd, false);
     }
     // `layer: "desktop"` puts the window directly above the wallpaper and below every ordinary
     // window — the place a desktop-level canvas belongs, so an effect can play on the wallpaper
@@ -379,9 +396,14 @@ pub fn build_custom(
             }
         });
     }
-    if let Some(opacity) = jnum(&o, "opacity") {
-        set_opacity(hwnd, opacity);
-    }
+    // 逐像素透明的窗口已经是玻璃帧，`SetLayeredWindowAttributes` 的整窗 alpha 会把玻璃帧顶掉
+    // （四角又变白、页面发灰）。这类窗口的透明度交给页面自己叠，弹框页就是这么做的。
+    // 这一句必须放在显示之后：tao 的 `set_visible` 会重写扩展样式，把 layered 位抹掉。
+    let alpha = if transparent {
+        None
+    } else {
+        jnum(&o, "opacity").map(|v| v.clamp(0.0, 1.0))
+    };
     if jbool(&o, "center").unwrap_or(false) {
         center(&window);
     }
@@ -474,6 +496,9 @@ pub fn build_custom(
             window.set_visible(true);
         }
     }
+    if let Some(opacity) = alpha {
+        set_opacity(hwnd, opacity);
+    }
 
     Ok(CustomWin {
         wallpaper,
@@ -514,6 +539,8 @@ pub fn build_custom(
         loaded: false,
         destroyed: false,
         ignore_mouse,
+        transparent,
+        alpha,
     })
 }
 
@@ -575,7 +602,7 @@ fn parse_color(text: &str, transparent: bool) -> (u8, u8, u8, u8) {
     fallback
 }
 
-fn set_opacity(hwnd: w::HWND, opacity: f64) {
+pub fn set_opacity(hwnd: w::HWND, opacity: f64) {
     let alpha = (opacity.clamp(0.0, 1.0) * 255.0).round() as u8;
     unsafe {
         let ex = w::GetWindowLongPtrW(hwnd, w::GWL_EXSTYLE) | w::GWL_EXSTYLE_LAYERED;
@@ -1295,6 +1322,10 @@ fn invoke(app: &mut App, id: u32, m: &str, p: &Value) -> BridgeResult<Reply> {
                 } else {
                     win.window.set_visible(true);
                 }
+                // `set_visible` 重写了扩展样式，创建时的整窗透明度要跟着补回来。
+                if let Some(opacity) = win.alpha {
+                    set_opacity(win.hwnd(), opacity);
+                }
             }
             Value::Null
         }
@@ -1575,8 +1606,12 @@ fn invoke(app: &mut App, id: u32, m: &str, p: &Value) -> BridgeResult<Reply> {
         }
         "setOpacity" => {
             let opacity = jnum(p, "opacity").unwrap_or(1.0);
-            if let Some(win) = app.customs.get(&id) {
-                set_opacity(win.hwnd(), opacity);
+            if let Some(win) = app.customs.get_mut(&id) {
+                // 玻璃帧窗口的透明度靠页面，整窗 alpha 会把玻璃帧顶掉。
+                if !win.transparent {
+                    win.alpha = Some(opacity.clamp(0.0, 1.0));
+                    set_opacity(win.hwnd(), opacity);
+                }
             }
             Value::Null
         }

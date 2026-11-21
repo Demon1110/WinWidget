@@ -1377,9 +1377,13 @@ pub fn drag_by_caption(hwnd: HWND) {
 }
 
 /// 模态：打开期间父窗口不接受任何输入，关闭后恢复。
+///
+/// `EnableWindow` 的第二个参数是「启用」而不是「禁用」，传反了会让模态期间父窗口照旧可点、
+/// 关掉之后父窗口反而变成禁用状态（点一下就响系统铃）。这里只保留一个参数 `on`，让调用方
+/// 说人话。
 pub fn enable_window(hwnd: HWND, on: bool) {
     unsafe {
-        EnableWindow(hwnd, if on { 0 } else { 1 });
+        EnableWindow(hwnd, if on { 1 } else { 0 });
     }
 }
 

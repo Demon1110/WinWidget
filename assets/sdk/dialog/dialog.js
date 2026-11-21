@@ -25,9 +25,18 @@
   dlg.dataset.kind = kind;
   if (cfg.animation !== "none") body.dataset.animation = cfg.animation || "fade";
   if (kind === "toast") body.dataset.toast = "true";
+  // 有原生边框时客户区是矩形，圆角由窗口负责；无边框时由 `rounded` 说了算。
+  if (cfg.frame === true || cfg.rounded === false) body.dataset.square = "true";
   if (cfg.theme === "light" || cfg.theme === "dark") root.classList.add("dlg-" + cfg.theme);
   if (typeof cfg.accentColor === "string" && cfg.accentColor) {
     root.style.setProperty("--w-accent", cfg.accentColor);
+  }
+
+  // 逐像素透明的窗口叠不了整窗 alpha（会把玻璃帧顶掉），所以透明度在页面上做；
+  // 不透光的窗口由宿主对整窗设置，这里再叠一次就变成两重淡。
+  const opacity = Number(cfg.opacity);
+  if (cfg.transparent === true && Number.isFinite(opacity) && opacity > 0 && opacity < 1) {
+    dlg.style.opacity = String(opacity);
   }
 
   // ── 内容 ────────────────────────────────────────────────────
