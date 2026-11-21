@@ -191,6 +191,12 @@ html:not([data-theme="paper"]) select { color-scheme: dark; }
 body:hover .fw-resize { opacity: 0.6; }
 html[data-locked="true"] .fw-resize { display: none; }
 
+/* 拖拽把位：标了 data-ww-drag 的元素按下就拖整窗（宿主侧要求窗口 draggable: true）。
+   光标和不选字这两条由 SDK 统一给，页面不必再写；子树里 data-ww-nodrag 的地方保持原样。 */
+[data-ww-drag] { cursor: grab; user-select: none; -webkit-user-select: none; }
+[data-ww-drag]:active { cursor: grabbing; }
+[data-ww-drag] [data-ww-nodrag] { user-select: text; }
+
 /* Arrange mode: a dashed outline with the widget's name and size. */
 .fw-edit-label { display: none; }
 html[data-edit="true"] body { outline: 1.5px dashed color-mix(in srgb, var(--w-accent) 80%, transparent); outline-offset: -1.5px; }

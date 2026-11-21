@@ -345,8 +345,19 @@
 
   // ── dragging, resizing, context menu ───────────────────────
   // Dragging starts once the mouse moves a few pixels, so plain clicks still reach the page.
-  const NO_DRAG = "input, textarea, select, button, a[href], [contenteditable]:not([contenteditable='false']), [data-no-drag], [role='slider']";
+  const NO_DRAG = "input, textarea, select, button, a[href], [contenteditable]:not([contenteditable='false']), [data-no-drag], [data-ww-nodrag], [role='slider']";
+  // 约定：任何元素标上 data-ww-drag，它连同整棵子树就是一块"拖拽把位"（标题条、整块面板都行）。
+  // 按下即拖，页面不用写一行 mousedown；子树里标 data-ww-nodrag 的、或本身是按钮/输入框/链接的，
+  // 这次按键仍归页面（点 × 不会变拖拽）。只对组件自己开的窗口（draggable: true）生效：卡片本来就
+  // 整张能拖，不必也不该由页面再指一个把位；那道闸在宿主侧。
+  const DRAG_GRIP = "[data-ww-drag]";
+  const IS_CUSTOM = (boot.windowType || "main") === "custom";
   let down = null;
+
+  /** 按下把位：自定义窗口交给系统的 SC_MOVE，卡片走它自己的自绘拖动。 */
+  function beginDrag() {
+    return IS_CUSTOM ? call("win.startDrag") : send("window.drag");
+  }
 
   document.addEventListener("mousedown", (e) => {
     if (e.button !== 0) return;
@@ -359,6 +370,11 @@
       // A fader, a field or a slider: the page keeps this press. Saying so stops the host's own
       // "the page must be dead" fallback from dragging the whole card when the pointer slides.
       send("window.press");
+      return;
+    }
+    if (IS_CUSTOM && e.target.closest && e.target.closest(DRAG_GRIP)) {
+      e.preventDefault();       // 也别让 WebView 起一次自带的文字选区拖拽
+      beginDrag();
       return;
     }
     down = { x: e.screenX, y: e.screenY };
@@ -1388,8 +1404,11 @@
       /** 0–1。卡片是把页面整体调淡（窗口层是逐像素透明的，不能再叠一层 alpha）。 */
       setOpacity: (o) => call("window.setOpacity", { opacity: Number(o) }),
       setTitle: (t) => call("window.setTitle", { title: t == null ? "" : String(t) }),
-      /** 无边框窗口的自绘标题条/拖拽区按下时调用；卡片走它自己的拖动。 */
-      startDrag: () => ((boot.windowType || "main") === "custom" ? call("win.startDrag") : send("window.drag")),
+      /**
+       * 无边框窗口的自绘标题条/拖拽区按下时调用；卡片走它自己的拖动。
+       * 只在真要自己管手势时才写——标了 `data-ww-drag` 的元素由 SDK 代劳。
+       */
+      startDrag: beginDrag,
       /** 关掉自己：卡片等于收起（托盘还能叫回来）。 */
       close: () => call("window.close"),
       hide: () => call("window.hide"),
