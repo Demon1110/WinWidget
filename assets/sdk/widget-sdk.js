@@ -483,9 +483,9 @@
       let pending = 0;
       new ResizeObserver(() => { cancelAnimationFrame(pending); pending = requestAnimationFrame(updateSizeScale); }).observe(document.body);
     }
-    // 只有卡片真的能被拖着改大小：自定义窗口（含弹框）的 `window.resize` 没有意义，宿主会
-    // 直接丢掉，挂上去就是一个点了没反应的右下角把位——光标变了、却什么都不发生。
-    if (boot.resizable && !IS_CUSTOM) {
+    // 只有真的能被拖着改大小的窗口才挂把位：卡片的尺寸由组件清单决定，自定义窗口在创建时
+    // 用 `resizable` 决定（弹框一律不能放大），两边都由宿主写进 boot，页面不必自己猜。
+    if (boot.resizable) {
       const grip = document.createElement("div");
       grip.className = "fw-resize";
       document.body.appendChild(grip);
@@ -711,7 +711,7 @@
       destroyed: false,
       loaded: false,
     };
-    const hooks = { loaded: [], closed: [], message: [] };
+    const hooks = { loaded: [], closed: [], message: [], resize: [] };
     let ready = null;
     let settle = null;
     const closed = new Promise((resolve) => { settle = resolve; });
@@ -837,6 +837,15 @@
     api.__message = function (payload) {
       fire("message", payload);
     };
+    // 把位拖着窗口长的时候，宿主只报尺寸：页面自己的布局交给 CSS，这里补的是状态和事件。
+    api.__resized = function (size) {
+      const width = Number(size && size.width) || state.width;
+      const height = Number(size && size.height) || state.height;
+      if (width === state.width && height === state.height) return;
+      state.width = width;
+      state.height = height;
+      fire("resize", { width, height });
+    };
     return api;
   }
 
@@ -848,6 +857,10 @@
   on("win.closed", (d) => {
     const h = d && winHandles.get(d.id);
     if (h) h.__closed(d);
+  });
+  on("win.resized", (d) => {
+    const h = d && winHandles.get(d.id);
+    if (h) h.__resized(d);
   });
   // 谁发来的消息都走同一个出口：`widget.on("message", ({ from, channel, args }) => …)`。
   on("ipc", (d) => {

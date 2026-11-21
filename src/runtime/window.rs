@@ -1074,6 +1074,43 @@ pub fn begin_resize(
     });
 }
 
+/// 自建窗口从右下角把位放大。窗口本身在后台线程直接改尺寸（和卡片同一个理由：把指针交还给
+/// Windows 的模态拉伸循环，页面和绘制会一起冻住）；WebView2 只能在事件循环线程上改，所以这里
+/// 只报一个"尺寸变了"，由宿主 `sync_custom_bounds` 去对齐视图和页面状态。
+pub fn begin_window_resize(
+    hwnd: w::HWND,
+    min: (i32, i32),
+    max: (i32, i32),
+    done: tao::event_loop::EventLoopProxy<Ev>,
+    id: u32,
+) {
+    std::thread::spawn(move || {
+        let start = w::window_rect(hwnd);
+        let cursor = w::cursor_pos();
+        let mut last = start;
+        let mut last_report = std::time::Instant::now();
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(8));
+            if !w::left_button_down() {
+                break;
+            }
+            let p = w::cursor_pos();
+            let width = (start.width() + (p.x - cursor.x)).clamp(min.0, max.0.max(min.0));
+            let height = (start.height() + (p.y - cursor.y)).clamp(min.1, max.1.max(min.1));
+            if width != last.width() || height != last.height() {
+                w::resize_window(hwnd, start.left, start.top, width, height);
+                last = w::window_rect(hwnd);
+                if last_report.elapsed() > std::time::Duration::from_millis(30) {
+                    last_report = std::time::Instant::now();
+                    let _ =
+                        crate::runtime::app::post(&done, Ev::Command(format!("winbounds:{id}")));
+                }
+            }
+        }
+        let _ = crate::runtime::app::post(&done, Ev::Command(format!("winbounds:{id}")));
+    });
+}
+
 fn esc_json(s: &str) -> String {
     serde_json::to_string(s).unwrap_or_else(|_| "\"\"".into())
 }

@@ -424,7 +424,7 @@ fn inject_page(html: &str, inst: &Instance) -> String {
 
 /// Turns a card's boot data into a custom window's: same origin, same settings, but the page has to
 /// know which window it is and where it lives.
-fn custom_boot(parent_boot: &str, id: u32, visible: bool, resizable: bool) -> String {
+pub fn custom_boot(parent_boot: &str, id: u32, visible: bool, resizable: bool) -> String {
     let mut value: Value =
         serde_json::from_str(parent_boot).unwrap_or_else(|_| serde_json::json!({}));
     if let Some(obj) = value.as_object_mut() {
@@ -442,7 +442,13 @@ fn custom_boot(parent_boot: &str, id: u32, visible: bool, resizable: bool) -> St
 
 /// A dialog window's boot data: the custom window markers plus the normalized dialog config, so the
 /// builtin page does not need a second round trip to find out what it is meant to draw.
-fn dialog_boot(parent_boot: &str, id: u32, visible: bool, resizable: bool, cfg: &Value) -> String {
+pub fn dialog_boot(
+    parent_boot: &str,
+    id: u32,
+    visible: bool,
+    resizable: bool,
+    cfg: &Value,
+) -> String {
     let mut value: Value = serde_json::from_str(&custom_boot(parent_boot, id, visible, resizable))
         .unwrap_or_else(|_| serde_json::json!({}));
     if let Some(obj) = value.as_object_mut() {

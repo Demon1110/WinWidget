@@ -327,6 +327,13 @@ pub fn run(app: &mut App, action: &str) {
                 app.sync_bounds(id);
             }
         }
+        // 自建窗口被把位拖着改完了尺寸：卡片那条 `bounds` 走的是卡片矩形，自建窗口要按客户区
+        // 重新交给 WebView2，顺手把页面侧的尺寸也更新一遍。
+        "winbounds" => {
+            if let Some(id) = arg.and_then(|a| a.parse::<u32>().ok()) {
+                app.sync_custom_bounds(id);
+            }
+        }
         // A worker thread finished a version check or a download step: keep the state and show it.
         // `run` splits the action on the first colon, so the payload arrives as the argument.
         "update" => {

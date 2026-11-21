@@ -725,6 +725,13 @@ impl App {
         }
     }
 
+    /// 自建窗口刚被右下角把位拖着改过尺寸：同一个步骤，只是对象换成一个自定义窗口。
+    pub fn sync_custom_bounds(&mut self, id: u32) {
+        if let Some(win) = self.customs.get(&id) {
+            win.fit_view();
+        }
+    }
+
     // ── window lifecycle ──────────────────────────────────────────────────
 
     pub fn flush_windows(&mut self, target: &tao::event_loop::EventLoopWindowTarget<Ev>) {

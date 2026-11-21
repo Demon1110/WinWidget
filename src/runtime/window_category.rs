@@ -66,7 +66,13 @@ pub fn custom_notify(app: &mut App, win: u32, method: &str, p: &Value) -> bool {
             }
             true
         }
-        // A custom window has no card behind it: `window.*` notifications (press, drag, resize) are
+        // 页面按下右下角把位：窗口真跟着指针长。不能放大的窗口（弹框 `resizable: false`、贴在
+        // 壁纸层的那种）什么都不做——把位本来也不会挂在它们身上。
+        "window.resize" => {
+            start_custom_resize(app, win);
+            true
+        }
+        // A custom window has no card behind it: `window.*` notifications (press, drag) are
         // meaningless there, not a mistake worth a warning.
         other if other.starts_with("window.") => true,
         _ => false,
@@ -185,6 +191,31 @@ impl CustomWin {
         if self.square {
             w::clip_square(self.window.hwnd());
         }
+    }
+
+    /// 窗口刚被把位改过尺寸：WebView2 不会自己跟着父窗口长，得先把客户区尺寸量出来交给它，
+    /// 再补一次区域裁切，并把新尺寸告诉页面（`window.on("resize")` 与 `getSize()` 都靠它）。
+    pub fn fit_view(&self) {
+        let mut client = w::RECT::default();
+        unsafe {
+            let _ = w::GetClientRect(self.hwnd(), &mut client);
+        }
+        let width = (client.right - client.left).max(1);
+        let height = (client.bottom - client.top).max(1);
+        let _ = self.webview.set_bounds(Rect {
+            position: PhysicalPosition::new(0, 0).into(),
+            size: PhysicalSize::new(width, height).into(),
+        });
+        self.reclip();
+        let scale = self.scale();
+        self.send_ipc(
+            "win.resized",
+            json!({
+                "id": self.id,
+                "width": (width as f64 / scale).round(),
+                "height": (height as f64 / scale).round(),
+            }),
+        );
     }
 
     /// 直角窗口的形状是区域裁出来的，而 DWM 会在合成/重建边框时把区域换成圆角形状。宿主每隔
@@ -1126,6 +1157,32 @@ fn start_resize(app: &mut App, instance: &str) {
 }
 
 // ── custom windows ──────────────────────────────────────────────────────
+
+/// 自建窗口右下角把位的最小尺寸（DIP），和 `BrowserWindow` 里常见的默认值同一个量级。
+const MIN_RESIZE: (f64, f64) = (180.0, 120.0);
+
+/// 把位按下去：窗口跟着指针长，WebView2 由宿主随后对齐（见 `App::sync_custom_bounds`）。
+fn start_custom_resize(app: &mut App, id: u32) {
+    let Some(win) = app.customs.get(&id) else {
+        return;
+    };
+    if !win.resizable || win.wallpaper {
+        return;
+    }
+    let scale = win.scale();
+    let min = win
+        .min
+        .map(|(a, b)| (from_dip(a, scale) as i32, from_dip(b, scale) as i32))
+        .unwrap_or((
+            from_dip(MIN_RESIZE.0, scale) as i32,
+            from_dip(MIN_RESIZE.1, scale) as i32,
+        ));
+    let max = win
+        .max
+        .map(|(a, b)| (from_dip(a, scale) as i32, from_dip(b, scale) as i32))
+        .unwrap_or((i32::MAX / 4, i32::MAX / 4));
+    crate::runtime::window::begin_window_resize(win.hwnd(), min, max, app.proxy.clone(), id);
+}
 
 /// `win.*` methods: creation, the `BrowserWindow` surface, and the two message channels.
 pub fn custom_call(
