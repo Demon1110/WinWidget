@@ -69,7 +69,17 @@ pub fn custom_notify(app: &mut App, win: u32, method: &str, p: &Value) -> bool {
         // 页面按下右下角把位：窗口真跟着指针长。不能放大的窗口（弹框 `resizable: false`、贴在
         // 壁纸层的那种）什么都不做——把位本来也不会挂在它们身上。
         "window.resize" => {
-            start_custom_resize(app, win);
+            crate::core::logging::info(&format!("win {win}: resize grip pressed"));
+            // 页面是等指针挪开几像素才发这一条的（双击的两次按下不能被当成拖拽），
+            // 这里把那段已经走过的距离带上，窗口的长短才对得上指针。
+            start_custom_resize(
+                app,
+                win,
+                (
+                    jnum(p, "dx").unwrap_or(0.0).round() as i32,
+                    jnum(p, "dy").unwrap_or(0.0).round() as i32,
+                ),
+            );
             true
         }
         // 双击把位：铺满当前显示器的工作区，再双击一次回到原矩形（见 `toggle_custom_maximize`）。
@@ -211,10 +221,19 @@ impl CustomWin {
         }
         let width = (client.right - client.left).max(1);
         let height = (client.bottom - client.top).max(1);
-        let _ = self.webview.set_bounds(Rect {
-            position: PhysicalPosition::new(0, 0).into(),
-            size: PhysicalSize::new(width, height).into(),
-        });
+        if self
+            .webview
+            .set_bounds(Rect {
+                position: PhysicalPosition::new(0, 0).into(),
+                size: PhysicalSize::new(width, height).into(),
+            })
+            .is_err()
+        {
+            crate::core::logging::warn(&format!(
+                "win {}: fit_view could not size the web view to {width}x{height}",
+                self.id
+            ));
+        }
         self.reclip();
         let scale = self.scale();
         self.send_ipc(
@@ -1174,12 +1193,18 @@ fn start_resize(app: &mut App, instance: &str) {
 const MIN_RESIZE: (f64, f64) = (180.0, 120.0);
 
 /// 把位按下去：窗口跟着指针长，WebView2 由宿主随后对齐（见 `App::sync_custom_bounds`）。
-fn start_custom_resize(app: &mut App, id: u32) {
+/// `offset` 是页面按下后、发这条消息之前指针已经走过的距离（物理像素），拖拽的起点要把它算进去。
+fn start_custom_resize(app: &mut App, id: u32, offset: (i32, i32)) {
     let proxy = app.proxy.clone();
     let Some(win) = app.customs.get_mut(&id) else {
+        crate::core::logging::warn(&format!("win {id}: resize ignored, window is gone"));
         return;
     };
     if !win.resizable || win.wallpaper {
+        crate::core::logging::warn(&format!(
+            "win {id}: resize ignored (resizable={}, wallpaper={})",
+            win.resizable, win.wallpaper
+        ));
         return;
     }
     // 铺满状态下按住把位：先把窗口还原成铺之前那扇再拖，否则起点是整屏尺寸，指针一抖就会缩出
@@ -1201,7 +1226,7 @@ fn start_custom_resize(app: &mut App, id: u32) {
         .max
         .map(|(a, b)| (from_dip(a, scale) as i32, from_dip(b, scale) as i32))
         .unwrap_or((i32::MAX / 4, i32::MAX / 4));
-    crate::runtime::window::begin_window_resize(win.hwnd(), min, max, proxy, id);
+    crate::runtime::window::begin_window_resize(win.hwnd(), min, max, offset, proxy, id);
 }
 
 /// 双击把位要用的矩形：铺满当前显示器的工作区（不含任务栏），但受创建时的 `minWidth` /
@@ -1270,6 +1295,18 @@ fn toggle_custom_maximize(app: &mut App, id: u32) {
         win.restore = Some(rect);
         maximize_rect(work, win.min, win.max, scale)
     };
+    crate::core::logging::info(&format!(
+        "win {id}: maximize -> {} x {},{} {}x{}",
+        if win.restore.is_some() {
+            "fill"
+        } else {
+            "restore"
+        },
+        target.left,
+        target.top,
+        target.right - target.left,
+        target.bottom - target.top
+    ));
     apply_custom_rect(win, target);
 }
 
