@@ -818,6 +818,7 @@ widget.dialog.toast({ content: "Saved", icon: "success" });
 | `autoClose` | 3000 for toast, 0 otherwise | milliseconds; 0 never closes on its own |
 | `draggable` | `true` | frameless windows can be dragged |
 | `modal` | `false` | the parent window stops taking input while open |
+| `alwaysOnTop` / `skipTaskbar` | `true` / `true` | a dialog sits above other windows and stays out of the taskbar by default; `false` makes it an ordinary window (`skipTaskbar: false` leaves a taskbar button) |
 | `anchor` / `offset` | — | `"card"` under the card (flips above when there is no room), `"cursor"` at the pointer, `"screen"` centred; `offset: [dx, dy]` nudges it |
 
 `frame` and `rounded` share the corners: with the native frame (`frame: true`) the client area is a rectangle and `rounded` only concerns the window shell; a framed window is always opaque (the glass frame and per-pixel transparency do not mix, and the title stays on the caption bar alone), so `opacity` becomes whole-window alpha. Frameless, `rounded: false` is drawn square by the page and `opacity` is also applied there, leaving the desktop visible outside the corners.
