@@ -345,7 +345,7 @@
 
   // ── dragging, resizing, context menu ───────────────────────
   // Dragging starts once the mouse moves a few pixels, so plain clicks still reach the page.
-  const NO_DRAG = "input, textarea, select, button, a[href], [contenteditable]:not([contenteditable='false']), [data-no-drag], [data-ww-nodrag], [role='slider']";
+  const NO_DRAG = "input, textarea, select, button, a[href], [contenteditable]:not([contenteditable='false']), [data-no-drag], [data-ww-nodrag], [data-ww-close], [role='slider']";
   // 约定：任何元素标上 data-ww-drag，它连同整棵子树就是一块"拖拽把位"（标题条、整块面板都行）。
   // 按下即拖，页面不用写一行 mousedown；子树里标 data-ww-nodrag 的、或本身是按钮/输入框/链接的，
   // 这次按键仍归页面（点 × 不会变拖拽）。只对组件自己开的窗口（draggable: true）生效：卡片本来就
@@ -393,6 +393,25 @@
   }, true);
 
   document.addEventListener("mouseup", () => { down = null; }, true);
+
+  // 约定：任何元素标上 data-ww-close，点一下就把自己这个窗口关掉——卡片上等于收起
+  // （托盘还能叫回来），自定义窗口里等于关掉它自己。属性值可选，当关闭原因写进
+  // `windows.on("closed")` 的 reason（默认 "api"）。它也自动豁免拖拽，所以放在把位里
+  // 也不会先被拖一下再关。
+  document.addEventListener("click", (e) => {
+    const el = e.target.closest && e.target.closest("[data-ww-close]");
+    if (!el) return;
+    e.preventDefault();
+    closeSelf(el.getAttribute("data-ww-close") || "api");
+  }, true);
+
+  /** 关掉当前窗口：自定义窗口走 `win.close`（能带原因），卡片走 `window.close`（收起）。 */
+  function closeSelf(reason) {
+    if (!IS_CUSTOM) return call("window.close");
+    const params = { win: boot.windowId || 0 };
+    if (reason && reason !== "api") params.reason = String(reason);
+    return call("win.close", params);
+  }
   document.addEventListener("contextmenu", (e) => {
     e.preventDefault();
     if (e.target.closest && e.target.closest("[data-no-menu]")) return;
