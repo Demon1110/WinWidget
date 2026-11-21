@@ -320,12 +320,18 @@ fn serve_page(
         .clone()
         .and_then(|id| st.instances.get(&id).cloned());
     // A custom window shares its card's origin, theme and settings; only its boot data differs.
-    // The URL carries the markers (`win=`, `wt=custom`, `vis=`) because the page may start loading
-    // before the host had a chance to publish this window into `wins`.
+    // The URL carries the markers (`win=`, `wt=custom`, `vis=`, `rs=`) because the page may start
+    // loading before the host had a chance to publish this window into `wins`.
     let marked_custom = query.split('&').any(|kv| kv == "wt=custom");
     let marked_visible = query
         .split('&')
         .find_map(|kv| kv.strip_prefix("vis="))
+        .map(|v| v == "1");
+    // 把位是页面加载时挂的，那一刻表里常常还没有这个窗口，所以缩放能力也走 URL 标记，
+    // 否则 `page.resizable` 只能是 false，能放大的窗口也不会出现把位。
+    let marked_resizable = query
+        .split('&')
+        .find_map(|kv| kv.strip_prefix("rs="))
         .map(|v| v == "1");
     if let Some(id) = win_id {
         let page = st.wins.get(&id).cloned();
@@ -337,7 +343,9 @@ fn serve_page(
             if let Some(mut parent) =
                 parent_instance.and_then(|name| st.instances.get(&name).cloned())
             {
-                let resizable = page.as_ref().map(|p| p.resizable).unwrap_or(false);
+                let resizable = marked_resizable
+                    .or(page.as_ref().map(|p| p.resizable))
+                    .unwrap_or(false);
                 parent.boot = match st.dialogs.get(&id).cloned() {
                     Some(cfg) => dialog_boot(&parent.boot, id, visible, resizable, &cfg),
                     None => custom_boot(&parent.boot, id, visible, resizable),

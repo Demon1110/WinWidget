@@ -886,14 +886,22 @@ impl App {
             .get("show")
             .and_then(|v| v.as_bool())
             .unwrap_or(true);
+        // 能不能缩放也走 URL：页面上的把位是加载时挂的，那一刻表里还没有这个窗口，
+        // 只靠表就只能拿到 false，连把位都不会出现。
+        let resizable = spec
+            .options
+            .get("resizable")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
         format!(
-            "http://{}:{}/{}?w={}&win={}&wt=custom&vis={}{}",
+            "http://{}:{}/{}?w={}&win={}&wt=custom&vis={}&rs={}{}",
             manifest.host_name(),
             self.port,
             path,
             spec.instance,
             id,
             if visible { 1 } else { 0 },
+            if resizable { 1 } else { 0 },
             extra
         )
     }
