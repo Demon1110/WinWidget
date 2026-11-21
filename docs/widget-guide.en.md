@@ -1095,6 +1095,11 @@ By default a widget can only show its own content: it can't go online, can't rea
 | `tool.exec` | `widget.tool.*`: downloading the CLI programs declared in `tools`, checking their SHA-256 when declared, and running them (users see a clear warning when allowing it; the download hosts need `network:` too) |
 | `file.read` | `widget.file.read`, `readText`, `info`, `exists`, `list`: reading a file by absolute path (users see a clear warning when allowing it) |
 | `file.write` | `widget.file.write`, `writeText`: writing a file by absolute path, creating missing folders (users see a clear warning when allowing it) |
+| `input.read` | `widget.input.subscribe`: reading system key and mouse events (key codes and coordinates only, never characters) (users see a clear warning when allowing it) |
+| `system.read` | `widget.system.processes` / `ports`, `widget.wifi.profiles`: reading processes, ports and WiFi profiles (a password additionally needs `system.write`) (users see a clear warning when allowing it) |
+| `system.write` | `widget.system.screensaver`: narrow system writes such as starting the screensaver (users see a clear warning when allowing it) |
+
+`input` and `input.read` are two different things: the first types into the system, the second reads keys and mouse back out of it. Opposite directions, opposite risks — a widget that only draws a key overlay should not incidentally gain the ability to type. 
 
 Reading a folder needs no permission: the widget can read only the pictures in the folder the user chose in its settings. See [`widget.files`](#a-folder-the-user-chose-widgetfiles).
 
