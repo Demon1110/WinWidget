@@ -16,9 +16,8 @@ node simples/pack.mjs          # 打包到 simples/packages
 node simples/pack.mjs --check  # 只核对仓库里的产物是否和源码一致
 ```
 
-装进真机：把 `simples/packages/simples-dialog-0.1.1.fwz` 拖到控制中心完成安装，或者
-解压后把目录放到 `%APPDATA%\WinWidget\widgets\`，重启宿主。装好后从 `list` 或控制中心
-把卡片放到桌面。
+装进真机：把 `simples/packages/*.fwz` 拖到控制中心完成安装，或者解压后把目录放到
+`%APPDATA%\WinWidget\widgets\`，重启宿主。装好后从 `list` 或控制中心把卡片放到桌面。
 
 ## simples-dialog：`widget.dialog` 用例
 
@@ -56,6 +55,9 @@ node simples/pack.mjs --check  # 只核对仓库里的产物是否和源码一�
 | closeOnOutsideClick | 点窗口外面才关，点窗口内部不算 |
 | modal | 子窗开着时卡片点不动，关掉恢复 |
 | 无边框可拖拽 | 按住子窗顶栏能整体拖动 |
+| 透明 + 鼠标穿透（8 秒自关） | 虚线框之外全透明；点框内任意位等于点它下面的卡片，框里的计数始终是 0；8 秒后自己关 |
+| 弹框正文吃 HTML（rawHtml） | 加粗、列表、行内颜色都照标签渲染；不传 `rawHtml` 时同一串连尖括号一起当文字显示 |
+| 弹框整页 HTML（dialog.window） | 窗口由 `rich.html` 自绘，外观仍是弹框；点「就用它」返回 `button=apply`，点「先不用」返回 `button=dismiss` |
 | closeAll | 所有子窗关掉，卡片还在 |
 | 卡片自操作 | 卡片抬到最前、置顶、透明度 0.85、右移 24px，再恢复 |
 
@@ -63,3 +65,10 @@ node simples/pack.mjs --check  # 只核对仓库里的产物是否和源码一�
 2026-11-21 在这次重装宿主后逐条点过：Esc 一下（按下几乎立刻抬起）也能关，`closeOnBlur`
 点卡片即关，`closeOnOutsideClick` 点窗口内部不动、点外面才关。三条的根因与宿主改法记在
 `docs/窗口与弹框API规划.md` 第六轮那节。
+
+「透明与鼠标穿透」「HTML 内容」也是同一天补上的：覆盖窗（`overlay.html`）用
+`transparent: true` + `ignoreMouseEvents: true` 开在自己卡片上方 300×150 处，实测点框中心
+只有宿主日志里的 `card_notify window.front`（按下落到了卡片），框里的「本页收到的点击」一直
+是 0，8 秒后 `autoClose` 记 `closed (timeout)`；`rawHtml` 那条弹框把 `content` 里的加粗、列表、
+行内 `color` 都渲染出来，`dialog.window` 那条的 `rich.html` 自绘整页、点按钮把 `button=apply`
+交回创建方。

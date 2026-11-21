@@ -479,7 +479,21 @@ P2 里 `closeOnBlur` / `closeOnOutsideClick` / `modal` 三条走的是窗口失�
 | `closeOnBlur` | 开窗后点卡片顶部 | 日志 `closed (blur)`，页面拿到 `{"reason":"blur"}` |
 | `closeOnOutsideClick` | 开窗后先点窗口内部（面板空白处），再点卡片 | 点内部不动；点外面后 `closed (outside)`，页面拿到 `{"reason":"outside"}` |
 
-还没做的一件（不阻塞使用）：
+### 真机返修第七轮：测试台补「透明与鼠标穿透」「HTML 内容」用例
+
+「透明 / 鼠标穿透 / 内容支持 HTML」这三条此前只在文档里写着，测试台里没有能点的例子。补了三行用例和两个新页面：
+
+| 用例 | 页面 | 期望 |
+|---|---|---|
+| 透明 + 鼠标穿透（8 秒自关） | `overlay.html` | `transparent: true` + `ignoreMouseEvents: true`，除虚线框外像素全透明；点框内任意位置事件落到下面的卡片，框里的计数一直是 0；`autoClose` 8 秒自己关 |
+| 弹框正文吃 HTML（rawHtml） | 内置弹框页 | 同一个 `content` 加 `rawHtml: true` 后按标签渲染（加粗、`ul` 列表、行内 `color`）；不加就原样当文字 |
+| 弹框整页 HTML（dialog.window） | `rich.html` | 每一像素由组件页面画，外观仍是弹框（无边框、圆角、淡入）；点「就用它」交回 `button=apply` |
+
+真机量到的（2560×1440）：覆盖窗按卡片 `getBounds` 偏移落在 `1967,580 300×150`，`win.get` 读回 `ignoreMouse: true`；点框中心后宿主日志只多出 `card_notify window.front`（说明按下落到卡片），页内计数仍是「0 次」；8 秒后 `win 1: closed (timeout)`。`rawHtml` 那条点「知道了」返回 `{"button":"ok","reason":"button"}`；`dialog.window` 那条点「就用它」返回 `{"reason":"button","button":"apply","result":{"button":"apply","reason":"button"}}`。
+
+两处为了看得清而调整的地方：覆盖框底色从 12% 抬到 62%——12% 时卡片上的字和框里的字叠在一起没法读；`rawHtml` 那条弹框给了 `x: 240, y: 260`——弹框是玻璃底，默认居中会正好压在明亮的编辑器窗口上，透出来的字比正文还清楚。
+
+### 还没做的
 
 1. `hello-widget` 模板示例：仓库里没有这个模板组件，指南里的示例段落已经覆盖同一份代码，是否要新建一个模板组件需要先定它放宿主仓库还是 Hub。
 
