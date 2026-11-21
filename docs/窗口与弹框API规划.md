@@ -635,6 +635,28 @@ C[body 背景]   = rgba(0, 0, 0, 0)
 
 用户紧接着要求「关闭按钮也给一条同样的约定」，于是同一轮补了 `data-ww-close`：标了的元素 `click` 即关掉自己这个窗口——自定义窗口走 `win.close`（带 `reason`），卡片走 `window.close`（收起、托盘能叫回来）。属性值可选，就是 `windows.on("closed")` 里的 `reason`，不写默认 `api`。它同时进 `NO_DRAG`，所以放在把位内部也不会先被拖一下再关。`grip.html` 的 × 换成 `data-ww-close="grip-x"` 之后，整页已经一行 JS 都没有（拖拽靠 `data-ww-drag`、关闭靠 `data-ww-close`），真机点 × 仍然是位置不变、日志写明 `win 1: closed (grip-x)` —— 值真的透到了 reason。
 
+### 真机返修第十四轮：自绘标题条要通栏（`data-ww-bleed`）
+
+用户接着问两件事：`windows` 弹框的内边距能不能自定义；`square.html`（`rounded: false` 直角子窗）把 body 的 `border` 设成 0，bar 上一圈还是空着，像是「不受 CSS 控制」。
+
+源码层面的答案：那圈从来不是 `border`。`base.css` 里 `body { padding: var(--w-padding) }`（默认 16px，主题 18/12，随实例 `appearance.padding` 走），bar 是 body 的子元素，天然内缩这一圈；再有一层 1px 视觉描边是 `box-shadow: inset 0 0 0 1px var(--w-border)`，也不吃 `border`。`--w-margin` 已恒为 0，不是来源。真要清零得写 `body { padding: 0; box-shadow: none }`，页面 CSS 在 `base.css` 之后、同特异度更靠后，一定生效。像素证据（子窗 320×220，`y=40` 那一行）：`x=0` 是页面自己那圈绿描边 `#3CDF6C`，`x=1..18` 是 body 底色，红 bar 从 `x=19` 才开始 —— 19 = 1px 边框 + 18px `--w-padding`。
+
+但用户随后否掉了「把 body padding 清零」这种解法：**内容区该内缩就内缩，只有标题条被三面夹在中间太丑**。于是这条做成和 `data-ww-drag` 同一族的约定 `data-ww-bleed`：
+
+- `assets\sdk\base.css` 新增 `[data-ww-bleed] { margin: calc(var(--w-padding) * -1) calc(var(--w-padding) * -1) 0; border-top-left-radius: inherit; border-top-right-radius: inherit; }` —— 上、左、右各吃掉一个 `--w-padding`，顶部圆角继承 body（圆角窗上不会冒出两个方角），内容区完全不受影响。
+- 为什么要留在 `base.css` 而不用页面里的负 margin：内边距本身分主题、分实例、还能被用户外观调，页面写死一个 `-18px` 迟早对不上；变量在哪儿生成就在哪儿抵消。
+- `simples\src\simples-window\square.html`：`.bar` 加 `data-ww-bleed`，顺手把页面里最后那点 JS（`mousedown` + `startDrag`、`click` + `window.close`）删掉，改用 `data-ww-drag` 与 `data-ww-close="square-x"`，整页零 JS。`grip.html` 的标题条也加了通栏。
+
+真机验收（`cargo build --release` 55.66s + 重启，子窗 320×220）：
+
+| 检测点 | 修前 | 修后 |
+|---|---|---|
+| `y=20` 一行左右边缘 | 红 bar 从 `x=19` 起 | `x=1` 起、到 `x=318` 止，只剩 `x=0`/`x=319` 两像素页面描边 |
+| 顶部 | 红 bar 从 `y≈19` 起 | `y=1` 就是红（`y=0` 为 body 描边） |
+| 内容区 | 内缩 18px | 不变，`y=69` 起照旧，文字行仍在 `y=91` |
+| 标题条拖拽（页面已无 JS） | — | `1350,295` → `1470,375`，`+120,+80` 精确相等 |
+| 点 × | — | 位置不变、窗口消失（`data-ww-close="square-x"`） |
+
 ### 还没做的
 
 1. `hello-widget` 模板示例：仓库里没有这个模板组件，指南里的示例段落已经覆盖同一份代码，是否要新建一个模板组件需要先定它放宿主仓库还是 Hub。

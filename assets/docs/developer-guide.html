@@ -902,6 +902,7 @@ document.querySelector(&quot;.panel-head&quot;).addEventListener(&quot;mousedown
 <li>子树里标 <code>data-ww-nodrag</code> 的，以及 <code>button</code> / <code>input</code> / <code>textarea</code> / <code>select</code> / <code>a[href]</code> / <code>[contenteditable]</code>，按下时仍归页面——点 × 不会变成拖曳，输入框照旧能聚焦。</li>
 <li>关窗也有一条对应的约定：标 <code>data-ww-close</code> 的元素点一下就把自己这个窗口关掉（卡片上等于收起、托盘还能叫回来；窗口里等于关掉自己）。属性值可选，写的是 <code>windows.on(&quot;closed&quot;)</code> 的 <code>reason</code>，不写就是 <code>api</code>；它同样豁免拖曳，放在把位里不会先被拖一下再关。</li>
 <li><code>cursor: grab</code> 和“按住不选字”由 <code>base.css</code> 统一给，不用自己写。</li>
+<li>标题列想真正贴到窗口边、不被 <code>body</code> 的内边距夹在中间，再标一个 <code>data-ww-bleed</code>：它往上、往左、往右各抵消一个 <code>--w-padding</code>，顶部圆角跟着 <code>body</code> 走，内容区照旧内缩。无边框窗口、<code>rounded: false</code> 的直角窗口上尤其明显——没这一条时标题列三面都会空出一圈底色，看着像浮在中间。</li>
 <li>只对组件自己开的窗口生效，且要以 <code>draggable: true</code> 打开：<strong>拖不拖得动由宿主决定，页面改不了这个闸</strong>；没开的窗口里标了也没反应。卡片本来就整张都能拖，不需要（也不会多指一个把位）。</li>
 <li>属性是活的：后插入的元素、<code>dialog.window</code> 里自己渲染的标题列，只要带这个属性就生效，不需要重新绑定。</li>
 </ul>
@@ -1866,6 +1867,7 @@ document.querySelector(&quot;.panel-head&quot;).addEventListener(&quot;mousedown
 <li>子樹裡標 <code>data-ww-nodrag</code> 的，以及 <code>button</code> / <code>input</code> / <code>textarea</code> / <code>select</code> / <code>a[href]</code> / <code>[contenteditable]</code>，按下時仍歸頁面——點 × 不會變成拖曳，輸入框照舊能聚焦。</li>
 <li>關窗也有一條對應的約定：標 <code>data-ww-close</code> 的元素點一下就把自己這個視窗關掉（卡片上等於收起、托盤還能叫回來；視窗裡等於關掉自己）。屬性值可選，寫的是 <code>windows.on(&quot;closed&quot;)</code> 的 <code>reason</code>，不寫就是 <code>api</code>；它同樣豁免拖曳，放在把位裡不會先被拖一下再關。</li>
 <li><code>cursor: grab</code> 和「按住不選字」由 <code>base.css</code> 統一給，不用自己寫。</li>
+<li>標題列想真正貼到視窗邊、不被 <code>body</code> 的內距夾在中間，再標一個 <code>data-ww-bleed</code>：它往上、往左、往右各抵消一個 <code>--w-padding</code>，頂部圓角跟著 <code>body</code> 走，內容區照舊內縮。無邊框視窗、<code>rounded: false</code> 的直角視窗上尤其明顯——沒這一條時標題列三面都會空出一圈底色，看著像浮在中間。</li>
 <li>只對組件自己開的視窗生效，且要以 <code>draggable: true</code> 打開：<strong>拖不拖得動由宿主決定，頁面改不了這個閘</strong>；沒開的視窗裡標了也沒反應。卡片本來就整張都能拖，不需要（也不會多指一個把位）。</li>
 <li>屬性是活的：後插入的元素、<code>dialog.window</code> 裡自己渲染的標題列，只要帶這個屬性就生效，不需要重新綁定。</li>
 </ul>
@@ -2830,6 +2832,7 @@ document.querySelector(&quot;.panel-head&quot;).addEventListener(&quot;mousedown
 <li>Elements marked <code>data-ww-nodrag</code>, and any <code>button</code> / <code>input</code> / <code>textarea</code> / <code>select</code> / <code>a[href]</code> / <code>[contenteditable]</code> inside, keep the press for themselves — clicking × never turns into a drag, fields still take focus.</li>
 <li>Closing has its own marker: anything marked <code>data-ww-close</code> closes its own window on click (on a card that means collapse, the tray can bring it back; in a window it means closing itself). The value is optional and becomes the <code>reason</code> on <code>windows.on(&quot;closed&quot;)</code>, defaulting to <code>api</code>. It is exempt from dragging too, so it never gets dragged first inside a handle.</li>
 <li><code>cursor: grab</code> and &quot;no text selection while dragging&quot; come from <code>base.css</code>; do not write them yourself.</li>
+<li>To make a title bar really touch the window edges instead of sitting inside the body&#x27;s padding, add <code>data-ww-bleed</code> as well: it cancels one <code>--w-padding</code> upwards, leftwards and rightwards, inherits the body&#x27;s top corner radius, and leaves the content area padded. It shows most on frameless and <code>rounded: false</code> windows, where without it the bar floats with a ring of body background on three sides.</li>
 <li>It only applies inside windows your widget opens, and those must be opened with <code>draggable: true</code>: <strong>whether a window may be dragged is the host&#x27;s decision</strong>, the page cannot flip that gate, and marking elements in a window without it does nothing. A card already drags from anywhere, so it neither needs nor accepts a handle.</li>
 <li>The attribute is live: elements added later, or a title bar you render inside <code>dialog.window</code>, are covered as soon as they carry it — no rebinding.</li>
 </ul>
