@@ -353,6 +353,9 @@
   const DRAG_GRIP = "[data-ww-drag]";
   const IS_CUSTOM = (boot.windowType || "main") === "custom";
   let down = null;
+  // 把位上按下先不动手：等指针真的挪开再开缩放的循环。否则双击也会先按下两次，宿主先在
+  // 「铺满」状态把窗口还原、窗口从指针底下缩走，第二次按下落到窗口外面，双击就永远收不到。
+  let gripDown = null;
 
   /** 按下把位：自定义窗口交给系统的 SC_MOVE，卡片走它自己的自绘拖动。 */
   function beginDrag() {
@@ -362,7 +365,10 @@
   document.addEventListener("mousedown", (e) => {
     if (e.button !== 0) return;
     if (e.target.closest && e.target.closest(".fw-resize")) {
-      if (!state.locked) { e.preventDefault(); send("window.resize"); }
+      if (!state.locked) {
+        e.preventDefault();
+        gripDown = { x: e.screenX, y: e.screenY };
+      }
       return;
     }
     if (state.locked) return;
@@ -381,6 +387,19 @@
   }, true);
 
   document.addEventListener("mousemove", (e) => {
+    if (gripDown) {
+      if ((e.buttons & 1) === 0) { gripDown = null; }
+      else if (Math.abs(e.screenX - gripDown.x) + Math.abs(e.screenY - gripDown.y) > 3) {
+        // 指针已经挪开，这就是一次真的拖拽：现在才让宿主开循环，并把这段已经走过的距离
+        // 一起带上（宿主按物理像素算尺寸），窗口的长短才跟得上指针。
+        const r = window.devicePixelRatio || 1;
+        send("window.resize", {
+          dx: (e.screenX - gripDown.x) * r,
+          dy: (e.screenY - gripDown.y) * r,
+        });
+        gripDown = null;
+      }
+    }
     if (!down) return;
     if ((e.buttons & 1) === 0) { down = null; return; }
     if (Math.abs(e.screenX - down.x) + Math.abs(e.screenY - down.y) > 4) {
@@ -392,7 +411,7 @@
     }
   }, true);
 
-  document.addEventListener("mouseup", () => { down = null; }, true);
+  document.addEventListener("mouseup", () => { down = null; gripDown = null; }, true);
 
   // 双击右下角把位：自建窗口在「铺满屏幕」和「原来那扇」之间来回切，矩形由宿主自己算（不改
   // 窗口样式，圆角和矩形区域都不受影响）。卡片上没有这回事，宿主会当没发生。
