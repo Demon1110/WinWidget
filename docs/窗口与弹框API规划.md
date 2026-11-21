@@ -657,6 +657,27 @@ C[body 背景]   = rgba(0, 0, 0, 0)
 | 标题条拖拽（页面已无 JS） | — | `1350,295` → `1470,375`，`+120,+80` 精确相等 |
 | 点 × | — | 位置不变、窗口消失（`data-ww-close="square-x"`） |
 
+### 真机返修第十五轮：不挂无用的放大把位、玻璃主题去描边、单测搬出 src
+
+三件事一起提的，都落在窗口测试台与 SDK 上。
+
+**① 不能放大的窗口不该显示放大把位。** 用户说得很直：「如果弹框都不支持右下角放大，那鼠标放上去就不要显示右下角可拖拽图标」。根因是 boot 里那个 `resizable` 是**父卡片的**值：`dialog_boot` / `custom_boot` 都从父卡片的 boot 复制一份再补字段，卡片的 `resizable` 来自 `widget.json` 的 `size.resizable`（默认 true），于是弹框页面按 `boot.resizable` 挂了一个 `.fw-resize`——光标变 `nwse-resize`，一按却什么都没发生（`window.resize` 在自定义窗口里被宿主直接丢掉，`window_category.rs` 第 71 行）。改两处：
+- `WinPage` 加 `resizable`，`app.rs` 用窗口自己的 `win.resizable` 填；`custom_boot` / `dialog_boot` 把它写进 boot，弹框自然拿到 `false`。
+- SDK 只给真能放大的页面挂把位：`if (boot.resizable && !IS_CUSTOM)`。自定义窗口的 `window.resize` 没有语义，挂上去纯属噪音。
+- 真机验收：打开 `dialog.window` 富文本弹框（`460×222`），把指针停在弹框内部后放大右下角 62×62——只有按钮像素，没有任何斜纹把位。
+
+**② 玻璃主题上那圈 1px 描边。** 用户的原话是「玻璃上的字主题，组件边框还是有一像素的边框，要去掉，让整体看着真的像是在玻璃上」。这圈线是 `base.css` 里 `body { box-shadow: inset 0 0 0 1px var(--w-border) }`，主题里没有能单独关掉它的开关——`--w-border` 同时被输入框、分隔线、`.tag` 用着，直接改它会把控件也一起弄没。于是新开一个只给卡片用的变量：`--w-card-ring: var(--w-border)`，`body` 只认它；`appearance.rs::css()` 在 `backgroundOpacity <= 0` 时把它写成 `transparent`（「玻璃上的字」就是 0）。真机像素：切到 type 主题后卡片四边逐点取样，边缘与内部同色（`#A8C8D3` 对 `#A7C7D2`），没有那条亮线；切回 instrument 描边照旧。
+
+**③ 滚动条。** 顺带一起说的「组件如果有滚动条就特别难看跟整个主题不搭」。原来 SDK 只给了 `.w-scroll-none` 用来藏滚动条，正常滚动一律是 Chromium 默认那套灰白块。补一套跟着主题走的：轨道透明、滑块用 `color-mix(in srgb, var(--w-fg) 24%, transparent)`、`border: 3px solid transparent` + `padding-box` 收成圆头细条，hover 38%、按下用强调色。
+第一版还顺手写了 `scrollbar-width: thin; scrollbar-color: ...`——真机一看反而更糟：Chromium 在 Windows 上一收到这两个属性就切回**系统滚动条**，上下带箭头小块，跟主题完全不搭。截图确认后把这两条删掉，只留 `::-webkit-scrollbar`，重新构建后滚动条才是一条干净的圆头条（真机放大 3 倍取样确认没有箭头）。
+
+**④ 单元测试搬出 `src/`。** 用户要求「测试用例都默认放到 tests 目录，如果 src 里有测试代码，全部迁移到 tests 里」。25 个 `#[cfg(test)] mod tests`、93 条测试，全部变成 `tests/*.rs` 集成测试：
+
+- 用一次性脚本把每个模块末尾的测试块切出来，写成 `tests/<模块名>.rs`，头部 `use winwidget::<层>::<模块>::*;`；`crate::` 改成 `winwidget::`，`super::` 前缀去掉，测试模块里自己的 `use super::{a,b};` 直接删掉（glob 已经覆盖）。
+- 原来 `use super::*;` 顺手把父模块的 `use` 也带进来了，所以第二个脚本把父模块顶部的 `use` 行抄进测试文件，并加 `#![allow(unused_imports)]`（集成测试里多余的 import 不该算错）。
+- 代价是被测项得对外可见：`move_path`、`named_path_value`、`read_text_value`、`hex`/`Sha256`、`page_of`、`compare`、`parse_release`、`preview_candidates`、`purge`、`is_link`、`wallpaper_host`、`registry`/`handler_for`、`from_dip`/`to_dip`/`parse_color`/`snap_metrics`、`field`/`is_due`/`parse_cron`/`matches`/`LocalParts`、`package_root`/`unpack_zip`/`add_folder`、`ensure_tool`/`execute`/`file_len`、`Prepared`/`Unpacked`/`Device` 及其字段、`Sha256::new/update/finish` 全部改成 `pub`（另给 `Sha256` 补了 `Default`，否则 clippy 的 `new_without_default` 会挂）。
+- 迁移后 `cargo test` 93 passed / 2 ignored（一条是 lib 里那个被忽略的 doc test），与迁移前一致；`cargo clippy --all-targets -D warnings` 全绿，`cargo fmt` 无改写。一次性迁移脚本用完即删，不留进仓库。
+
 ### 还没做的
 
 1. `hello-widget` 模板示例：仓库里没有这个模板组件，指南里的示例段落已经覆盖同一份代码，是否要新建一个模板组件需要先定它放宿主仓库还是 Hub。

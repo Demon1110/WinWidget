@@ -917,6 +917,8 @@ document.querySelector(&quot;.panel-head&quot;).addEventListener(&quot;mousedown
 <h3 id="版面">版面</h3>
 <ul class="plain">
 <li><code>&lt;body&gt;</code> 就是卡片：背景、圆角、边框、内边距都已经设好。内容直接放进 <code>&lt;body&gt;</code>。</li>
+<li>如果主题把卡片底设成全透明（例如“玻璃上的字”），那圈 1px 内描边会自动关掉（<code>--w-card-ring</code> 变透明），字就是直接浮在桌布上；想让它回来，自己给 <code>--w-card-ring</code> 一个颜色即可。</li>
+<li>卷轴已经换成跟着主题取色的细条（<code>::-webkit-scrollbar</code>），别再自己写 <code>scrollbar-width</code> / <code>scrollbar-color</code>：Windows 上的 Chromium 一收到这两个就会切成系统那套带上下箭头的卷轴，比默认的还难看。</li>
 <li><code>&lt;html&gt;</code> 是透明的窗口，四周留了给阴影的空白，不要给它加背景。</li>
 <li>字号用 <code>rem</code>：用户调“字号”时，<code>1rem</code> 会跟着变（默认 14px）。</li>
 <li>卡片可能被缩放。用 flex/grid 排版；要按大小调整，可以在 <code>body</code> 上设 <code>container-type: size</code>，再用 <code>@container (max-height: 100px) { … }</code>。注意 <code>@container</code> 只能改 <code>body</code> 里面的元素，改不了 <code>body</code> 本身。</li>
@@ -1882,6 +1884,8 @@ document.querySelector(&quot;.panel-head&quot;).addEventListener(&quot;mousedown
 <h3 id="版面">版面</h3>
 <ul class="plain">
 <li><code>&lt;body&gt;</code> 就是卡片：背景、圓角、邊框、內距都已經設好。內容直接放進 <code>&lt;body&gt;</code>。</li>
+<li>如果主題把卡片底設成全透明（例如「玻璃上的字」），那圈 1px 內描邊會自動關掉（<code>--w-card-ring</code> 變透明），字就是直接浮在桌布上；想讓它回來，自己給 <code>--w-card-ring</code> 一個顏色即可。</li>
+<li>捲軸已經換成跟著主題取色的細條（<code>::-webkit-scrollbar</code>），別再自己寫 <code>scrollbar-width</code> / <code>scrollbar-color</code>：Windows 上的 Chromium 一收到這兩個就會切成系統那套帶上下箭頭的捲軸，比預設的還難看。</li>
 <li><code>&lt;html&gt;</code> 是透明的視窗，四周留了給陰影的空白，不要給它加背景。</li>
 <li>字號用 <code>rem</code>：用戶調「字號」時，<code>1rem</code> 會跟着變（預設 14px）。</li>
 <li>卡片可能被縮放。用 flex/grid 排版；要按大小調整，可以在 <code>body</code> 上設 <code>container-type: size</code>，再用 <code>@container (max-height: 100px) { … }</code>。注意 <code>@container</code> 只能改 <code>body</code> 裏面的元素，改不了 <code>body</code> 本身。</li>
@@ -2847,6 +2851,8 @@ document.querySelector(&quot;.panel-head&quot;).addEventListener(&quot;mousedown
 <h3 id="layout">Layout</h3>
 <ul class="plain">
 <li><code>&lt;body&gt;</code> is the card: background, corners, border and padding are already set. Put your content straight into <code>&lt;body&gt;</code>.</li>
+<li>When a theme makes the card itself fully transparent (Type, &quot;words on glass&quot;), the 1px inner outline turns itself off (<code>--w-card-ring</code> becomes transparent), so the type sits directly on the wallpaper; assign a colour to <code>--w-card-ring</code> to bring it back.</li>
+<li>Scrollbars are already themed: a thin thumb that follows the text colour, drawn with <code>::-webkit-scrollbar</code>. Do not add <code>scrollbar-width</code> / <code>scrollbar-color</code> of your own — Chromium on Windows switches to the system scrollbar with arrow buttons as soon as it sees those, which looks worse than the default.</li>
 <li><code>&lt;html&gt;</code> is the transparent window with room for the shadow around the card; don&#x27;t give it a background.</li>
 <li>Size text in <code>rem</code>: when users change the text size, <code>1rem</code> follows (14px by default).</li>
 <li>Cards can be resized. Lay out with flex or grid; to adapt to size, set <code>container-type: size</code> on <code>body</code> and use <code>@container (max-height: 100px) { … }</code>. <code>@container</code> rules style what is inside <code>body</code>, not <code>body</code> itself.</li>
