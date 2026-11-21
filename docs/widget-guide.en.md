@@ -914,7 +914,7 @@ WinWidget comes with several themes, and users can adjust background, text color
 ### Layout
 
 - `<body>` is the card: background, corners, border and padding are already set. Put your content straight into `<body>`.
-- When a theme makes the card itself fully transparent (Type, "words on glass"), the 1px inner outline turns itself off (`--w-card-ring` becomes transparent), so the type sits directly on the wallpaper; assign a colour to `--w-card-ring` to bring it back.
+- When a theme makes the card body see-through, the 1px inner outline fades with it: below `backgroundOpacity` 0.4 it gets progressively lighter and at 0 it is gone (`--w-card-ring` becomes transparent), so the type sits directly on the wallpaper; assign a colour to `--w-card-ring` to bring it back.
 - Scrollbars are already themed: a thin thumb that follows the text colour, drawn with `::-webkit-scrollbar`. Do not add `scrollbar-width` / `scrollbar-color` of your own — Chromium on Windows switches to the system scrollbar with arrow buttons as soon as it sees those, which looks worse than the default.
 - `<html>` is the transparent window with room for the shadow around the card; don't give it a background.
 - Size text in `rem`: when users change the text size, `1rem` follows (14px by default).

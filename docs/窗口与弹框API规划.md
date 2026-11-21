@@ -678,6 +678,29 @@ C[body 背景]   = rgba(0, 0, 0, 0)
 - 代价是被测项得对外可见：`move_path`、`named_path_value`、`read_text_value`、`hex`/`Sha256`、`page_of`、`compare`、`parse_release`、`preview_candidates`、`purge`、`is_link`、`wallpaper_host`、`registry`/`handler_for`、`from_dip`/`to_dip`/`parse_color`/`snap_metrics`、`field`/`is_due`/`parse_cron`/`matches`/`LocalParts`、`package_root`/`unpack_zip`/`add_folder`、`ensure_tool`/`execute`/`file_len`、`Prepared`/`Unpacked`/`Device` 及其字段、`Sha256::new/update/finish` 全部改成 `pub`（另给 `Sha256` 补了 `Default`，否则 clippy 的 `new_without_default` 会挂）。
 - 迁移后 `cargo test` 93 passed / 2 ignored（一条是 lib 里那个被忽略的 doc test），与迁移前一致；`cargo clippy --all-targets -D warnings` 全绿，`cargo fmt` 无改写。一次性迁移脚本用完即删，不留进仓库。
 
+### 真机返修第十六轮：把位真能放大、描边跟着底板淡、把位不再吃点击
+
+第十五轮把"无效把位"藏起来了，但按下去仍然什么都没有；用户接着要求把剩下的几处一起做完。
+
+**① 自定义窗口真的能拖拽放大。** 现在 `window.resize` 在自建窗口里是一条真路径：
+
+- 页面按下 `.fw-resize` → SDK `send("window.resize")` → 宿主 `custom_notify` 接住 → `start_custom_resize`：只有 `resizable: true` 且不贴在壁纸层的窗口才起循环，弹框（`resizable: false`）什么都不发生。
+- 循环本身在 `window.rs::begin_window_resize`：后台线程按指针位移算宽高（`min`/`max` 取创建时的 `minWidth`/`maxWidth`，没给就用 180×120 DIP 的地板），直接 `SetWindowPos` 改外层矩形——和卡片同一个理由，不把指针交还给 Windows 的模态拉伸循环，否则页面和绘制一起冻住。
+- WebView2 不跟着父窗口长，所以线程只按 30ms 节流 post 一个 `winbounds:{id}`，由事件循环线程上的 `App::sync_custom_bounds` → `CustomWin::fit_view` 量客户区、`set_bounds`、补一次 `clip_square`（直角窗口的矩形区域是按尺寸贴死的），再 `send_ipc("win.resized")` 给页面。
+- 页面侧：`window.on("resize")` 现在真会响（`__resized` 顺手把 `getSize()` 的缓存一起更新），SDK 只在 `boot.resizable` 为真时才挂把位——卡片看清单，自建窗口看创建参数，弹框恒为 `false`。
+
+**② 把位不再吃掉那一小角。** `.fw-resize` 原来是 12×12 的方块热区，压在卡片右下角：那里看得见内容、看得见贴边滚动条最底下一截，点下去却什么也不发生。改成 14×14 并加 `clip-path: polygon(100% 0, 100% 100%, 0 100%)`——命中区跟着裁成右下那个三角形，滑块和内容剩下的部分照常可点。顺带把 `.w-scroll-none` 只留 `::-webkit-scrollbar { display: none }`，删掉 `scrollbar-width: none`：第十五轮已经证明 Chromium 见到这个属性就先换系统滚动条皮肤。
+
+**③ 描边改成跟着底板淡出。** 上一轮只有 `backgroundOpacity <= 0` 才把 `--w-card-ring` 设成 `transparent`，于是磨砂 35% 那种"只剩一层雾"的底板还挂着一道实线。现在按底板透明度分级：`>= 0.4` 完全不动（所以 instrument 的 0.8、常规 0.62 一个像素不差），`0 < op < 0.4` 用 `color-mix(in srgb, var(--w-border) N%, transparent)` 逐级变淡（磨砂还要按它实际留下的 45% 折算），`op = 0` 直接透明。闸值写成 `appearance.rs` 里的 `RING_SOLID_AT`。
+
+**④ 测试台加了「全跑（自动项）」。** 每行现在带 `data-case` 与 `data-manual`，置顶一条按钮串行跑所有不需要人手的用例（要按 Esc、点窗口外面、等人在弹框里选按钮的那些留着人点），跑完在结果区压一份"通过数 + 每条耗时"的汇总。真机点验从"滚动找行、逐个点"变成"点一次看一份表"。
+
+**⑤ 两条改动补了回归单测。** `tests/appearance.rs` 钉住描边的三档（无底/常规/薄底/磨砂折算），`tests/boot.rs` 钉住 `custom_boot` / `dialog_boot` 的 `resizable` 覆盖、`windowType`、以及父 boot 是坏 JSON 时仍给出可用数据。这两处以前只有截图做证据。
+
+**⑥ 环境噪音两处。** 全屏日志补上窗口类名与标题（`Full-screen app on (…) [Windows.UI.Core.CoreWindow|…]`），卡片整片消失时第一眼就知道它把谁当成了全屏；热键注册失败先给同一个键加 `Shift` 再试一次（`Ctrl+Alt+W` 被别的程序占掉时退到 `Shift+Ctrl+Alt+W`），两次都不行才留一条写明"两次都被占"的 warn。
+
+**验证状态**：`cargo test` 101 passed / 2 ignored、`clippy --all-targets -D warnings` 全绿、`fmt` 无改写、`node simples\pack.mjs` 两个组件包重打。真机像素回归这一轮**没做完**——构建并重启宿主时这台机器已经进了锁屏（`LogonUI` 在跑，全屏检测把它记成了 `Windows.UI.Core.CoreWindow|Windows 默认锁屏界面`），卡片按 `pause_on_fullscreen` 整片隐去，截屏只能拿到锁屏壁纸。解锁后要补的三项：把位三角形命中区（点卡片右下角内容仍生效）、自建窗口拖拽放大（`grip.html` 那扇 340×200 拖成 380×240）、全跑汇总表。
+
 ### 还没做的
 
 1. `hello-widget` 模板示例：仓库里没有这个模板组件，指南里的示例段落已经覆盖同一份代码，是否要新建一个模板组件需要先定它放宿主仓库还是 Hub。
