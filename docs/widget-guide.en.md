@@ -1636,7 +1636,7 @@ Anything returning a Promise can be awaited; "sync" means it returns immediately
 | `widget.file.list(dir, {recursive})` | `file.read` | Promise | folder listing with `isDir`, size and change time |
 | `widget.file.info(path)` | `file.read` | Promise | `exists` / `isDir` / `ext` / `size` |
 | `widget.file.exists(path)` | `file.read` | Promise | is there a file at this path |
-| `widget.file.write(path, data)` | `file.write` | Promise | write text, base64 or a `data:` URL, creating missing folders |
+| `widget.file.write(path, data)` | `file.write` | Promise | write text or a `data:` URL; raw base64 must be wrapped as `{ base64 }` (a bare string is always saved as text), creating missing folders |
 | `widget.file.writeText(path, text)` | `file.write` | Promise | text only |
 | `widget.recycleBin.query` | built-in | Promise | Recycle Bin: answers at once from the last count, `items` of -1 means it is still counting; also `age` / `scanning` / `emptying` / `done` / `total`. Counting is expensive (136 s on a 59 GB bin), so it is cached, never done on the spot |
 | `widget.recycleBin.empty` | built-in | Promise | Returns immediately (the emptying runs in the background); follow it through `done` / `total` from `query` |

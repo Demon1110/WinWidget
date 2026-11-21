@@ -545,7 +545,7 @@ declare namespace WinWidget {
       read(path: string): Promise<{ path: string; name: string; size: number; modified: number; base64: string }>;
       /** UTF-8 text; bytes it cannot decode are replaced instead of failing the read. */
       readText(path: string): Promise<string>;
-      /** `data` is text, raw base64, or a data: URL; missing folders are created. */
+      /** Text or a `data:` URL as a plain string; raw base64 has to be `{ base64 }`. Missing folders are created. */
       write(path: string, data: string | { text?: string; base64?: string; dataUrl?: string }): Promise<{ path: string; name: string; size: number; existed: boolean }>;
       writeText(path: string, text: string): Promise<{ path: string; name: string; size: number; existed: boolean }>;
       /** Six levels deep, at most 5000 entries, hidden names skipped; `more` means "not all of it". */

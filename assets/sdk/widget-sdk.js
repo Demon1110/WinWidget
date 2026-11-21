@@ -1214,7 +1214,11 @@
       read: (path) => call("file.read", { path: String(path) }),
       /** The file as text (UTF-8, undecodable bytes replaced), or rejects when it is too big. */
       readText: (path) => call("file.readText", { path: String(path) }),
-      /** write(path, data) → { path, name, size, existed }; `data` is text, base64 or a data: URL. */
+      /**
+       * write(path, data) → { path, name, size, existed }. A plain string is saved as text (or
+       * treated as a `data:` URL when it starts with `data:`); raw base64 has to be wrapped as
+       * `{ base64 }`, otherwise it lands in the file as base64 text.
+       */
       write: (path, data) => call("file.write", { path: String(path), ...filePayload(data) }),
       /** The same, for text only. */
       writeText: (path, text) => call("file.write", { path: String(path), text: String(text ?? "") }),
