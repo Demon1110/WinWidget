@@ -56,6 +56,11 @@ $assets = Join-Path $root "assets"
 if (-not (Test-Path -LiteralPath (Join-Path $assets "sdk\base.css"))) {
     throw "缺少资源目录：$assets（build.rs 要把它编进 exe）"
 }
+# simples\ 是手工真机测试用例（打成 .fwz 外挂），不是产品资源。build.rs 只编 assets\
+# 所以它本来就不在 exe 里；这里再拦一道，免得哪天有人把它挪进 assets\ 变成内置组件。
+if (Test-Path -LiteralPath (Join-Path $assets "simples")) {
+    throw "assets\simples 不应存在：simples\ 只放测试用例，留在仓库根目录才不会被编进 exe"
+}
 
 if (-not $SkipBuild) {
     Write-Host "==> cargo build --release"

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>子窗</title>
+  <style>
+    html, body { margin: 0; height: 100%; }
+    body {
+      box-sizing: border-box;
+      display: flex; flex-direction: column;
+      border-radius: 16px;
+      overflow: hidden;
+      background: var(--w-bg-solid, #12161a);
+      color: var(--w-fg, #e9eef2);
+      font: 13px/1.5 system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    .bar {
+      flex: none;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 10px;
+      background: rgba(255, 255, 255, 0.06);
+      cursor: grab;
+      user-select: none;
+    }
+    .bar button {
+      border: 0; background: transparent; color: inherit;
+      font: inherit; cursor: pointer; opacity: 0.7;
+    }
+    .body { flex: 1 1 auto; padding: 10px 12px; overflow-y: auto; }
+    .body p { margin: 0 0 6px; opacity: 0.75; }
+    .msgs { margin: 0; padding-left: 16px; font-size: 12px; }
+    .msgs li { margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <div class="bar" id="bar">
+    <strong id="title">子窗</strong>
+    <button type="button" id="close" title="关闭">×</button>
+  </div>
+  <div class="body">
+    <p>窗口 id <span id="wid">–</span></p>
+    <p>收到的消息：</p>
+    <ol class="msgs" id="msgs"></ol>
+  </div>
+  <script>
+    const boot = window.__FW_BOOT__ || {};
+    document.getElementById("wid").textContent = boot.windowId || 0;
+
+    // 无边框窗口靠这条自绘标题条拖动（点按钮时不拖）。
+    document.getElementById("bar").addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      if (e.target.closest && e.target.closest("button, input")) return;
+      e.preventDefault();
+      widget.window.startDrag();
+    });
+
+    document.getElementById("close").addEventListener("click", () => {
+      widget.window.close("panel-x");
+    });
+
+    widget.windows.on("message", (m) => {
+      const li = document.createElement("li");
+      li.textContent = `${m.channel} ${JSON.stringify(m.args)} from ${m.from}`;
+      document.getElementById("msgs").prepend(li);
+      li.style.opacity = "1";
+    });
+  </script>
+</body>
+</html>

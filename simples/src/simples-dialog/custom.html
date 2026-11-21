@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>自定义页面</title>
+  <style>
+    html, body { margin: 0; height: 100%; }
+    body {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      background: var(--w-bg-solid, #12161a); color: var(--w-fg, #e9eef2);
+      font: 14px/1.5 system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    button {
+      padding: 8px 16px; border-radius: 10px; border: 1px solid var(--w-line, rgba(255,255,255,.16));
+      background: transparent; color: inherit; font: inherit; cursor: pointer;
+    }
+    button.primary { background: var(--w-accent, #4cc2ff); color: #0b1014; border-color: transparent; }
+  </style>
+</head>
+<body>
+  <button type="button" data-id="dismiss">先不用</button>
+  <button type="button" class="primary" data-id="apply">就用它</button>
+  <script>
+    // 弹框页面自己交卷：win.result 带 button，页面关掉的窗口会把这个结果交给创建方。
+    for (const b of document.querySelectorAll("button")) {
+      b.addEventListener("click", () => {
+        widget.call("win.result", { button: b.dataset.id, reason: "button" }).catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,135 @@
+/* 弹框测试台：跟随卡片主题变量，深浅色都不至于看不清。 */
+
+:root {
+  color-scheme: light dark;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: var(--w-bg, #12161a);
+  color: var(--w-fg, #e9eef2);
+  font: 14px/1.5 system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+
+header {
+  flex: none;
+}
+
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.55;
+}
+
+h1 {
+  margin: 2px 0 4px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.62;
+}
+
+.cases {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  gap: 6px;
+  padding-right: 4px;
+}
+
+.case {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--w-line, rgba(255, 255, 255, 0.14));
+  border-radius: 10px;
+  background: var(--w-card, rgba(255, 255, 255, 0.06));
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.case:hover {
+  border-color: var(--w-accent, #4cc2ff);
+}
+
+.case-label {
+  font-weight: 600;
+}
+
+.case-hint {
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+.log {
+  flex: none;
+  max-height: 38%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid var(--w-line, rgba(255, 255, 255, 0.14));
+  padding-top: 8px;
+}
+
+.log-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.log-head button {
+  padding: 2px 8px;
+  border: 1px solid var(--w-line, rgba(255, 255, 255, 0.14));
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+#results {
+  margin: 0;
+  padding-left: 16px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+
+#results li {
+  margin-bottom: 6px;
+}
+
+.ms {
+  opacity: 0.5;
+  font-size: 11px;
+}
+
+pre {
+  margin: 2px 0 0;
+  font: 11px/1.45 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  opacity: 0.8;
+}

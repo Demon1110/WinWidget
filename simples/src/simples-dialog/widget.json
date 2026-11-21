@@ -1,0 +1,27 @@
+{
+  "id": "simples-dialog",
+  "name": { "zh-TW": "弹框测试台", "zh-CN": "弹框测试台", "en": "Dialog test bench" },
+  "description": {
+    "zh-TW": "widget.dialog 的逐项测试：alert / confirm / prompt / toast / window，以及尺寸、透明度、自动关闭、锚点、模态这些配置。",
+    "zh-CN": "widget.dialog 的逐项测试：alert / confirm / prompt / toast / window，以及尺寸、透明度、自动关闭、锚点、模态这些配置。",
+    "en": "Step-by-step checks for widget.dialog: alert / confirm / prompt / toast / window, plus size, opacity, auto close, anchor and modal."
+  },
+  "version": "0.1.0",
+  "date": "2026-11-21",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "productivity",
+  "size": {
+    "width": 380,
+    "height": 640,
+    "minWidth": 340,
+    "minHeight": 420,
+    "maxWidth": 560,
+    "maxHeight": 900,
+    "resizable": true,
+    "grow": 0.3
+  },
+  "permissions": [],
+  "settings": []
+}

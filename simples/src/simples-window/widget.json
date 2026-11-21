@@ -1,0 +1,27 @@
+{
+  "id": "simples-window",
+  "name": { "zh-TW": "多視窗測試台", "zh-CN": "多窗口测试台", "en": "Window test bench" },
+  "description": {
+    "zh-TW": "多視窗與關閉行為的逐項測試：key 復用、list/post/broadcast、關閉原因，以及 closeOnEsc / closeOnBlur / closeOnOutsideClick / modal 與卡片自操作。",
+    "zh-CN": "多窗口与关闭行为的逐项测试：key 复用、list/post/broadcast、关闭原因，以及 closeOnEsc / closeOnBlur / closeOnOutsideClick / modal 与卡片自操作。",
+    "en": "Checks for several windows: key reuse, list/post/broadcast, close reasons, closeOnEsc / closeOnBlur / closeOnOutsideClick / modal, and the card's own window calls."
+  },
+  "version": "0.1.0",
+  "date": "2026-11-21",
+  "author": "WinWidget",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "category": "productivity",
+  "size": {
+    "width": 380,
+    "height": 640,
+    "minWidth": 340,
+    "minHeight": 420,
+    "maxWidth": 560,
+    "maxHeight": 900,
+    "resizable": true,
+    "grow": 0.3
+  },
+  "permissions": [],
+  "settings": []
+}
