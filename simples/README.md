@@ -16,7 +16,7 @@ node simples/pack.mjs          # 打包到 simples/packages
 node simples/pack.mjs --check  # 只核对仓库里的产物是否和源码一致
 ```
 
-装进真机：把 `simples/packages/simples-dialog-0.1.0.fwz` 拖到控制中心完成安装，或者
+装进真机：把 `simples/packages/simples-dialog-0.1.1.fwz` 拖到控制中心完成安装，或者
 解压后把目录放到 `%APPDATA%\WinWidget\widgets\`，重启宿主。装好后从 `list` 或控制中心
 把卡片放到桌面。
 

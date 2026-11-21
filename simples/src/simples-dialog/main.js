@@ -136,11 +136,11 @@ const CASES = [
   ],
   [
     "460×220 原生边框 + 不圆角 + 92% 透明",
-    "frame=true 时露系统边框；圆角关掉；半透明；Esc 关不掉",
+    "frame=true 时露系统边框（透光关掉、标题只在标题栏写一次）；四角是方的；整窗 92%；Esc 关不掉",
     () =>
       widget.dialog.confirm({
         title: "外观全开",
-        content: "这一只能按窗口按钮关，Esc 不管用。",
+        content: "这一只只能按窗口按钮关，Esc 不管用；四角应该是方的，整窗略带透明。",
         width: 460,
         height: 220,
         frame: true,
@@ -148,6 +148,19 @@ const CASES = [
         opacity: 0.92,
         closeOnEsc: false,
         draggable: false,
+      }),
+  ],
+  [
+    "无边框 + 直角 + 92% 透明",
+    "和上一条反过来：没有系统边框，直角靠页面自己画，四角不该有白色小尖",
+    () =>
+      widget.dialog.confirm({
+        title: "直角无边框",
+        content: "这一只没有系统边框，四角仍要是方的，整窗半透明，并且四角外要能看见桌面。",
+        width: 380,
+        height: 180,
+        rounded: false,
+        opacity: 0.92,
       }),
   ],
   [
