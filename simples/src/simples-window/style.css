@@ -81,9 +81,27 @@ h1 {
   opacity: 0.6;
 }
 
+/* 全跑：置顶一条，跟普通用例区分开；跑的时候禁用，标签上带进度。 */
+.case[data-case="全跑"] {
+  border-color: var(--w-accent, #4cc2ff);
+  background: color-mix(in srgb, var(--w-accent, #4cc2ff) 14%, transparent);
+}
+
+/* 要人上手的用例：左侧一条竖线，扫一眼就知道这条不能交给全跑。 */
+.case[data-manual="true"] {
+  border-left: 2px solid color-mix(in srgb, var(--w-accent, #4cc2ff) 55%, transparent);
+}
+
+.summary {
+  padding: 6px 8px;
+  border: 1px solid var(--w-accent, #4cc2ff);
+  border-radius: 8px;
+}
+
+
 .log {
   flex: none;
-  max-height: 38%;
+  max-height: 44%;
   display: flex;
   flex-direction: column;
   gap: 4px;

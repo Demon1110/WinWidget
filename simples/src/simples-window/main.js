@@ -30,14 +30,30 @@ function runner(label, fn) {
   };
 }
 
-function button(label, hint, run) {
+function button(label, hint, run, manual) {
   const b = document.createElement("button");
   b.type = "button";
   b.className = "case";
+  b.dataset.case = label;
+  if (manual) b.dataset.manual = "true";
   b.innerHTML = `<span class="case-label">${label}</span><span class="case-hint">${hint}</span>`;
   b.addEventListener("click", run);
   list.appendChild(b);
   return b;
+}
+
+/** 一行汇总：所有自动用例串行跑完后写在这里，真机点验只看这一块就够。 */
+function summary(report) {
+  const li = document.createElement("li");
+  li.className = "summary";
+  const passed = report.filter((r) => r.ok).length;
+  li.innerHTML = `<strong>全跑 ${passed}/${report.length} 通过</strong>`;
+  const pre = document.createElement("pre");
+  pre.textContent = report.map((r) => `${r.ok ? "ok " : "ERR"} ${r.ms}ms ${r.label}`).join("\n");
+  li.appendChild(pre);
+  results.prepend(li);
+  console.error(`[simples-window] all: ${passed}/${report.length}`);
+  return li;
 }
 
 /** 子窗共用的外观：无边框 + 半透明 + 圆角，跟卡片一套主题变量。 */
@@ -124,6 +140,7 @@ const CASES = [
       const w = openPanel("esc", { closeOnEsc: true, title: "Esc 关我" });
       return await whenClosed(w);
     },
+    true,
   ],
   [
     "closeOnBlur",
@@ -132,6 +149,7 @@ const CASES = [
       const w = openPanel("blur", { closeOnBlur: true, title: "失焦关我" });
       return await whenClosed(w);
     },
+    true,
   ],
   [
     "closeOnOutsideClick",
@@ -140,6 +158,7 @@ const CASES = [
       const w = openPanel("outside", { closeOnOutsideClick: true, title: "点外面关我" });
       return await whenClosed(w);
     },
+    true,
   ],
   [
     "modal 模态",
@@ -148,6 +167,7 @@ const CASES = [
       const w = openPanel("modal", { modal: true, title: "模态子窗" });
       return { id: w.id, note: "关掉它再试卡片按钮" };
     },
+    true,
   ],
   [
     "无边框可拖拽",
@@ -157,6 +177,7 @@ const CASES = [
       await w.loaded;
       return { id: w.id };
     },
+    true,
   ],
   [
     "约定拖拽（data-ww-drag）",
@@ -175,6 +196,7 @@ const CASES = [
       await w.loaded;
       return { id: w.id };
     },
+    true,
   ],
   [
     "无边框 + 直角（rounded:false）",
@@ -246,6 +268,7 @@ const CASES = [
           "<li>列表和换行也按标签排</li></ul>" +
           '<p style="opacity:.6">不传 rawHtml 时，这一整串会连尖括号一起当文字显示。</p>',
       }),
+    true,
   ],
   [
     "弹框整页 HTML（dialog.window）",
@@ -263,6 +286,7 @@ const CASES = [
       // 人来点按钮，别用用例里那 12 秒的等待上限。
       return await whenClosed(w, 120000);
     },
+    true,
   ],
   [
     "closeAll",
@@ -297,7 +321,39 @@ const CASES = [
   ],
 ];
 
-CASES.forEach(([label, hint, fn]) => button(label, hint, runner(label, fn)));
+CASES.forEach(([label, hint, fn, manual]) => button(label, hint, runner(label, fn), manual));
+
+/**
+ * 全跑：串行跑所有「不需要人手」的用例，最后留一份汇总。要人按 Esc、点窗口外面、或等人在
+ * 弹框里选按钮的那些用例排除在外——它们塞进自动跑只会把整轮卡在等待上。
+ */
+const runAll = async () => {
+  const auto = CASES.filter(([, , , manual]) => !manual);
+  const report = [];
+  runBtn.disabled = true;
+  for (const [label, , fn] of auto) {
+    runBtn.dataset.case = `全跑中 ${report.length + 1}/${auto.length}`;
+    const startedAt = performance.now();
+    try {
+      report.push({ ok: true, ms: 0, label, payload: await fn() });
+    } catch (err) {
+      report.push({ ok: false, ms: 0, label, payload: String((err && err.message) || err) });
+    }
+    report[report.length - 1].ms = Math.round(performance.now() - startedAt);
+    await new Promise((r) => setTimeout(r, 800));
+  }
+  runBtn.disabled = false;
+  runBtn.dataset.case = "全跑";
+  runBtn.querySelector(".case-label").textContent = "全跑（自动项）";
+  summary(report);
+};
+
+const runBtn = button(
+  "全跑（自动项）",
+  `串行跑 ${CASES.filter(([, , , manual]) => !manual).length} 条不需要人手的用例，结果写成一份汇总`,
+  runAll
+);
+list.prepend(runBtn);
 
 document.getElementById("clear").addEventListener("click", () => {
   results.innerHTML = "";
