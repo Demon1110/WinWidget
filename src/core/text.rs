@@ -121,19 +121,3 @@ pub fn all(value: Option<&Value>) -> Vec<String> {
     }
     out
 }
-
-#[cfg(test)]
-mod tests {
-    use super::{locale, set_locale};
-
-    #[test]
-    fn the_language_can_change_while_the_app_runs() {
-        let before = locale();
-        set_locale("en");
-        assert_eq!(locale(), "en");
-        // The old implementation only kept the first value, so a second choice never arrived.
-        set_locale("zh-CN");
-        assert_eq!(locale(), "zh-CN");
-        set_locale(&before);
-    }
-}

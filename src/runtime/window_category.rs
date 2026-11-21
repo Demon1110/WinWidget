@@ -256,7 +256,7 @@ impl CustomWin {
     }
 }
 
-fn to_dip(px: f64, scale: f64) -> f64 {
+pub fn to_dip(px: f64, scale: f64) -> f64 {
     if scale > 0.0 {
         (px / scale).round()
     } else {
@@ -264,7 +264,7 @@ fn to_dip(px: f64, scale: f64) -> f64 {
     }
 }
 
-fn from_dip(dip: f64, scale: f64) -> f64 {
+pub fn from_dip(dip: f64, scale: f64) -> f64 {
     if scale > 0.0 {
         (dip * scale).round()
     } else {
@@ -587,7 +587,7 @@ pub fn build_custom(
 
 /// A CSS colour from `backgroundColor`, as the RGBA the web view paints behind the page. A window
 /// that is not transparent defaults to white, like Electron's.
-fn parse_color(text: &str, transparent: bool) -> (u8, u8, u8, u8) {
+pub fn parse_color(text: &str, transparent: bool) -> (u8, u8, u8, u8) {
     let fallback = if transparent {
         (0, 0, 0, 0)
     } else {
@@ -1004,7 +1004,7 @@ pub(crate) fn guide_ink(app: &App, instance: &str) -> u32 {
 }
 
 /// Gap kept between cards, and how close a card has to come before it snaps, both on the screen.
-pub(crate) fn snap_metrics(scale: f64) -> (i32, i32, (i32, i32, i32)) {
+pub fn snap_metrics(scale: f64) -> (i32, i32, (i32, i32, i32)) {
     let gap = (12.0 * scale).round() as i32;
     let reach = (8.0 * scale).round() as i32;
     let thickness = (1.0 * scale).round().max(1.0) as i32;
@@ -1858,53 +1858,3 @@ pub fn state_json(app: &App, id: u32) -> Value {
 
 /// Every custom window still alive, by id.
 pub type Registry = HashMap<u32, CustomWin>;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn dip_round_trip_at_real_scales() {
-        for scale in [1.0, 1.25, 1.5, 2.0] {
-            for dip in [0.0, 12.0, 96.0, 333.0] {
-                assert_eq!(
-                    from_dip(to_dip(from_dip(dip, scale), scale), scale),
-                    from_dip(dip, scale)
-                );
-            }
-        }
-        // A non-positive scale is treated as "no scaling", not a divide-by-zero.
-        assert_eq!(to_dip(96.0, 0.0), 96.0);
-        assert_eq!(from_dip(96.0, -1.0), 96.0);
-    }
-
-    #[test]
-    fn parses_hex_and_css_colours() {
-        assert_eq!(parse_color("#fff", false), (255, 255, 255, 255));
-        assert_eq!(parse_color("#000000", false), (0, 0, 0, 255));
-        assert_eq!(parse_color("#4cc9f0", false), (0x4c, 0xc9, 0xf0, 255));
-        assert_eq!(parse_color("#11223344", false), (0x11, 0x22, 0x33, 0x44));
-        assert_eq!(parse_color("rgb(1, 2, 3)", false), (1, 2, 3, 255));
-        assert_eq!(parse_color("rgba(1, 2, 3, 0.5)", false), (1, 2, 3, 128));
-        assert_eq!(parse_color("transparent", true), (0, 0, 0, 0));
-        assert_eq!(parse_color("transparent", false), (255, 255, 255, 255));
-        assert_eq!(parse_color("not a colour", false), (255, 255, 255, 255));
-    }
-
-    #[test]
-    fn snap_metrics_scale_and_clamp() {
-        assert_eq!(snap_metrics(1.0), (12, 8, (1, 5, 4)));
-        assert_eq!(snap_metrics(2.0), (24, 16, (2, 10, 8)));
-        // A tiny scale still leaves a one-pixel guide and a positive snap reach.
-        let (gap, reach, (thickness, _, _)) = snap_metrics(0.01);
-        assert!(gap >= 0 && reach >= 1 && thickness >= 1);
-    }
-
-    #[test]
-    fn unsupported_methods_explain_why() {
-        assert!(unsupported_reason("capturePage").is_some());
-        assert!(unsupported_reason("printToPDF").is_some());
-        assert!(unsupported_reason("window.hide").is_none());
-        assert!(unsupported_reason("").is_none());
-    }
-}

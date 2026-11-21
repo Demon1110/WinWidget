@@ -9,7 +9,7 @@
     "ui"
   ],
   "violations": {
-    "core->model": 4,
+    "core->model": 3,
     "core->platform": 46,
     "core->runtime": 2,
     "market->runtime": 3,

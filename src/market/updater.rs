@@ -56,7 +56,7 @@ pub fn current(app: &App) -> Value {
 
 /// `{"version": …, "url": …, …}` is our own feed; a GitHub release document is `tag_name` +
 /// `assets`. Both end up as the same object, so the control center has one shape to render.
-fn parse_release(text: &str) -> Result<Value, String> {
+pub fn parse_release(text: &str) -> Result<Value, String> {
     let info: Value = serde_json::from_str(text).map_err(|_| "offline".to_string())?;
     if let Some(tag) = info.get("tag_name").and_then(|v| v.as_str()) {
         let assets = info
@@ -218,7 +218,7 @@ pub fn check(app: &mut App) -> Value {
     set(app, value)
 }
 
-fn compare(a: &str, b: &str) -> i32 {
+pub fn compare(a: &str, b: &str) -> i32 {
     let parts = |v: &str| -> Vec<i64> {
         // GitHub tags carry a leading "v" ("v1.1"), our own feed does not.
         v.trim_start_matches(['v', 'V'])
@@ -460,41 +460,4 @@ pub fn page(app: &App) -> Result<(), String> {
         .or_else(|| app.cfg().update_url.clone())
         .unwrap_or_else(|| crate::market::client::DEFAULT_SITE.to_string());
     crate::platform::shell::open(&url)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{compare, parse_release};
-
-    #[test]
-    fn versions_compare_numerically() {
-        assert_eq!(compare("1.0.10", "1.0.9"), 1);
-        assert_eq!(compare("v1.1", "1.0"), 1);
-        assert_eq!(compare("1.0", "1.0.0"), 0);
-        assert_eq!(compare("0.9", "1.0"), -1);
-    }
-
-    #[test]
-    fn a_github_release_becomes_the_same_shape_as_our_own_feed() {
-        let text = r#"{"tag_name":"v1.2.0","body":"notes","html_url":"https://x/rel",
-            "assets":[{"name":"WinWidget-1.2.0-setup.exe","size":123,"browser_download_url":"https://x/a.exe"}]}"#;
-        let v = parse_release(text).expect("github release");
-        assert_eq!(v["version"], "1.2.0");
-        assert_eq!(v["url"], "https://x/a.exe");
-        assert_eq!(v["file"], "WinWidget-1.2.0-setup.exe");
-        let own = parse_release(r#"{"version":"1.3.0","url":"https://x/b.exe","notes":"n"}"#)
-            .expect("own feed");
-        assert_eq!(own["version"], "1.3.0");
-    }
-
-    #[test]
-    fn a_release_with_only_a_zip_has_nowhere_to_install_from() {
-        let text = r#"{"tag_name":"v1.2.0","html_url":"https://x/rel",
-            "assets":[{"name":"WinWidget-1.2.0-windows-x64.zip","size":999,
-            "browser_download_url":"https://x/a.zip"}]}"#;
-        let v = parse_release(text).expect("github release");
-        assert_eq!(v["version"], "1.2.0");
-        // 挑资产时明确不拿 zip 当更新包：zip 不是能直接跑起来的东西
-        assert!(v["url"].is_null());
-    }
 }

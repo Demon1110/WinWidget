@@ -174,22 +174,3 @@ pub fn thumbnail(path: &Path, width: u32) -> Option<Vec<u8>> {
         crate::core::img::thumbnail(path, width).ok()
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::with_urls;
-    use serde_json::json;
-    use std::path::Path;
-
-    #[test]
-    fn every_entry_gets_the_route_the_page_loads_it_from() {
-        let mut listing = json!({
-            "files": [{ "path": r"C:\Pics\a b\today.jpg", "name": "today.jpg" }]
-        });
-        with_urls(&mut listing, "inst", "folder", Path::new(r"C:\Pics"));
-        assert_eq!(
-            listing["files"][0]["url"],
-            "/__files/inst/folder/a%20b/today.jpg"
-        );
-    }
-}

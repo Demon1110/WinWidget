@@ -1299,7 +1299,7 @@ unsafe extern "system" fn find_top_card(hwnd: HWND, data: isize) -> i32 {
 /// fine as a top-level window, and goes blank the moment it becomes a Progman child). So we ask
 /// the shell to spawn the wallpaper `WorkerW` (message `0x052C`) and parent below the icons; only
 /// when the shell refuses to spawn one do we fall back to Progman itself, below `DefView`.
-fn wallpaper_host() -> (HWND, HWND) {
+pub fn wallpaper_host() -> (HWND, HWND) {
     let prog = progman();
     if prog == 0 {
         return (0, 0);
@@ -3234,33 +3234,4 @@ pub fn base64_decode(input: &str) -> Option<Vec<u8>> {
         }
     }
     Some(out)
-}
-
-#[cfg(test)]
-mod wallpaper_tests {
-    use super::*;
-
-    /// The wallpaper mount only works if the shell really exposes an icon layer we can sit below.
-    /// This is read-only: it never creates or moves a window, so it is safe in CI and on a live
-    /// desktop. On non-Windows dev builds there is no Progman and the test is a no-op.
-    #[test]
-    fn wallpaper_host_finds_the_icon_layer() {
-        let prog = progman();
-        if prog == 0 {
-            return; // not a Windows shell (or headless CI) — nothing to assert
-        }
-        let (host, defview) = wallpaper_host();
-        assert_ne!(host, 0, "the shell must expose a wallpaper host");
-        if host == prog {
-            // Fallback layout: DefView lives directly under Progman and no WorkerW could be
-            // spawned, so the effect mounts below the icons inside Progman.
-            assert_ne!(defview, 0, "SHELLDLL_DefView must be a child of Progman");
-            assert_eq!(class_name(defview), "SHELLDLL_DefView");
-        } else {
-            // Preferred layout: the wallpaper WorkerW below the icon host. It has no DefView of
-            // its own — the icons live in the sibling window above us.
-            assert_eq!(class_name(host), "WorkerW");
-            assert_eq!(defview, 0, "the wallpaper WorkerW must not host the icons");
-        }
-    }
 }

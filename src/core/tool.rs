@@ -143,9 +143,9 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
     }
 }
 
-struct Prepared {
-    path: PathBuf,
-    downloaded: bool,
+pub struct Prepared {
+    pub path: PathBuf,
+    pub downloaded: bool,
 }
 
 fn find_spec<'a>(tools: &'a [ToolSpec], name: &str) -> BridgeResult<&'a ToolSpec> {
@@ -186,7 +186,7 @@ fn status_value(dir: &Path, id: &str, spec: &ToolSpec) -> Value {
     })
 }
 
-fn ensure_tool(
+pub fn ensure_tool(
     dir: &Path,
     id: &str,
     allowed: &[String],
@@ -350,7 +350,7 @@ fn mtime_stamp(meta: &std::fs::Metadata) -> u64 {
         .unwrap_or(0)
 }
 
-fn file_len(path: &Path) -> u64 {
+pub fn file_len(path: &Path) -> u64 {
     std::fs::metadata(path).map(|m| m.len()).unwrap_or(0)
 }
 
@@ -502,7 +502,7 @@ fn work_dir(dir: &Path, id: &str, requested: Option<&str>) -> Result<PathBuf, St
     }
 }
 
-fn execute(
+pub fn execute(
     program: &Path,
     args: &[String],
     stdin: Option<&str>,
@@ -605,7 +605,7 @@ fn sha256_file(path: &Path) -> Result<String, String> {
     Ok(hex(&hasher.finish()))
 }
 
-fn hex(bytes: &[u8]) -> String {
+pub fn hex(bytes: &[u8]) -> String {
     let mut out = String::with_capacity(bytes.len() * 2);
     for b in bytes {
         out.push_str(&format!("{b:02x}"));
@@ -615,15 +615,21 @@ fn hex(bytes: &[u8]) -> String {
 
 /// A small SHA-256 implementation so the host does not need another dependency just to verify a
 /// downloaded executable. The unit tests cover the standard vectors.
-struct Sha256 {
+pub struct Sha256 {
     state: [u32; 8],
     buffer: [u8; 64],
     buffered: usize,
     length: u64,
 }
 
+impl Default for Sha256 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Sha256 {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Sha256 {
             state: [
                 0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
@@ -635,7 +641,7 @@ impl Sha256 {
         }
     }
 
-    fn update(&mut self, mut data: &[u8]) {
+    pub fn update(&mut self, mut data: &[u8]) {
         self.length = self.length.wrapping_add(data.len() as u64);
         if self.buffered > 0 {
             let take = (64 - self.buffered).min(data.len());
@@ -660,7 +666,7 @@ impl Sha256 {
         }
     }
 
-    fn finish(mut self) -> [u8; 32] {
+    pub fn finish(mut self) -> [u8; 32] {
         let bit_len = self.length.wrapping_mul(8);
         // 0x80, zeros until the block has 56 bytes, then the 64-bit length. Appending exactly
         // 64 bytes after the 56-byte point lets `update` compress the final block.
@@ -739,112 +745,3 @@ const K: [u32; 64] = [
     0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
     0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 ];
-
-#[cfg(test)]
-mod tests {
-    use super::{hex, Sha256};
-    use serde_json::json;
-
-    fn digest(text: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(text.as_bytes());
-        hex(&hasher.finish())
-    }
-
-    #[test]
-    fn sha256_known_vectors() {
-        assert_eq!(
-            digest(""),
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        );
-        assert_eq!(
-            digest("abc"),
-            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
-        );
-        assert_eq!(
-            digest("The quick brown fox jumps over the lazy dog"),
-            "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592"
-        );
-    }
-
-    #[test]
-    fn sha256_matches_a_long_stream() {
-        let text = "a".repeat(1000);
-        let mut hasher = Sha256::new();
-        for chunk in text.as_bytes().chunks(37) {
-            hasher.update(chunk);
-        }
-        assert_eq!(
-            hex(&hasher.finish()),
-            "41edece42d63e8d9bf515a9ba6932e1c20cbc9f5a5d134645adb5db1b9737ea3"
-        );
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn captures_exit_code_stdout_and_stderr() {
-        let result = super::execute(
-            std::path::Path::new(r"C:\Windows\System32\cmd.exe"),
-            &["/C".into(), "echo out& echo err 1>&2".into()],
-            None,
-            std::path::Path::new("."),
-            5_000,
-        )
-        .unwrap();
-        assert_eq!(result["code"].as_i64(), Some(0));
-        assert_eq!(result["ok"].as_bool(), Some(true));
-        assert!(result["stdout"].as_str().unwrap().contains("out"));
-        assert!(result["stderr"].as_str().unwrap().contains("err"));
-    }
-
-    #[test]
-    #[ignore = "network: downloads a 5-byte body from httpbin.org"]
-    fn downloads_verifies_and_caches() {
-        let dir =
-            std::env::temp_dir().join(format!("winwidget-tool-download-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("index.html"), "<!doctype html>").unwrap();
-        let mut manifest: crate::model::manifest::Manifest = serde_json::from_value(json!({
-            "id": "test.download",
-            "version": "1.0.0",
-            "size": { "width": 320, "height": 200 },
-            "permissions": ["tool.exec", "network:httpbin.org"],
-            "tools": [{
-                "name": "hello",
-                "url": "https://httpbin.org/base64/aGVsbG8=",
-                "filename": "hello.exe",
-                "sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
-                "size": 5
-            }]
-        }))
-        .unwrap();
-        manifest.dir = dir.clone();
-        manifest.validate().unwrap();
-        let allowed = vec!["tool.exec".to_string(), "network:httpbin.org".to_string()];
-        let spec = &manifest.tools[0];
-
-        let first = super::ensure_tool(&manifest.dir, &manifest.id, &allowed, spec, false).unwrap();
-        assert!(first.downloaded);
-        assert_eq!(super::file_len(&first.path), 5);
-        let second =
-            super::ensure_tool(&manifest.dir, &manifest.id, &allowed, spec, false).unwrap();
-        assert!(!second.downloaded, "a verified cache should be reused");
-        let third = super::ensure_tool(&manifest.dir, &manifest.id, &allowed, spec, true).unwrap();
-        assert!(third.downloaded);
-
-        let mut bad = spec.clone();
-        bad.sha256 = Some("0".repeat(64));
-        assert!(super::ensure_tool(&manifest.dir, &manifest.id, &allowed, &bad, true).is_err());
-
-        // Without a declared hash the download still succeeds and the sidecar keeps the cache fresh.
-        let mut no_hash = spec.clone();
-        no_hash.sha256 = None;
-        let fourth =
-            super::ensure_tool(&manifest.dir, &manifest.id, &allowed, &no_hash, true).unwrap();
-        assert!(fourth.downloaded);
-        let fifth =
-            super::ensure_tool(&manifest.dir, &manifest.id, &allowed, &no_hash, false).unwrap();
-        assert!(!fifth.downloaded, "an unhashed cache should be reused");
-        let _ = std::fs::remove_dir_all(dir);
-    }
-}

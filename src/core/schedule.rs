@@ -210,7 +210,7 @@ pub fn tick(host: &dyn ScheduleHost) {
     }
 }
 
-fn is_due(trigger: &Value, parts: &LocalParts, last: Option<i64>, minute_start: i64) -> bool {
+pub fn is_due(trigger: &Value, parts: &LocalParts, last: Option<i64>, minute_start: i64) -> bool {
     if last == Some(minute_start) {
         return false;
     }
@@ -236,14 +236,14 @@ fn is_due(trigger: &Value, parts: &LocalParts, last: Option<i64>, minute_start: 
     }
 }
 
-struct LocalParts {
-    minute: u32,
-    hour: u32,
-    day: u32,
-    month: u32,
+pub struct LocalParts {
+    pub minute: u32,
+    pub hour: u32,
+    pub day: u32,
+    pub month: u32,
     /// 0 = Sunday, the way cron counts.
-    weekday: u32,
-    minute_start: i64,
+    pub weekday: u32,
+    pub minute_start: i64,
 }
 
 fn local_parts() -> Option<LocalParts> {
@@ -266,7 +266,7 @@ fn local_parts() -> Option<LocalParts> {
     })
 }
 
-fn matches(fields: &[String; 5], p: &LocalParts) -> bool {
+pub fn matches(fields: &[String; 5], p: &LocalParts) -> bool {
     field(&fields[0], p.minute, 0, 59)
         && field(&fields[1], p.hour, 0, 23)
         && field(&fields[2], p.day, 1, 31)
@@ -275,7 +275,7 @@ fn matches(fields: &[String; 5], p: &LocalParts) -> bool {
 }
 
 /// One cron field: `*`, `7`, `1-5`, `*/15`, `1,15,30`, or `10-20/2`.
-fn field(expr: &str, value: u32, min: u32, max: u32) -> bool {
+pub fn field(expr: &str, value: u32, min: u32, max: u32) -> bool {
     for part in expr.split(',') {
         let part = part.trim();
         let (range, step) = match part.split_once('/') {
@@ -302,7 +302,7 @@ fn field(expr: &str, value: u32, min: u32, max: u32) -> bool {
     false
 }
 
-fn parse_cron(expr: &str) -> BridgeResult<[String; 5]> {
+pub fn parse_cron(expr: &str) -> BridgeResult<[String; 5]> {
     let fields: Vec<String> = expr.split_whitespace().map(|f| f.to_string()).collect();
     if fields.len() != 5 {
         return Err(BridgeError::new(
@@ -379,63 +379,4 @@ fn save(items: &Map<String, Value>) -> BridgeResult<()> {
 /// running app.
 pub fn minute_of(day: u32, hour: u32, minute: u32) -> i64 {
     i64::from(day) * 86_400_000 + i64::from(hour) * 3_600_000 + i64::from(minute) * 60_000
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn parts(hour: u32, minute: u32) -> LocalParts {
-        LocalParts {
-            minute,
-            hour,
-            day: 1,
-            month: 1,
-            weekday: 0,
-            minute_start: 0,
-        }
-    }
-
-    #[test]
-    fn cron_fields_match_the_way_cron_does() {
-        assert!(field("*/15", 0, 0, 59));
-        assert!(field("*/15", 45, 0, 59));
-        assert!(!field("*/15", 7, 0, 59));
-        assert!(field("9-18", 12, 0, 23));
-        assert!(!field("9-18", 20, 0, 23));
-        assert!(field("1,15,30", 15, 0, 59));
-        assert!(field("10-20/2", 14, 0, 59));
-        assert!(!field("10-20/2", 15, 0, 59));
-    }
-
-    #[test]
-    fn a_whole_expression_matches() {
-        let fields = parse_cron("0 9-18 * * *").unwrap();
-        assert!(matches(&fields, &parts(9, 0)));
-        assert!(matches(&fields, &parts(18, 0)));
-        assert!(!matches(&fields, &parts(9, 1)));
-        assert!(!matches(&fields, &parts(8, 0)));
-    }
-
-    #[test]
-    fn a_typo_is_rejected() {
-        assert!(parse_cron("0 9 * *").is_err());
-        assert!(parse_cron("0 25 * * *").is_err());
-        assert!(parse_cron("0 9 * * *").is_ok());
-    }
-
-    #[test]
-    fn a_due_one_shot_fires_once() {
-        let trigger = json!(minute_of(1, 9, 0));
-        assert!(is_due(&trigger, &parts(9, 0), None, minute_of(1, 9, 0)));
-        // A minute missed (the machine slept, the app had just started) is caught up once rather
-        // than dropped.
-        assert!(is_due(&trigger, &parts(9, 1), None, minute_of(1, 9, 1)));
-        assert!(!is_due(
-            &trigger,
-            &parts(9, 0),
-            Some(minute_of(1, 9, 0)),
-            minute_of(1, 9, 0)
-        ));
-    }
 }

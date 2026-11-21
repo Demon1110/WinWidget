@@ -322,7 +322,7 @@ type Method = fn(&mut App, &Value, i64) -> BridgeResult<Reply>;
 /// The single source of truth for the control-center bridge API. Tooling reads the `m.insert`
 /// lines below to build the spec and check the front end for drift; adding or renaming a method
 /// is one line here plus its handler.
-fn registry() -> &'static HashMap<&'static str, Method> {
+pub fn registry() -> &'static HashMap<&'static str, Method> {
     static REGISTRY: OnceLock<HashMap<&'static str, Method>> = OnceLock::new();
     REGISTRY.get_or_init(|| {
         let mut m: HashMap<&'static str, Method> = HashMap::new();
@@ -396,7 +396,7 @@ fn registry() -> &'static HashMap<&'static str, Method> {
     })
 }
 
-fn handler_for(method: &str) -> BridgeResult<Method> {
+pub fn handler_for(method: &str) -> BridgeResult<Method> {
     registry()
         .get(method)
         .copied()
@@ -1123,86 +1123,4 @@ fn set_file_association(on: bool) -> Result<(), String> {
         let _ = hkcu.delete_subkey_all(r"Software\Classes\WinWidget.Archive");
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn registry_covers_every_method() {
-        let r = registry();
-        // 57 methods + 1 legacy alias.
-        assert_eq!(r.len(), 58);
-        // The old and new spellings of the auto-update toggle share one handler.
-        assert_eq!(r["app.updateAuto"] as usize, r["app.autoUpdate"] as usize);
-        for name in [
-            "app.editMode",
-            "app.guide",
-            "app.hotkey",
-            "app.hotkeysPause",
-            "app.language",
-            "app.uiTheme",
-            "app.lockAll",
-            "app.openFolder",
-            "app.rescan",
-            "app.restart",
-            "app.setDataDir",
-            "app.resetDataDir",
-            "app.reveal",
-            "app.updateCheck",
-            "app.updateInstall",
-            "app.updateCancel",
-            "app.updatePage",
-            "app.updateAuto",
-            "app.updateUrl",
-            "app.autoUpdate",
-            "app.autostart",
-            "app.lowResource",
-            "app.developer",
-            "app.hideAll",
-            "app.pauseFullscreen",
-            "app.fileAssociation",
-            "app.close",
-            "fonts.list",
-            "instance.appearance",
-            "instance.css",
-            "instance.locked",
-            "instance.layer",
-            "instance.theme",
-            "instance.setting",
-            "instance.size",
-            "instance.reload",
-            "instance.devtools",
-            "instance.identify",
-            "instance.duplicate",
-            "instance.remove",
-            "instance.clearAll",
-            "instance.pickFolder",
-            "widget.add",
-            "widget.grant",
-            "widget.openFolder",
-            "widget.export",
-            "widget.uninstall",
-            "widget.create",
-            "theme.global",
-            "theme.override",
-            "theme.reset",
-            "package.import",
-            "package.cancel",
-            "package.install",
-            "package.export",
-            "market.list",
-            "market.install",
-            "market.open",
-        ] {
-            assert!(r.contains_key(name), "missing method {name}");
-        }
-    }
-
-    #[test]
-    fn unknown_method_is_rejected() {
-        assert!(handler_for("app.noSuchMethod").is_err());
-        assert!(handler_for("").is_err());
-    }
 }

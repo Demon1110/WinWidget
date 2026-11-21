@@ -92,7 +92,7 @@ fn stage_upx(app: &App, path: &Path) -> Result<Staged, String> {
 /// what a uTools developer uploads, so a plain `.zip` of a plugin is the usual download). The
 /// shallowest manifest of either kind decides the package root; `widget.json` wins outright, so a
 /// package that already has one is never converted.
-fn package_root(archive: &mut zip::ZipArchive<std::fs::File>) -> Option<(bool, String)> {
+pub fn package_root(archive: &mut zip::ZipArchive<std::fs::File>) -> Option<(bool, String)> {
     let mut native: Option<(usize, String)> = None;
     let mut plugin: Option<(usize, String)> = None;
     for index in 0..archive.len() {
@@ -124,16 +124,16 @@ fn package_root(archive: &mut zip::ZipArchive<std::fs::File>) -> Option<(bool, S
 
 /// What a package turns into once its files are on disk. Comparing it with what is already
 /// installed (`describe`) needs the app, so that part happens afterwards in `staged`.
-struct Unpacked {
-    dir: PathBuf,
-    id: String,
-    name: String,
-    version: String,
-    author: String,
-    description: String,
-    permissions: Vec<String>,
+pub struct Unpacked {
+    pub dir: PathBuf,
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub author: String,
+    pub description: String,
+    pub permissions: Vec<String>,
     /// The package declares `preload.js`, so it wants Node.js — which this host cannot give it.
-    node: bool,
+    pub node: bool,
 }
 
 fn stage_zip(app: &App, path: &Path) -> Result<Staged, String> {
@@ -176,7 +176,7 @@ fn staged(app: &App, unpacked: Unpacked, source: &Path, token: String) -> Staged
 /// Writes a `.fwz` or a plain `.zip` under `dir` and reads back what it declares. A folder with a
 /// `widget.json` is taken as it is; a folder with only `plugin.json` is a zipped uTools plugin, so
 /// its `widget.json` is synthesised first — the same conversion `.upx` / `.asar` go through.
-fn unpack_zip(path: &Path, dir: &Path) -> Result<Unpacked, String> {
+pub fn unpack_zip(path: &Path, dir: &Path) -> Result<Unpacked, String> {
     let file =
         std::fs::File::open(path).map_err(|e| format!("the file could not be opened: {e}"))?;
     let mut archive =
@@ -356,7 +356,7 @@ fn describe(
     (update, new_permissions)
 }
 
-fn compare(a: &str, b: &str) -> &'static str {
+pub fn compare(a: &str, b: &str) -> &'static str {
     let pa: Vec<i64> = a.split('.').filter_map(|p| p.parse().ok()).collect();
     let pb: Vec<i64> = b.split('.').filter_map(|p| p.parse().ok()).collect();
     for i in 0..pa.len().max(pb.len()) {
@@ -515,7 +515,7 @@ pub fn export(app: &App, widget_id: &str) -> Result<Value, String> {
     }))
 }
 
-fn add_folder<W: Write + std::io::Seek>(
+pub fn add_folder<W: Write + std::io::Seek>(
     writer: &mut zip::ZipWriter<W>,
     root: &Path,
     prefix: &str,
@@ -677,142 +677,4 @@ pub fn create(app: &mut App, name: &str) -> Result<Value, String> {
     crate::platform::shell::open(&folder.to_string_lossy())?;
     app.push_state_to_control(None);
     Ok(json!({ "id": id, "instanceId": instance }))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// `.fwz` is a plain zip: standard headers, deflate, one folder inside. The probe file is left
-    /// behind on purpose so an outside reader (python's zipfile, `Expand-Archive`) can be pointed
-    /// at what the writer really produced.
-    #[test]
-    fn a_fwz_package_is_an_ordinary_zip() {
-        let base = std::env::temp_dir().join(format!("winwidget-fwz-{}", std::process::id()));
-        let src = base.join("demo");
-        std::fs::create_dir_all(src.join("sub")).unwrap();
-        std::fs::write(
-            src.join("widget.json"),
-            r#"{"id":"demo","name":"Demo","entry":"index.html"}"#,
-        )
-        .unwrap();
-        std::fs::write(src.join("index.html"), "<!doctype html>").unwrap();
-        std::fs::write(src.join("sub/note.txt"), b"hello").unwrap();
-        let probe = base.join("demo-1.0.0.fwz");
-
-        let file = std::fs::File::create(&probe).unwrap();
-        let mut writer = zip::ZipWriter::new(file);
-        let options = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Deflated);
-        add_folder(&mut writer, &src, "demo", options).unwrap();
-        writer.finish().unwrap();
-
-        let mut archive = zip::ZipArchive::new(std::fs::File::open(&probe).unwrap()).unwrap();
-        let mut names = Vec::new();
-        for index in 0..archive.len() {
-            let entry = archive.by_index(index).unwrap();
-            names.push(entry.name().unwrap_or_default().to_string());
-        }
-        names.sort();
-        assert_eq!(
-            names,
-            vec!["demo/index.html", "demo/sub/note.txt", "demo/widget.json"]
-        );
-        assert!(names.iter().all(|name| name.starts_with("demo/")));
-        println!("probe: {}", probe.display());
-    }
-
-    /// A uTools developer uploads `plugin.json` + the built files, so downloads of a plugin are a
-    /// plain `.zip` with no `widget.json` at all. That has to be recognised as a package too, and
-    /// rooted at the shallowest `plugin.json` (the extra copies some bundlers leave behind must not
-    /// win).
-    #[test]
-    fn a_zipped_utools_plugin_is_rooted_at_its_shallowest_plugin_json() {
-        let base = std::env::temp_dir().join(format!("winwidget-zip-root-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&base);
-        std::fs::create_dir_all(&base).unwrap();
-        let probe = base.join("plugin.zip");
-
-        let file = std::fs::File::create(&probe).unwrap();
-        let mut writer = zip::ZipWriter::new(file);
-        let options = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Deflated);
-        writer.start_file("plugin.json", options).unwrap();
-        writer
-            .write_all(
-                br#"{"pluginName":"demo plugin","main":"index.html","preload":"preload.js"}"#,
-            )
-            .unwrap();
-        writer.start_file("index.html", options).unwrap();
-        writer.write_all(b"<!doctype html>").unwrap();
-        writer
-            .start_file("node_modules/x/plugin.json", options)
-            .unwrap();
-        writer.write_all(br#"{"pluginName":"nested"}"#).unwrap();
-        writer.finish().unwrap();
-
-        let mut archive = zip::ZipArchive::new(std::fs::File::open(&probe).unwrap()).unwrap();
-        let (native, path) = package_root(&mut archive).unwrap();
-        assert!(!native, "there is no widget.json in this package");
-        assert_eq!(path, "plugin.json");
-        let _ = std::fs::remove_dir_all(&base);
-    }
-
-    /// The exact package the user handed over: a uTools developer upload (files at the zip root,
-    /// `plugin.json` naming the plugin, a `preload.js` that wants Node) with no `widget.json`
-    /// anywhere. It has to unpack into a widget folder with a synthesised manifest.
-    #[test]
-    fn a_zipped_utools_plugin_unpacks_into_a_widget_folder() {
-        let package = Path::new(env!("CARGO_MANIFEST_DIR")).join("dist/plugin.zip");
-        if !package.is_file() {
-            println!("skip: {} is not there", package.display());
-            return;
-        }
-        let dir = std::env::temp_dir().join(format!("winwidget-zip-real-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        let unpacked = unpack_zip(&package, &dir).unwrap();
-        assert!(unpacked.node, "the package declares preload.js");
-        assert!(
-            unpacked.id.starts_with("uplugin-"),
-            "this plugin has no `name`, so the id is a hash of its name; got {}",
-            unpacked.id
-        );
-        assert_eq!(unpacked.name, "变焦录屏");
-        assert!(dir.join("index.html").is_file());
-        assert!(dir.join("index.js").is_file());
-        assert!(dir.join("plugin.json").is_file());
-        let manifest = crate::core::util::read_text(&dir.join("widget.json")).unwrap();
-        let value: Value = serde_json::from_str(&manifest).unwrap();
-        assert_eq!(value["entry"], "index.html");
-        assert_eq!(value["icon"], "logo.svg");
-        assert_eq!(value["utools"]["preload"], "preload.js");
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    /// The native manifest always wins, even when it sits deeper than some `plugin.json`: a package
-    /// that already declares itself for WinWidget must never be converted from uTools fields.
-    #[test]
-    fn a_widget_manifest_wins_over_a_plugin_manifest() {
-        let base =
-            std::env::temp_dir().join(format!("winwidget-zip-native-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&base);
-        std::fs::create_dir_all(&base).unwrap();
-        let probe = base.join("both.zip");
-
-        let file = std::fs::File::create(&probe).unwrap();
-        let mut writer = zip::ZipWriter::new(file);
-        let options = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Deflated);
-        writer.start_file("plugin.json", options).unwrap();
-        writer.write_all(br#"{"pluginName":"demo"}"#).unwrap();
-        writer.start_file("demo/widget.json", options).unwrap();
-        writer.write_all(br#"{"id":"demo"}"#).unwrap();
-        writer.finish().unwrap();
-
-        let mut archive = zip::ZipArchive::new(std::fs::File::open(&probe).unwrap()).unwrap();
-        let (native, path) = package_root(&mut archive).unwrap();
-        assert!(native);
-        assert_eq!(path, "demo/widget.json");
-        let _ = std::fs::remove_dir_all(&base);
-    }
 }

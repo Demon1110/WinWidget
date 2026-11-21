@@ -12,7 +12,7 @@ use serde_json::{json, Value};
 
 /// Map a known-folder lookup to what the page sees. Separate from `Ctx` so it can be
 /// unit-tested with a fake system port.
-fn named_path_value(system: &dyn SystemPort, name: &str) -> Value {
+pub fn named_path_value(system: &dyn SystemPort, name: &str) -> Value {
     match system.known_folder_path(name) {
         Some(path) => Value::String(path),
         None => Value::Null,
@@ -325,62 +325,4 @@ fn monitor_sizes() -> (Vec<(i32, i32, bool)>, i32) {
         .map(|(w, _, _)| *w)
         .unwrap_or(0);
     (list, primary_width)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    struct FakeSystem {
-        known: Vec<(String, String)>,
-        light: bool,
-    }
-
-    impl SystemPort for FakeSystem {
-        fn known_folder_path(&self, name: &str) -> Option<String> {
-            self.known
-                .iter()
-                .find(|(n, _)| n == name)
-                .map(|(_, path)| path.clone())
-        }
-        fn light_mode(&self) -> bool {
-            self.light
-        }
-        fn set_light_mode(&self, _light: bool) -> Result<(), String> {
-            Ok(())
-        }
-    }
-
-    fn fake() -> FakeSystem {
-        FakeSystem {
-            known: vec![
-                ("desktop".into(), "C:\\Users\\me\\Desktop".into()),
-                ("home".into(), "C:\\Users\\me".into()),
-            ],
-            light: true,
-        }
-    }
-
-    #[test]
-    fn known_folder_resolves_to_json_string() {
-        assert_eq!(
-            named_path_value(&fake(), "desktop"),
-            json!("C:\\Users\\me\\Desktop")
-        );
-    }
-
-    #[test]
-    fn unknown_folder_resolves_to_json_null() {
-        assert_eq!(named_path_value(&fake(), "nonesuch"), Value::Null);
-    }
-
-    #[test]
-    fn fake_reports_light_mode() {
-        let dark = FakeSystem {
-            known: Vec::new(),
-            light: false,
-        };
-        assert!(fake().light_mode());
-        assert!(!dark.light_mode());
-    }
 }
