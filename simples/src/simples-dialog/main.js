@@ -173,7 +173,7 @@ const CASES = [
   ],
   [
     "460×220 原生边框 + 不圆角 + 92% 透明",
-    "frame=true 时露系统边框（透光关掉、标题只在标题栏写一次）；四角是方的；整窗 92%；Esc 关不掉",
+    "frame=true 时露系统边框（透光关掉、标题只在标题栏写一次）；四角是方的；整窗 92%；标题栏图标换成包里的 icon.png",
     () =>
       widget.dialog.confirm({
         title: "外观全开",
@@ -185,6 +185,7 @@ const CASES = [
         opacity: 0.92,
         closeOnEsc: false,
         draggable: false,
+        windowIcon: "icon.png",
       }),
   ],
   [

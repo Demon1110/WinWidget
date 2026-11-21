@@ -444,6 +444,17 @@ P2 里 `closeOnBlur` / `closeOnOutsideClick` / `modal` 三条走的是窗口失�
 
 `animationMs` 一并接上了：它现在是真正的动画时长（之前只是个占位字段）。
 
+### 真机返修第五轮：原生标题栏那个图标也要能换
+
+「460×220 原生边框」这条用的是系统标题栏，左上角那个图标一直是 Windows 的通用占位图，和组件毫无关系。
+
+| 诉求 | 原来什么样 | 现在怎么做 |
+|---|---|---|
+| 原生标题栏的小图标支持自定义 | 全宿主只有控制中心给自己 `set_window_icon`，自定义窗口一律沿用 exe 的图标，看着像别人的程序 | 新增 `windowIcon` 选项：组件包内相对路径（`"icon.png"`）或 `data:` 内联位图，`png`/`ico`/`bmp`/`jpg`/`webp` 都行；`app::custom_window_icon` 解出来、超 32px 先缩到 32、再 `set_window_icon`；`false` 明确不要 |
+| 只让一个选项管两个地方 | 徽标（页面里）和标题栏图（原生）是两套东西，组件要写两遍 logo | `windowIcon` 没写时，只要 `icon` 是位图（`{ url }` 或 `data:`）就拿它顶上；`icon: "lock"` 这种内置名、`icon.svg` 不参与——Windows 要的是内存里的像素，SVG 解不了，也不替组件去联网 |
+
+顺带：这条也接在 `createBrowserWindow` 上，普通自建窗口同样能用 `windowIcon`。
+
 
 
 迁移后真机量到的结果：弹框落在主屏右上角 `(2164, 16)`、宽 380、高按内容收到 168（原来是写死的 300，一句话提醒下面留白），点「完成」宿主日志记 `win 1: closed (button)`，页面拿到的返回值是 `{"button":"ok","confirmed":true,"reason":"button"}`；弹框出现时前台窗口一直是浏览器，没有抢焦点。

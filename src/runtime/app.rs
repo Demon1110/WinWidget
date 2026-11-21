@@ -914,6 +914,11 @@ impl App {
                 self.proxy.clone(),
             ) {
                 Ok(win) => {
+                    // 原生标题栏（有系统边框时）左上角那个小图标：组件给了 `windowIcon` 就换上，
+                    // 没给就留系统默认，别把 exe 自带的图标顶掉。
+                    if let Some(icon) = custom_window_icon(&manifest.dir, &spec.options) {
+                        win.window.set_window_icon(Some(icon));
+                    }
                     crate::core::logging::info(&format!(
                         "win {id}: opened {} for {}",
                         spec.file, spec.instance
@@ -2038,4 +2043,34 @@ fn control_icon() -> Option<tao::window::Icon> {
     let image = image::load_from_memory(&bytes).ok()?.to_rgba8();
     let (width, height) = image.dimensions();
     tao::window::Icon::from_rgba(image.into_raw(), width, height).ok()
+}
+
+/// 组件级窗口图标：`windowIcon`（组件包里的相对路径，或 `data:` 内联位图）。
+///
+/// 原生标题栏和任务栏要的是位图句柄，SVG 在这里没法解，所以 `.svg` 一律当没给（见
+/// `dialog::window_icon_source`）。大图先缩到 32px——标题栏那个位置就这么大，让 Windows 自己
+/// 抽点会比缩一次更糊。
+fn custom_window_icon(
+    dir: &std::path::Path,
+    options: &serde_json::Value,
+) -> Option<tao::window::Icon> {
+    let source = crate::runtime::dialog::window_icon_source(options)?;
+    let bytes = match source.split_once(',') {
+        Some((head, data)) if head.starts_with("data:") && head.contains(";base64") => {
+            crate::platform::win32::base64_decode(data)?
+        }
+        _ => crate::core::assets::file_bytes(dir, source.trim_start_matches(['/', '\\']))?,
+    };
+    let image = image::load_from_memory(&bytes).ok()?.to_rgba8();
+    let (width, height) = image.dimensions();
+    if width == 0 || height == 0 {
+        return None;
+    }
+    let (w, h, rgba) = if width > 32 || height > 32 {
+        let scaled = image::imageops::resize(&image, 32, 32, image::imageops::FilterType::Lanczos3);
+        (32, 32, scaled.into_raw())
+    } else {
+        (width, height, image.into_raw())
+    };
+    tao::window::Icon::from_rgba(rgba, w, h).ok()
 }

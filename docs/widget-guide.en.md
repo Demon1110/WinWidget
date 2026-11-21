@@ -654,6 +654,7 @@ win.on("closed", () => widget.log("window closed"));
 | `seeThrough` | `false` | With `transparent`: tells DWM to stop drawing its own backdrop behind the window, so the page's alpha lands on what is behind it |
 | `layer` | none | `"desktop"` → above the wallpaper, below every ordinary window; `"wallpaper"` → **below the desktop icons**, as the new wallpaper: icons and apps stay fully visible and clickable. Use this for full-screen effects |
 | `fullscreen` | `false` | Open full screen |
+| `windowIcon` | none | The little icon in the native title bar / taskbar: a path inside the widget package (`"icon.png"`) or a `data:` bitmap — `png`/`ico`/`bmp`/`jpg`/`webp` all work; SVG does not (Windows wants pixels); `false` removes it |
 | `webPreferences.preload` | — | **Does not run** (no Node); use `ipcRenderer` below instead |
 
 `movable`, `maximizable`, `minimizable`, `focusable`, `hasShadow`, `titleBarStyle`, `acceptFirstMouse`, `enableLargerThanScreen` and `fullscreenable` are accepted, but Windows may have nothing to map them to; passing them does not fail.
@@ -797,6 +798,7 @@ widget.dialog.toast({ content: "Saved", icon: "success" });
 | `content` / `rawHtml` | — | plain text (wrapped) or HTML (`rawHtml: true`) |
 | `icon` | kind-dependent | Badge left of the title: built-in `info` `success` `warn` `error` `bell` `question` `clock` `sparkle` `lock` `trash` `heart` `star`; `{ svg }` inline SVG, `{ url }` image (absolute, `data:` or a path inside the widget package), `{ text }` a single character; `""` hides it |
 | `iconColor` | theme | Badge background, for the widget's own brand colour |
+| `windowIcon` | none | With a native frame, the icon in the title bar (same option as `createBrowserWindow`); falls back to `icon` when that is a bitmap, otherwise the system default stays |
 | `buttons` | by kind | `[{ id, text, kind: "primary" \| "danger" }]`; with custom buttons `button` is the `id` |
 | `okText` / `cancelText` | OK / Cancel | button labels |
 | `danger` | `false` | paints the main button in the danger colour |

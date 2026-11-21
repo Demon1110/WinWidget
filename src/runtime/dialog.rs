@@ -58,6 +58,7 @@ const KNOWN: &[&str] = &[
     "showTitle",
     "icon",
     "iconColor",
+    "windowIcon",
     "content",
     "rawHtml",
     "buttons",
@@ -95,6 +96,51 @@ const KNOWN: &[&str] = &[
     "offset",
     "ignoreMouseEvents",
 ];
+
+/// 原生标题栏左上角那个小图标从哪取：显式 `windowIcon` 优先；没写就看 `icon` 是不是一张位图
+/// （`{ url }` 或 `data:` / 图片路径），是就拿它顶上——一个组件只说一次 logo 就够。
+///
+/// 只认位图：Windows 的标题栏要的是内存里的像素，SVG 解不了，所以 `.svg` 一律当没有。
+pub fn window_icon_source(options: &Value) -> Option<String> {
+    match options.get("windowIcon") {
+        // 明确不要图标时别再退回 `icon`
+        Some(Value::Bool(false)) | Some(Value::Null) => None,
+        Some(Value::String(s)) if s.trim().is_empty() => None,
+        Some(v) => image_source(Some(v)),
+        None => image_source(options.get("icon")),
+    }
+}
+
+fn image_source(v: Option<&Value>) -> Option<String> {
+    let source = match v? {
+        Value::String(s) => s.trim().to_string(),
+        Value::Object(o) => o.get("url").and_then(Value::as_str)?.trim().to_string(),
+        _ => return None,
+    };
+    if source.is_empty() || !looks_like_bitmap(&source) {
+        return None;
+    }
+    Some(source)
+}
+
+/// `data:` 或者「带扩展名的位图路径」。`"lock"` 这种内置图标名、`icon.svg` 都不算。
+fn looks_like_bitmap(source: &str) -> bool {
+    if source.starts_with("data:") {
+        return source.contains(";base64,");
+    }
+    if source.starts_with("http:") || source.starts_with("https:") {
+        return false;
+    }
+    let ext = source
+        .rsplit('.')
+        .next()
+        .map(|s| s.to_ascii_lowercase())
+        .unwrap_or_default();
+    matches!(
+        ext.as_str(),
+        "png" | "jpg" | "jpeg" | "bmp" | "gif" | "webp" | "ico" | "tif" | "tiff"
+    )
+}
 
 /// 一个 kind 的完整配置：默认值 + 组件覆盖。
 pub fn normalize(kind: &str, options: &Value) -> Value {
@@ -223,6 +269,33 @@ mod tests {
         );
         assert_eq!(cfg["icon"]["url"], json!("data:image/png;base64,AA"));
         assert_eq!(cfg["iconColor"], json!("#ee00aa"));
+    }
+
+    #[test]
+    fn a_bitmap_icon_also_dresses_the_native_title_bar() {
+        // 显式 windowIcon 优先
+        assert_eq!(
+            window_icon_source(&json!({ "windowIcon": "logo.png", "icon": "lock" })),
+            Some("logo.png".into())
+        );
+        // 没写 windowIcon 时，`icon` 是位图就拿它顶上
+        assert_eq!(
+            window_icon_source(&json!({ "icon": { "url": "logo.PNG" } })),
+            Some("logo.PNG".into())
+        );
+        // 内置图标名、SVG、远程地址都不行：Windows 要位图，也不替组件去联网
+        assert!(window_icon_source(&json!({ "icon": "lock" })).is_none());
+        assert!(window_icon_source(&json!({ "icon": { "url": "icon.svg" } })).is_none());
+        assert!(window_icon_source(&json!({ "windowIcon": "https://a/b.png" })).is_none());
+        // 明确关掉：别退回 `icon`
+        assert!(window_icon_source(&json!({ "windowIcon": false, "icon": "a.png" })).is_none());
+        assert!(window_icon_source(&json!({ "windowIcon": "" })).is_none());
+        // data: URL 认
+        let data = "data:image/png;base64,AAAA";
+        assert_eq!(
+            window_icon_source(&json!({ "windowIcon": data })),
+            Some(data.into())
+        );
     }
 
     #[test]

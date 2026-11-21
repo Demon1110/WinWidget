@@ -930,6 +930,9 @@
      * `icon` 是左上角那个徽标：内置名（info / success / warn / error / bell / question /
      * clock / sparkle / lock / trash / heart / star）、`{ svg }` 内联 SVG、`{ url }` 图片、
      * `{ text }` 一个字符；`""` 不要徽标。底色用 `iconColor` 换。
+     *
+     * 有原生边框（`frame: true`）时，标题栏左上角那个小图标用 `windowIcon`：组件包内的
+     * 相对路径或 `data:` 位图（SVG 不行，Windows 要像素）。
      */
     alert(options) {
       const opt = typeof options === "string" ? { content: options } : options || {};
