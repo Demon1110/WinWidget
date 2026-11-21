@@ -61,6 +61,7 @@ pub const SWP_NOOWNERZORDER: u32 = 0x0200;
 pub const SWP_SHOWWINDOW: u32 = 0x0040;
 pub const SWP_HIDEWINDOW: u32 = 0x0080;
 
+pub const GW_CHILD: u32 = 5;
 pub const GW_HWNDNEXT: u32 = 2;
 pub const GW_HWNDPREV: u32 = 3;
 pub const LWA_ALPHA: u32 = 0x0000_0002;
@@ -974,11 +975,28 @@ const WS_FRAME_BITS: isize = 0x00C0_0000 /* CAPTION */ | 0x0004_0000 /* THICKFRA
 fn strip_frame(hwnd: HWND) {
     unsafe {
         let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
-        if style & WS_FRAME_BITS == 0 && style & WS_POPUP != 0 {
-            return;
+        let styled = frameless_style(style);
+        if styled != style {
+            SetWindowLongPtrW(hwnd, GWL_STYLE, styled);
         }
-        SetWindowLongPtrW(hwnd, GWL_STYLE, (style & !WS_FRAME_BITS) | WS_POPUP);
     }
+}
+
+/// The frameless style for a top-level window: the caption and sizing bits dropped, `WS_POPUP`
+/// stated so DWM composites it without a frame.
+///
+/// A `WS_CHILD` window is returned untouched. That is the effect window mounted on the wallpaper
+/// layer: it has no caption to strip, and putting `WS_POPUP` back on it undoes the mount —
+/// Windows then stacks it as a popup and `place_on_wallpaper`'s "sit below `SHELLDLL_DefView`"
+/// ordering has no effect, so the effect covers the desktop icons instead of sliding behind them.
+pub fn frameless_style(style: isize) -> isize {
+    if style & WS_CHILD != 0 {
+        return style;
+    }
+    if style & WS_FRAME_BITS == 0 && style & WS_POPUP != 0 {
+        return style;
+    }
+    (style & !WS_FRAME_BITS) | WS_POPUP
 }
 
 /// Strips the caption and sizing edge from a window that asked to be frameless. Windows keeps an
@@ -988,6 +1006,11 @@ fn strip_frame(hwnd: HWND) {
 pub fn drop_frame(hwnd: HWND) {
     unsafe {
         let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+        if style & WS_CHILD != 0 {
+            // A child of the wallpaper host has no frame of its own; `WS_POPUP` on it would
+            // un-mount it (see `frameless_style`).
+            return;
+        }
         if style & WS_FRAME_BITS == 0 && style & WS_POPUP != 0 {
             return;
         }
@@ -1442,6 +1465,30 @@ pub fn set_desktop_icons_visible(visible: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// Whether `hwnd` is stacked above `sibling` among the children of the same parent window.
+fn stacked_above(hwnd: HWND, sibling: HWND) -> bool {
+    if hwnd == 0 || sibling == 0 {
+        return false;
+    }
+    unsafe {
+        let parent = GetParent(hwnd);
+        if parent == 0 || parent != GetParent(sibling) {
+            return false;
+        }
+        let mut walk = GetWindow(parent, GW_CHILD);
+        while walk != 0 {
+            if walk == hwnd {
+                return true;
+            }
+            if walk == sibling {
+                return false;
+            }
+            walk = GetWindow(walk, GW_HWNDNEXT);
+        }
+    }
+    false
+}
+
 /// Mounts an effect window *behind the desktop icons*, on the wallpaper layer.
 ///
 /// This is fundamentally different from `place_above_desktop` (used by cards). A top-level window
@@ -1486,6 +1533,15 @@ pub fn place_on_wallpaper(hwnd: HWND, screen: &RECT) -> bool {
             SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
         );
 
+        // `SWP_FRAMECHANGED` runs our own `WM_NCCALCSIZE` handler, which restates the frameless
+        // style. State the child shape again *after* that frame change: a `WS_POPUP` left on this
+        // window makes Windows stack it as a popup, where the ordering below is silently ignored
+        // and the effect ends up covering the desktop icons.
+        let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+        if style & WS_POPUP != 0 || style & WS_CHILD == 0 {
+            SetWindowLongPtrW(hwnd, GWL_STYLE, (style & !WS_POPUP) | WS_CHILD);
+        }
+
         // The decisive step: insert *after* DefView so Windows stacks the icons above us (verified
         // on a 24H2 raised desktop — GetWindow(GW_CHILD) then lists DefView first, us second).
         // Without an explicit z-order, a new child defaults to the top and would cover the icons.
@@ -1503,6 +1559,25 @@ pub fn place_on_wallpaper(hwnd: HWND, screen: &RECT) -> bool {
             0,
             SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
         );
+        // The shell is free to ignore that order while it is busy with its own children, and the
+        // failure is invisible until the user notices the icons are gone: ask once more, then
+        // record what actually happened so a broken mount always leaves a trace in the log.
+        if after != HWND_BOTTOM && stacked_above(hwnd, after) {
+            SetWindowPos(
+                hwnd,
+                after,
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+            );
+            if stacked_above(hwnd, after) {
+                crate::core::logging::warn(
+                    "wallpaper window could not be stacked below the desktop icons",
+                );
+            }
+        }
 
         // Belt and braces: never take focus. Click-through itself belongs to the card's lock
         // state, not to the layer — an unlocked desktop card still has to accept the pointer.
