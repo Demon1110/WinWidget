@@ -40,6 +40,9 @@ const KNOWN: &[&str] = &[
     "minHeight",
     "maxWidth",
     "maxHeight",
+    "x",
+    "y",
+    "center",
     "frame",
     "rounded",
     "transparent",
@@ -63,6 +66,8 @@ const KNOWN: &[&str] = &[
 /// 一个 kind 的完整配置：默认值 + 组件覆盖。
 pub fn normalize(kind: &str, options: &Value) -> Value {
     let toast = kind == "toast";
+    // 组件自己给了坐标就别再居中：居中在窗口建好之后执行，会把 x/y 覆盖掉。
+    let positioned = options.get("x").is_some() || options.get("y").is_some();
     let mut out = Map::new();
     out.insert("kind".into(), json!(kind));
     // 尺寸：弹框不需要手动定高，先给一个够用的初值，页面量完内容会自己调。
@@ -90,7 +95,7 @@ pub fn normalize(kind: &str, options: &Value) -> Value {
     out.insert("closeOnEsc".into(), json!(true));
     out.insert("draggable".into(), json!(true));
     out.insert("focusable".into(), json!(!toast));
-    out.insert("center".into(), json!(!toast));
+    out.insert("center".into(), json!(!toast && !positioned));
     out.insert("autoClose".into(), json!(if toast { 3000.0 } else { 0.0 }));
     out.insert("modal".into(), json!(false));
     // toast 不该挡住底下的点击：窗口层面就穿过去。
@@ -133,5 +138,15 @@ mod tests {
         assert!(cfg.get("unknown").is_none());
         // kind 不会被覆盖
         assert_eq!(cfg["kind"], json!("alert"));
+    }
+
+    #[test]
+    fn giving_a_position_turns_off_centering() {
+        let centered = normalize("confirm", &json!({}));
+        assert_eq!(centered["center"], json!(true));
+        let cfg = normalize("confirm", &json!({ "x": 120, "y": 28 }));
+        assert_eq!(cfg["x"], json!(120));
+        assert_eq!(cfg["y"], json!(28));
+        assert_eq!(cfg["center"], json!(false));
     }
 }
