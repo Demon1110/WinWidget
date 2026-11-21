@@ -955,6 +955,48 @@ impl App {
         }
     }
 
+    /// 左键刚按下：落点在这些窗口外面就按配置收起来。
+    ///
+    /// 不能只靠失焦：卡片是 `NOACTIVATE` 的，点卡片不会把焦点抢走，窗口一直是「有焦点」的状态，
+    /// `Focused(false)` 永远不来——这恰好是测试台里最常用的一下「点别处」。
+    pub fn pointer_pressed(&mut self) {
+        // 开窗那一下点击自己不能算「点了别处」：鼠标按下发生在窗口建出来之前，但事件可能
+        // 排队排到窗口已经站住之后才被处理，那样弹出来就立刻自己关了。
+        let press_ms = crate::platform::win32::last_press_ms();
+        let ids: Vec<u32> = self
+            .customs
+            .iter()
+            .filter(|(_, win)| {
+                win.shown
+                    && !win.destroyed
+                    && (win.flags.close_on_blur || win.flags.close_on_outside)
+                    && press_ms >= win.created_ms
+                    && !crate::platform::win32::cursor_inside(win.hwnd())
+            })
+            .map(|(id, _)| *id)
+            .collect();
+        for id in ids {
+            let blur = self
+                .customs
+                .get(&id)
+                .is_some_and(|win| win.flags.close_on_blur);
+            self.close_custom(id, if blur { "blur" } else { "outside" });
+        }
+    }
+
+    /// Esc 刚按下：带 `closeOnEsc` 的窗口收起来。窗口没拿到焦点时页面听不到键盘，只能宿主代劳。
+    pub fn escape_pressed(&mut self) {
+        let ids: Vec<u32> = self
+            .customs
+            .iter()
+            .filter(|(_, win)| win.shown && !win.destroyed && win.flags.close_on_esc)
+            .map(|(id, _)| *id)
+            .collect();
+        for id in ids {
+            self.close_custom(id, "esc");
+        }
+    }
+
     /// `modal: true`：弹框期间父窗口不接受输入，关掉时恢复。父可以是卡片，也可以是窗口。
     fn apply_modal(&mut self, spec: &crate::runtime::window_category::CustomSpec, id: u32) {
         let modal = spec

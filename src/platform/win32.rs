@@ -12,6 +12,7 @@
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU8, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 pub type HWND = isize;
@@ -69,6 +70,15 @@ pub const GWL_EXSTYLE_LAYERED: isize = 0x0008_0000;
 
 pub const VK_LBUTTON: i32 = 0x01;
 pub const VK_CONTROL: i32 = 0x11;
+pub const VK_ESCAPE: i32 = 0x1B;
+
+/// 全局低级键盘钩子，回调在安装它的线程里跑。
+pub const WH_KEYBOARD_LL: i32 = 13;
+/// 全局低级鼠标钩子，同上。
+pub const WH_MOUSE_LL: i32 = 14;
+pub const WM_SYSKEYDOWN: u32 = 0x0104;
+pub const WM_KEYDOWN: u32 = 0x0100;
+pub const WM_LBUTTONDOWN: u32 = 0x0201;
 
 pub const GWLP_WNDPROC: i32 = -4;
 /// `GWLP_HWNDPARENT`: the owner of a top-level window, or the parent of a child window.
@@ -208,6 +218,8 @@ pub struct MONITORINFO {
 pub const MONITORINFOF_PRIMARY: u32 = 1;
 
 pub type MONITORENUMPROC = extern "system" fn(isize, isize, *mut RECT, isize) -> i32;
+/// 低级钩子的回调签名；`Option` 让空指针也是一个合法取值。
+pub type HOOKPROC = Option<unsafe extern "system" fn(i32, usize, isize) -> isize>;
 
 /// Every monitor, primary first, with its rectangle in physical pixels.
 pub fn monitors() -> Vec<(RECT, bool)> {
@@ -354,6 +366,9 @@ extern "system" {
     pub fn DefWindowProcW(hwnd: HWND, msg: u32, w: usize, l: isize) -> isize;
     pub fn RegisterClassExW(class: *const WNDCLASSEXW) -> u16;
     pub fn GetMessageW(msg: *mut MSG, hwnd: HWND, min: u32, max: u32) -> i32;
+    pub fn SetWindowsHookExW(id_hook: i32, proc: HOOKPROC, module: isize, thread: u32) -> isize;
+    pub fn CallNextHookEx(hook: isize, code: i32, w: usize, l: isize) -> isize;
+    pub fn UnhookWindowsHookEx(hook: isize) -> i32;
     pub fn TranslateMessage(msg: *const MSG) -> i32;
     pub fn DispatchMessageW(msg: *const MSG) -> isize;
     pub fn PostMessageW(hwnd: HWND, msg: u32, w: usize, l: isize) -> i32;
@@ -717,6 +732,72 @@ pub fn set_cursor_pos(x: i32, y: i32) {
 
 pub fn left_button_down() -> bool {
     unsafe { (GetAsyncKeyState(VK_LBUTTON) as u32 & 0x8000) != 0 }
+}
+
+pub fn escape_down() -> bool {
+    unsafe { (GetAsyncKeyState(VK_ESCAPE) as u32 & 0x8000) != 0 }
+}
+
+// 鼠标按下走全局低级钩子：一次十几毫秒的快速点击也不会漏。键盘那头实测钩子只在第一次回调
+// 之后再没动静（像是被系统悄悄摘了），所以 Esc 改成高频取态 + 边沿判定——真人按 Esc 至少
+// 也有三四十毫秒，够采样两三次。
+static RAW_INPUT: AtomicU8 = AtomicU8::new(0);
+const RAW_POINTER: u8 = 1;
+const RAW_ESCAPE: u8 = 2;
+/// 最近一次左键按下的时刻（毫秒）。用来分辨「是这一下点击开出来的窗口」还是「窗口已经站住了，
+/// 用户后来点了别处」。
+static PRESS_MS: AtomicI64 = AtomicI64::new(0);
+
+/// 最近一次左键按下的时刻，见 `PRESS_MS`。
+pub fn last_press_ms() -> i64 {
+    PRESS_MS.load(Ordering::Relaxed)
+}
+
+/// 取走自上次调用以来攒下的「按下」并清位。返回 `(左键, Esc)`.
+pub fn take_raw_input() -> (bool, bool) {
+    let bits = RAW_INPUT.swap(0, Ordering::Relaxed);
+    (bits & RAW_POINTER != 0, bits & RAW_ESCAPE != 0)
+}
+
+/// 采一次 Esc 的当前状态，按下那一瞬置位。得有人高频调用它，见 `main.rs` 的输入探针线程。
+pub fn sample_escape() {
+    static HELD: AtomicBool = AtomicBool::new(false);
+    let down = escape_down();
+    if down && !HELD.swap(true, Ordering::Relaxed) {
+        RAW_INPUT.fetch_or(RAW_ESCAPE, Ordering::Relaxed);
+    } else if !down {
+        HELD.store(false, Ordering::Relaxed);
+    }
+}
+
+unsafe extern "system" fn mouse_hook(code: i32, w: usize, l: isize) -> isize {
+    if code >= 0 && w as u32 == WM_LBUTTONDOWN {
+        PRESS_MS.store(crate::core::util::now_ms(), Ordering::Relaxed);
+        RAW_INPUT.fetch_or(RAW_POINTER, Ordering::Relaxed);
+    }
+    CallNextHookEx(0, code, w, l)
+}
+
+/// 装上低级鼠标钩子。钩子只在安装它的线程里回调，所以必须配一个消息循环；
+/// 这个线程会一直跑到进程退出，钩子不必显式摘除。
+pub fn start_input_hooks() -> bool {
+    let (tx, rx) = std::sync::mpsc::channel::<bool>();
+    std::thread::spawn(move || unsafe {
+        // 低级钩子在别的进程里跑不起来，hMod 必须是本进程的模块句柄。
+        let module = GetModuleHandleW(std::ptr::null());
+        let mouse = SetWindowsHookExW(WH_MOUSE_LL, Some(mouse_hook), module, 0);
+        let _ = tx.send(mouse != 0);
+        if mouse == 0 {
+            return;
+        }
+        let mut msg = MSG::default();
+        while GetMessageW(&mut msg, 0, 0, 0) != 0 {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+    });
+    rx.recv_timeout(std::time::Duration::from_millis(200))
+        .unwrap_or(false)
 }
 
 pub fn progman() -> HWND {

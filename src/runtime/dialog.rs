@@ -89,6 +89,8 @@ const KNOWN: &[&str] = &[
     "fitContent",
     "closable",
     "closeOnEsc",
+    "closeOnBlur",
+    "closeOnOutsideClick",
     "autoClose",
     "draggable",
     "modal",
@@ -296,6 +298,20 @@ mod tests {
             window_icon_source(&json!({ "windowIcon": data })),
             Some(data.into())
         );
+    }
+
+    #[test]
+    fn a_dialog_can_also_close_when_the_pointer_leaves() {
+        let cfg = normalize(
+            "confirm",
+            &json!({ "closeOnBlur": true, "closeOnOutsideClick": true }),
+        );
+        assert_eq!(cfg["closeOnBlur"], json!(true));
+        assert_eq!(cfg["closeOnOutsideClick"], json!(true));
+        // 不写就什么都不做，跟旧行为一致
+        let plain = normalize("alert", &json!({}));
+        assert!(plain.get("closeOnBlur").is_none());
+        assert!(plain.get("closeOnOutsideClick").is_none());
     }
 
     #[test]

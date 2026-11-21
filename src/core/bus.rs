@@ -71,6 +71,13 @@ pub enum Ev {
         at: (i32, i32),
     },
     Tick,
+    /// 鼠标左键或 Esc 刚按下。`closeOnBlur` / `closeOnOutsideClick` / `closeOnEsc` 靠它落地：
+    /// 自建窗口显示时不一定会拿到焦点（卡片本身是 `NOACTIVATE`），光等 `Focused(false)` 会漏掉
+    /// 「点卡片」这种最自然的「点外面」。只在真的有窗口需要时才发。
+    Input {
+        pointer: bool,
+        escape: bool,
+    },
     /// The active Windows virtual desktop changed; cards assigned to other desktops are hidden.
     Desktop(String),
     /// A delayed follow-up nudge for wallpaper effect windows: right after a switch WebView2

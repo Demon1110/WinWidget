@@ -142,6 +142,29 @@ fn main() {
             }
         });
     }
+    {
+        // 输入探针：自建窗口显示时不一定抢到焦点（卡片是 NOACTIVATE 的），`closeOnEsc` 和
+        // 「点窗口外面就关」就只能靠宿主自己看键。按下由低级键鼠钩子记下（一次十几毫秒的
+        // 快速点按也不会漏），这个线程只负责把攒下的按下投递回事件循环。
+        let proxy = app.proxy.clone();
+        if !platform::win32::start_input_hooks() {
+            logging::warn("输入钩子装不上，closeOnEsc / closeOnBlur / closeOnOutsideClick 会失效");
+        }
+        std::thread::spawn(move || loop {
+            // 10ms 一回：Esc 的按下靠这个采样，鼠标按下由钩子直接置位。
+            std::thread::sleep(Duration::from_millis(10));
+            platform::win32::sample_escape();
+            let (pointer, escape) = platform::win32::take_raw_input();
+            if !(pointer || escape) {
+                continue;
+            }
+            // 不按 `input_probe` 过滤：窗口刚建好、还没 `shown` 的那一瞬恰好是用户最容易按 Esc
+            // 的时候，丢了就再也补不回来。投递很便宜，处理端自己会挑有没有窗口关心。
+            if !app::post(&proxy, Ev::Input { pointer, escape }) {
+                return;
+            }
+        });
+    }
     if app.cfg().instances.is_empty() {
         // First run: nothing on the desktop yet, so open the control center to explain itself.
         app.show_control(None);
@@ -211,6 +234,16 @@ fn main() {
             }
             Event::UserEvent(Ev::Desktop(desktop)) => {
                 app.sync_desktop(&desktop);
+                *control = ControlFlow::Wait;
+            }
+            Event::UserEvent(Ev::Input { pointer, escape }) => {
+                // 自建窗口不保证拿得到焦点，所以 Esc 和「点外面」都在宿主这一层读键。
+                if pointer {
+                    app.pointer_pressed();
+                }
+                if escape {
+                    app.escape_pressed();
+                }
                 *control = ControlFlow::Wait;
             }
             Event::UserEvent(Ev::NudgeWallpaper) => {
