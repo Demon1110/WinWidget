@@ -69,17 +69,14 @@ pub fn custom_notify(app: &mut App, win: u32, method: &str, p: &Value) -> bool {
         // 页面按下右下角把位：窗口真跟着指针长。不能放大的窗口（弹框 `resizable: false`、贴在
         // 壁纸层的那种）什么都不做——把位本来也不会挂在它们身上。
         "window.resize" => {
-            crate::core::logging::info(&format!("win {win}: resize grip pressed"));
+            let (dx, dy) = (
+                jnum(p, "dx").unwrap_or(0.0).round() as i32,
+                jnum(p, "dy").unwrap_or(0.0).round() as i32,
+            );
+            crate::core::logging::info(&format!("win {win}: resize grip pressed dx={dx} dy={dy}"));
             // 页面是等指针挪开几像素才发这一条的（双击的两次按下不能被当成拖拽），
             // 这里把那段已经走过的距离带上，窗口的长短才对得上指针。
-            start_custom_resize(
-                app,
-                win,
-                (
-                    jnum(p, "dx").unwrap_or(0.0).round() as i32,
-                    jnum(p, "dy").unwrap_or(0.0).round() as i32,
-                ),
-            );
+            start_custom_resize(app, win, (dx, dy));
             true
         }
         // 双击把位：铺满当前显示器的工作区，再双击一次回到原矩形（见 `toggle_custom_maximize`）。
