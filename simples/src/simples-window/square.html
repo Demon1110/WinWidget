@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>直角子窗</title>
+  <style>
+    /* 直角样例：这一页一个 border-radius 都不写，窗口那边再用 `rounded: false` 整扇裁直。
+       两边都做到，四角才是干净的 90 度。 */
+    html, body { margin: 0; height: 100%; border-radius: 0; }
+    body {
+      box-sizing: border-box;
+      display: flex; flex-direction: column;
+      background: var(--w-bg-solid, #12161a);
+      color: var(--w-fg, #e9eef2);
+      font: 13px/1.55 system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+      /* 一整圈内描边，读得出四角是方的 */
+      box-shadow: inset 0 0 0 1px var(--w-line, rgba(255, 255, 255, 0.16));
+    }
+    .bar {
+      flex: none;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 10px;
+      background: rgba(255, 255, 255, 0.06);
+      cursor: grab;
+      user-select: none;
+    }
+    .bar button {
+      border: 0; background: transparent; color: inherit;
+      font: inherit; cursor: pointer; opacity: 0.7;
+    }
+    .body { flex: 1 1 auto; padding: 10px 12px; }
+    .body p { margin: 0 0 6px; opacity: 0.78; }
+    .tag {
+      display: inline-block; margin-top: 4px; padding: 1px 8px;
+      border: 1px solid var(--w-line, rgba(255, 255, 255, 0.16));
+      border-radius: 0; font-size: 12px; opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <div class="bar" id="bar">
+    <strong>直角子窗</strong>
+    <button type="button" id="close" title="关闭">×</button>
+  </div>
+  <div class="body">
+    <p>窗口无边框、透光，四角 90 度。</p>
+    <p>窗口这层是 <code>rounded:false</code> → 宿主整扇 <code>clip_square</code>；页面这层没有任何 <code>border-radius</code>。</p>
+    <span class="tag">90°</span>
+  </div>
+  <script>
+    document.getElementById("bar").addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      if (e.target.closest && e.target.closest("button")) return;
+      e.preventDefault();
+      widget.window.startDrag();
+    });
+    document.getElementById("close").addEventListener("click", () => {
+      widget.window.close("square-x");
+    });
+  </script>
+</body>
+</html>

@@ -159,6 +159,29 @@ const CASES = [
     },
   ],
   [
+    "无边框 + 直角（rounded:false）",
+    "四角应干净 90 度：窗口层整扇裁直，页面也没有 border-radius；按住顶栏仍能拖",
+    async () => {
+      const w = widget.windows.open({
+        html: "square.html",
+        key: "square",
+        title: "直角子窗",
+        width: 320,
+        height: 220,
+        frame: false,
+        transparent: true,
+        rounded: false,
+        draggable: true,
+      });
+      await w.loaded;
+      const state = await widget.call("win.get", { key: "square" });
+      return {
+        id: w.id,
+        at: state && { x: state.x, y: state.y, width: state.width, height: state.height },
+      };
+    },
+  ],
+  [
     "透明 + 鼠标穿透（8 秒自关）",
     "整窗只有虚线框和字是画出来的；点框里任意位置等于点它下面的卡片，框里收不到点击",
     async () => {
