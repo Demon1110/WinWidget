@@ -176,8 +176,8 @@ fn handle(state: &ServeState, request: Request, port: u16) {
             .map(|bytes| response(200, "image/png", bytes))
     } else if path == "/__wallpaper" {
         // The current desktop wallpaper, for pages that paint the user's real wallpaper behind
-        // themselves (the bloom effect layer). Served without caching so a wallpaper change is
-        // picked up on the next reload.
+        // themselves (the effect windows mounted on the wallpaper layer). Served without caching
+        // so a wallpaper change is picked up on the next reload.
         crate::platform::win32::wallpaper_path()
             .and_then(|p| std::fs::read(p).ok())
             .map(|bytes| response(200, wallpaper_mime(&bytes), bytes))
