@@ -925,6 +925,18 @@ unsafe extern "system" fn polished_proc(hwnd: HWND, msg: u32, wp: usize, lp: isi
     if msg == WM_NCCALCSIZE && wp != 0 {
         // The client rectangle is the window rectangle: with no non-client area left, DWM has
         // nowhere to draw the caption strip it otherwise keeps around a frameless card.
+        // The frame bits have to go again right here as well: every tao window-flags diff
+        // (`set_visible`, `set_resizable`, `restore`, `set_always_on_top`, …) ends with
+        // `SetWindowPos(SWP_FRAMECHANGED)` after rewriting `GWL_STYLE` from
+        // `WindowState::to_window_styles()`, and that style always carries `WS_CAPTION |
+        // WS_SYSMENU` plus the sizing/minimise/maximise bits. The frame dropped while the
+        // window was still hidden comes straight back on the first show. DWM then composites
+        // the window as a framed one and paints the system caption — the title text, minimise
+        // and close — inside the glass frame that carries the page's per-pixel alpha: an
+        // opaque page hides it, and any page alpha or window opacity lets it show through.
+        // A frame change is exactly what lands here, so stripping it now means the composite
+        // that follows already sees `WS_POPUP`.
+        strip_frame(hwnd);
         return 0;
     }
     // Activation is the moment DWM rebuilds the frame, and it is also the moment the glass frame
@@ -950,20 +962,35 @@ unsafe extern "system" fn polished_proc(hwnd: HWND, msg: u32, wp: usize, lp: isi
     result
 }
 
+/// The style bits Windows draws a caption and a sizing edge from.
+const WS_FRAME_BITS: isize = 0x00C0_0000 /* CAPTION */ | 0x0004_0000 /* THICKFRAME */
+    | 0x0008_0000 /* SYSMENU */ | 0x0001_0000 /* MINIMIZEBOX */
+    | 0x0002_0000 /* MAXIMIZEBOX */ | 0x0080_0000 /* BORDER */;
+
+/// Rewrites `GWL_STYLE` into the frameless shape and nothing else. This is the part that has to
+/// run *during* a frame change (from `WM_NCCALCSIZE`), where calling `SetWindowPos` again would
+/// only nest another frame change inside the one already in flight.
+fn strip_frame(hwnd: HWND) {
+    unsafe {
+        let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+        if style & WS_FRAME_BITS == 0 && style & WS_POPUP != 0 {
+            return;
+        }
+        SetWindowLongPtrW(hwnd, GWL_STYLE, (style & !WS_FRAME_BITS) | WS_POPUP);
+    }
+}
+
 /// Strips the caption and sizing edge from a window that asked to be frameless. Windows keeps an
 /// 8px edge on a top-level window even after the frame is polished away, which leaves a sliver of
 /// the screen uncovered when a window is meant to cover a whole monitor; with no frame styles the
 /// client area is the window rectangle itself.
 pub fn drop_frame(hwnd: HWND) {
-    const WS_FRAME: isize = 0x00C0_0000 /* CAPTION */ | 0x0004_0000 /* THICKFRAME */
-        | 0x0008_0000 /* SYSMENU */ | 0x0001_0000 /* MINIMIZEBOX */
-        | 0x0002_0000 /* MAXIMIZEBOX */ | 0x0080_0000 /* BORDER */;
     unsafe {
         let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
-        if style & WS_FRAME == 0 {
+        if style & WS_FRAME_BITS == 0 && style & WS_POPUP != 0 {
             return;
         }
-        SetWindowLongPtrW(hwnd, GWL_STYLE, (style & !WS_FRAME) | WS_POPUP);
+        strip_frame(hwnd);
         SetWindowPos(
             hwnd,
             0,
