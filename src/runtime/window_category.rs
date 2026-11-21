@@ -72,6 +72,11 @@ pub fn custom_notify(app: &mut App, win: u32, method: &str, p: &Value) -> bool {
             start_custom_resize(app, win);
             true
         }
+        // 双击把位：铺满当前显示器的工作区，再双击一次回到原矩形（见 `toggle_custom_maximize`）。
+        "window.maximize" => {
+            toggle_custom_maximize(app, win);
+            true
+        }
         // A custom window has no card behind it: `window.*` notifications (press, drag) are
         // meaningless there, not a mistake worth a warning.
         other if other.starts_with("window.") => true,
@@ -174,6 +179,10 @@ pub struct CustomWin {
     /// 无边框且要求直角的窗口靠 win32 区域裁成矩形（见 `win32::clip_square`）。区域是按窗口尺
     /// 寸定死的，窗口一改大小就得重贴，所以记着这个开关，`setSize` / `setBounds` 里补一次。
     pub square: bool,
+    /// 双击把位铺满屏幕时记下的原矩形（屏幕坐标）。`Some` 表示此刻是铺满状态，再双击一次就按
+    /// 这个矩形还原。不用系统最大化：`WS_MAXIMIZE` 会顺手改窗口样式，无边框自绘窗口的圆角和
+    /// 矩形区域都会跟着变样，自算矩形只动位置和尺寸。
+    pub restore: Option<w::RECT>,
     /// Mounted as a child of the shell's wallpaper host, below the desktop icons. Such a window
     /// must never go through tao's window-flags diff (set_visible/set_ignore_cursor_events/
     /// set_fullscreen/set_outer_position), which would rewrite its style back to WS_POPUP.
@@ -573,6 +582,7 @@ pub fn build_custom(
     Ok(CustomWin {
         wallpaper,
         square: !frame && !rounded,
+        restore: None,
         show_on_ready,
         id,
         key: jstr(&o, "key").unwrap_or_default(),
@@ -968,6 +978,8 @@ pub fn card_notify(app: &mut App, instance: &str, method: &str, params: &Value) 
             start_resize(app, instance);
             true
         }
+        // 卡片的大小归组件清单，没有「铺满屏幕」这回事：把位上双击就当没发生，不当成未知消息。
+        "window.maximize" => true,
         "window.menu" => {
             // The menu is a UI-layer action. Post it to the loop rather than calling `ui::menus`
             // upward from runtime — `main.rs` already routes `Ev::Command` into `menus::run`.
@@ -1163,11 +1175,19 @@ const MIN_RESIZE: (f64, f64) = (180.0, 120.0);
 
 /// 把位按下去：窗口跟着指针长，WebView2 由宿主随后对齐（见 `App::sync_custom_bounds`）。
 fn start_custom_resize(app: &mut App, id: u32) {
-    let Some(win) = app.customs.get(&id) else {
+    let proxy = app.proxy.clone();
+    let Some(win) = app.customs.get_mut(&id) else {
         return;
     };
     if !win.resizable || win.wallpaper {
         return;
+    }
+    // 铺满状态下按住把位：先把窗口还原成铺之前那扇再拖，否则起点是整屏尺寸，指针一抖就会缩出
+    // 去一大块，看起来像窗口自己跳了一下。
+    if let Some(rest) = win.restore.take() {
+        if rest.right > rest.left && rest.bottom > rest.top {
+            apply_custom_rect(win, rest);
+        }
     }
     let scale = win.scale();
     let min = win
@@ -1181,7 +1201,76 @@ fn start_custom_resize(app: &mut App, id: u32) {
         .max
         .map(|(a, b)| (from_dip(a, scale) as i32, from_dip(b, scale) as i32))
         .unwrap_or((i32::MAX / 4, i32::MAX / 4));
-    crate::runtime::window::begin_window_resize(win.hwnd(), min, max, app.proxy.clone(), id);
+    crate::runtime::window::begin_window_resize(win.hwnd(), min, max, proxy, id);
+}
+
+/// 双击把位要用的矩形：铺满当前显示器的工作区（不含任务栏），但受创建时的 `minWidth` /
+/// `maxWidth` 夹住；被夹小了就居中摆在工作区里，不然会贴在左上角，看着既不像铺满也不像居中。
+pub fn maximize_rect(
+    work: w::RECT,
+    min: Option<(f64, f64)>,
+    max: Option<(f64, f64)>,
+    scale: f64,
+) -> w::RECT {
+    let mut width = work.right - work.left;
+    let mut height = work.bottom - work.top;
+    if let Some((cap_w, cap_h)) = max {
+        width = width.min(from_dip(cap_w, scale) as i32);
+        height = height.min(from_dip(cap_h, scale) as i32);
+    }
+    if let Some((floor_w, floor_h)) = min {
+        width = width.max(from_dip(floor_w, scale) as i32);
+        height = height.max(from_dip(floor_h, scale) as i32);
+    }
+    let left = work.left + ((work.right - work.left) - width) / 2;
+    let top = work.top + ((work.bottom - work.top) - height) / 2;
+    w::RECT {
+        left,
+        top,
+        right: left + width,
+        bottom: top + height,
+    }
+}
+
+/// 把自建窗口摆到某个矩形：改外层矩形、让 WebView2 跟上，再把「现在是不是铺满」告诉页面。
+fn apply_custom_rect(win: &CustomWin, target: w::RECT) {
+    let (width, height) = (target.right - target.left, target.bottom - target.top);
+    w::resize_window(win.hwnd(), target.left, target.top, width, height);
+    win.fit_view();
+    win.send_ipc(
+        "win.maximized",
+        json!({ "id": win.id, "maximized": win.restore.is_some() }),
+    );
+}
+
+/// 双击右下角把位：铺满屏幕 / 还原，来回切。不交给系统的 `WS_MAXIMIZE`——那会改窗口样式，无边框
+/// 自绘窗口的圆角与矩形区域都跟着变样，这里只按自己算的矩形改位置和尺寸（夹在创建时的 min/max
+/// 里），WebView2 照旧由 `fit_view` 对齐，页面再收到一条 `win.maximized`。
+fn toggle_custom_maximize(app: &mut App, id: u32) {
+    let Some(win) = app.customs.get_mut(&id) else {
+        return;
+    };
+    if !win.resizable || win.wallpaper {
+        return;
+    }
+    let rect = w::window_rect(win.hwnd());
+    if rect.right <= rect.left || rect.bottom <= rect.top {
+        return;
+    }
+    let scale = win.scale();
+    let target = if let Some(rest) = win.restore.take() {
+        // 已经是铺满状态：回到铺之前那扇。
+        if rest.right > rest.left && rest.bottom > rest.top {
+            rest
+        } else {
+            rect
+        }
+    } else {
+        let (_, work) = w::monitor_work_area(&rect);
+        win.restore = Some(rect);
+        maximize_rect(work, win.min, win.max, scale)
+    };
+    apply_custom_rect(win, target);
 }
 
 /// `win.*` methods: creation, the `BrowserWindow` surface, and the two message channels.

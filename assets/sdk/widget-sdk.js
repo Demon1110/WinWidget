@@ -394,6 +394,16 @@
 
   document.addEventListener("mouseup", () => { down = null; }, true);
 
+  // 双击右下角把位：自建窗口在「铺满屏幕」和「原来那扇」之间来回切，矩形由宿主自己算（不改
+  // 窗口样式，圆角和矩形区域都不受影响）。卡片上没有这回事，宿主会当没发生。
+  document.addEventListener("dblclick", (e) => {
+    if (state.locked) return;
+    if (e.target.closest && e.target.closest(".fw-resize")) {
+      e.preventDefault();
+      send("window.maximize");
+    }
+  }, true);
+
   // 约定：任何元素标上 data-ww-close，点一下就把自己这个窗口关掉——卡片上等于收起
   // （托盘还能叫回来），自定义窗口里等于关掉它自己。属性值可选，当关闭原因写进
   // `windows.on("closed")` 的 reason（默认 "api"）。它也自动豁免拖拽，所以放在把位里
