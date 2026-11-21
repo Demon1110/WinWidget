@@ -153,7 +153,7 @@ In developer mode, a script error shows as a red bar at the bottom of the card w
 
 Control Center → **Add widgets** → your widget's card → **Export .fwz**. Anyone can install it by double-clicking the `.fwz` file (or dropping it on the Control Center window).
 
-To let everyone find it under **Online** in the Control Center, submit it to the [widget market](https://hmgvibe.github.io/fullwidget-market/): put the widget folder in `widgets/<your-github-name>.<widget>/` of the [fullwidget-market](https://github.com/hmgvibe/fullwidget-market) repository on GitHub and open a pull request. Once the automatic check passes and a maintainer has looked at it, it goes live; CONTRIBUTING.md there has the details.
+To let everyone find it under **Online** in the Control Center, submit it to the [widget market](https://demon1110.github.io/WinWidgetHub/): put the widget folder in `src/<widget>/` of the [WinWidgetHub](https://github.com/Demon1110/WinWidgetHub) repository and open a pull request. Once the automatic check passes and a maintainer has looked at it, it goes live; the README there has the details.
 
 ---
 
