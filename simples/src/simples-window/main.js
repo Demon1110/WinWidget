@@ -159,6 +159,71 @@ const CASES = [
     },
   ],
   [
+    "透明 + 鼠标穿透（8 秒自关）",
+    "整窗只有虚线框和字是画出来的；点框里任意位置等于点它下面的卡片，框里收不到点击",
+    async () => {
+      const bounds = await widget.window.getBounds();
+      const w = widget.windows.open({
+        html: "overlay.html",
+        key: "overlay",
+        title: "鼠标穿透",
+        width: 300,
+        height: 150,
+        x: bounds.x + 20,
+        y: bounds.y + 470,
+        frame: false,
+        transparent: true,
+        ignoreMouseEvents: true,
+        autoClose: 8000,
+        resizable: false,
+      });
+      await w.loaded;
+      const state = await widget.call("win.get", { key: "overlay" });
+      return {
+        id: w.id,
+        ignoreMouse: state && state.ignoreMouse,
+        at: state && { x: state.x, y: state.y, width: state.width, height: state.height },
+        note: "8 秒后自己关（reason=timeout）",
+      };
+    },
+  ],
+  [
+    "弹框正文吃 HTML（rawHtml）",
+    "同一个 content：rawHtml=true 当标签渲染（加粗/列表/行内上色），不传就原样当文字显示",
+    () =>
+      widget.dialog.alert({
+        title: "HTML 正文",
+        rawHtml: true,
+        icon: "sparkle",
+        width: 460,
+        // 挪到桌面左侧：弹框是玻璃底，压在明亮的编辑器窗口上会透出背后的字。
+        x: 240,
+        y: 260,
+        content:
+          "<b>这段是 HTML</b>，不是纯文本。<ul>" +
+          '<li>加粗、<i>斜体</i>、<span style="color:#4cc2ff">行内上色</span>都照原样</li>' +
+          "<li>列表和换行也按标签排</li></ul>" +
+          '<p style="opacity:.6">不传 rawHtml 时，这一整串会连尖括号一起当文字显示。</p>',
+      }),
+  ],
+  [
+    "弹框整页 HTML（dialog.window）",
+    "窗口由组件自己的 rich.html 画；点「就用它」返回 button=apply，点「先不用」返回 button=dismiss",
+    async () => {
+      const w = widget.dialog.window({
+        html: "rich.html",
+        key: "rich",
+        title: "整页 HTML",
+        width: 400,
+        height: 300,
+        center: true,
+      });
+      await w.loaded;
+      // 人来点按钮，别用用例里那 12 秒的等待上限。
+      return await whenClosed(w, 120000);
+    },
+  ],
+  [
     "closeAll",
     "关掉本组件所有自定义窗口，卡片留着",
     async () => {

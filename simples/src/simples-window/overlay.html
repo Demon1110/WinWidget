@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>鼠标穿透</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: transparent; }
+    /* 整扇窗只有下面这块虚线框是画出来的，其余像素全透明（transparent: true）。
+       框里收不到鼠标：宿主给窗口开了 WS_EX_TRANSPARENT，点哪都落到下面的卡片。 */
+    body {
+      box-sizing: border-box;
+      padding: 10px;
+      display: flex;
+      font: 13px/1.55 system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    .box {
+      flex: 1 1 auto;
+      box-sizing: border-box;
+      display: flex; flex-direction: column; justify-content: center; gap: 4px;
+      padding: 10px 14px;
+      border: 2px dashed var(--w-accent, #4cc2ff);
+      border-radius: 14px;
+      /* 半透明底：底下的卡片还能透出来，字也读得清；框外那些像素是彻底透明的。 */
+      background: rgba(10, 14, 20, 0.62);
+      box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
+      color: var(--w-fg, #e9eef2);
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+    }
+    .box strong { font-size: 14px; }
+    .box p { margin: 0; opacity: 0.8; }
+    #hits { font-weight: 600; opacity: 1; color: var(--w-accent, #4cc2ff); }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <strong>透明 + 鼠标穿透</strong>
+    <p>这块框压在卡片上：点框里任意位置，事件会穿过去落到卡片。</p>
+    <p id="hits">本页收到的点击：0 次</p>
+  </div>
+  <script>
+    // 只有穿透失效时这里才会加一 —— 计数一直是 0 就说明事件真的穿过去了。
+    let hits = 0;
+    document.addEventListener("mousedown", () => {
+      hits += 1;
+      document.getElementById("hits").textContent = `本页收到的点击：${hits} 次`;
+    });
+  </script>
+</body>
+</html>

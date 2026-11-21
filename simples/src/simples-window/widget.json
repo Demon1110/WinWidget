@@ -2,9 +2,9 @@
   "id": "simples-window",
   "name": { "zh-TW": "多視窗測試台", "zh-CN": "多窗口测试台", "en": "Window test bench" },
   "description": {
-    "zh-TW": "多視窗與關閉行為的逐項測試：key 復用、list/post/broadcast、關閉原因，以及 closeOnEsc / closeOnBlur / closeOnOutsideClick / modal 與卡片自操作。",
-    "zh-CN": "多窗口与关闭行为的逐项测试：key 复用、list/post/broadcast、关闭原因，以及 closeOnEsc / closeOnBlur / closeOnOutsideClick / modal 与卡片自操作。",
-    "en": "Checks for several windows: key reuse, list/post/broadcast, close reasons, closeOnEsc / closeOnBlur / closeOnOutsideClick / modal, and the card's own window calls."
+    "zh-TW": "多視窗與關閉行為的逐項測試：key 復用、list/post/broadcast、關閉原因，以及 closeOnEsc / closeOnBlur / closeOnOutsideClick / modal、透明與滑鼠穿透、HTML 內容與卡片自操作。",
+    "zh-CN": "多窗口与关闭行为的逐项测试：key 复用、list/post/broadcast、关闭原因，以及 closeOnEsc / closeOnBlur / closeOnOutsideClick / modal、透明与鼠标穿透、HTML 内容与卡片自操作。",
+    "en": "Checks for several windows: key reuse, list/post/broadcast, close reasons, closeOnEsc / closeOnBlur / closeOnOutsideClick / modal, transparency and click-through, HTML content, and the card's own window calls."
   },
   "version": "0.1.0",
   "date": "2026-11-21",
