@@ -10,8 +10,8 @@
   ],
   "violations": {
     "core->model": 3,
-    "core->platform": 46,
-    "core->runtime": 2,
+    "core->platform": 54,
+    "core->runtime": 3,
     "market->runtime": 3,
     "platform->runtime": 1,
     "runtime->ui": 6
