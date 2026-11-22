@@ -245,8 +245,14 @@ fn main() {
                 *control = ControlFlow::Wait;
             }
             Event::UserEvent(Ev::Command(action)) => {
-                menus::run(&mut app, &action);
-                app.after_command();
+                if let Some(id) = action.strip_prefix("tool.close:") {
+                    // A tool window asked to close itself. It cannot be destroyed from inside its
+                    // own IPC handler, so the page posts this and the loop does the teardown.
+                    app.close_tool(id);
+                } else {
+                    menus::run(&mut app, &action);
+                    app.after_command();
+                }
                 *control = ControlFlow::Wait;
             }
             Event::UserEvent(Ev::Wake) => {
@@ -308,6 +314,16 @@ fn main() {
                 if app.control.as_ref().map(|c| c.window.id()) == Some(window_id) {
                     if let Some(control_win) = &app.control {
                         control_win.window.set_visible(false);
+                    }
+                } else if let Some(id) = app.instance_of_window(window_id) {
+                    // A tool window's × destroys the window only; its instance record and the
+                    // page's storage stay behind for the next open. Cards have no × to press.
+                    if app
+                        .instance(&id)
+                        .map(|i| i.surface == "window")
+                        .unwrap_or(false)
+                    {
+                        app.close_tool(&id);
                     }
                 } else if let Some(id) = app
                     .customs

@@ -44,7 +44,7 @@ pub fn state_json(app: &App) -> Value {
         let count = cfg
             .instances
             .iter()
-            .filter(|i| i.widget.eq_ignore_ascii_case(&manifest.id))
+            .filter(|i| i.surface != "window" && i.widget.eq_ignore_ascii_case(&manifest.id))
             .count();
         let allowed = crate::model::permissions::allowed(cfg, manifest);
         let pending = crate::model::permissions::pending(cfg, manifest);
@@ -72,6 +72,14 @@ pub fn state_json(app: &App) -> Value {
             "pending": pending,
             "count": count,
             "folder": folder,
+            "surfaces": manifest.surfaces,
+            "surface": manifest.surface_default(),
+            "window": manifest.window.as_ref().map(|w| json!({
+                "width": w.width,
+                "height": w.height,
+                "minWidth": w.min_width,
+                "minHeight": w.min_height,
+            })),
         }));
     }
 
@@ -134,6 +142,7 @@ pub fn state_json(app: &App) -> Value {
             "height": inst.height,
             "size": size,
             "layer": inst.layer,
+            "surface": inst.surface,
             "locked": inst.locked,
             "clickThrough": inst.click_through,
             "themeId": inst.theme_id,
@@ -374,6 +383,7 @@ pub fn registry() -> &'static HashMap<&'static str, Method> {
         m.insert("instance.pickFolder", instance_pick_folder);
         // widgets
         m.insert("widget.add", widget_add);
+        m.insert("widget.open", widget_open);
         m.insert("widget.grant", widget_grant);
         m.insert("widget.openFolder", widget_open_folder);
         m.insert("widget.export", widget_export);
@@ -836,8 +846,13 @@ fn widget_add(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
             app.save();
         }
     }
-    let id = app.add_widget(&widget, None).map_err(BridgeError::new)?;
-    if let Some(manifest) = app.catalog.find(&widget).cloned() {
+    let manifest = app.catalog.find(&widget).cloned();
+    let id = match manifest.as_ref() {
+        // A window-only widget has nowhere to live on the desktop: "add" opens its window instead.
+        Some(m) if !m.has_surface("desktop") => app.open_tool(&m.id).map_err(BridgeError::new)?,
+        _ => app.add_widget(&widget, None).map_err(BridgeError::new)?,
+    };
+    if let Some(manifest) = manifest {
         let pending = crate::model::permissions::pending(app.cfg(), &manifest);
         if !pending.is_empty() {
             let consent = json!({ "widget": manifest.id, "then": "load", "permissions": pending });
@@ -848,6 +863,40 @@ fn widget_add(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
         }
     }
     app.refresh_tray_menu();
+    refresh(app, None);
+    Ok(Reply::Now(json!({ "id": id })))
+}
+
+/// Opens the `window` surface of a widget that declares one. Re-opening a single-instance tool
+/// focuses the window that already exists instead of stacking another copy.
+fn widget_open(app: &mut App, p: &Value, _id: i64) -> BridgeResult<Reply> {
+    let widget = req_str(p, "widget")?;
+    let manifest = app
+        .catalog
+        .find(&widget)
+        .cloned()
+        .ok_or_else(|| BridgeError::new(format!("no widget called {widget}")))?;
+    if !manifest.has_surface("window") {
+        return Err(BridgeError::new(format!(
+            "{} has no window surface",
+            manifest.id
+        )));
+    }
+    // The consent sheet's "allow and open" comes back with `grant`: record it before the window is
+    // built, so the page never starts with a permission prompt of its own.
+    if jbool(p, "grant").unwrap_or(false) {
+        crate::model::permissions::grant(app.cfg_mut(), &manifest);
+        app.save();
+    }
+    let id = app.open_tool(&manifest.id).map_err(BridgeError::new)?;
+    let pending = crate::model::permissions::pending(app.cfg(), &manifest);
+    if !pending.is_empty() {
+        let consent = json!({ "widget": manifest.id, "then": "open", "permissions": pending });
+        app.send_to(
+            CONTROL_WIN,
+            &format!("{{\"ev\":\"consent\",\"d\":{consent}}}"),
+        );
+    }
     refresh(app, None);
     Ok(Reply::Now(json!({ "id": id })))
 }

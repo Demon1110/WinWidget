@@ -88,6 +88,19 @@ body {
 /* Frosted: the window itself is the blurred, rounded card. */
 html[data-style="frosted"] body { border-radius: 0; box-shadow: none; }
 
+/* Window tools run inside a real application window: the caption already frames the page, so the
+   card's rounding and inner outline would just draw a second frame. The background is opaque
+   because there is no desktop showing through a tool window. */
+html[data-surface="window"] {
+  --w-bg: var(--w-bg-solid);
+  --w-shadow: none;
+}
+html[data-surface="window"] body {
+  border-radius: 0;
+  box-shadow: none;
+}
+html[data-surface="window"] { overflow: hidden; }
+
 input, textarea, [contenteditable] { user-select: text; font: inherit; color: inherit; }
 button { font: inherit; color: inherit; }
 

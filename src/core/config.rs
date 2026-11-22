@@ -84,6 +84,9 @@ pub struct InstanceConfig {
     pub height: f64,
     /// "desktop" | "normal" | "top"
     pub layer: String,
+    /// "desktop" | "window" — which kind of surface this record belongs to. A window record is
+    /// not restored at startup; it only exists so settings, storage and geometry survive closing.
+    pub surface: String,
     pub locked: bool,
     /// Derived from `locked`, not a switch of its own: a locked card passes the mouse through.
     /// The field is persisted so a window can restore its style before the app is fully built.
@@ -105,6 +108,7 @@ impl Default for InstanceConfig {
             width: 240.0,
             height: 120.0,
             layer: "desktop".into(),
+            surface: "desktop".into(),
             locked: false,
             click_through: false,
             theme_id: None,

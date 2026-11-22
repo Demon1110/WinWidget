@@ -9,7 +9,7 @@ use crate::runtime::app::Ev;
 use serde_json::Value;
 use std::collections::HashSet;
 use std::sync::{Mutex, OnceLock};
-use tao::dpi::{PhysicalPosition, PhysicalSize};
+use tao::dpi::{LogicalSize, PhysicalPosition, PhysicalSize};
 use tao::platform::windows::{WindowBuilderExtWindows, WindowExtWindows};
 use tao::window::{Window, WindowBuilder};
 use wry::{Rect, WebContext, WebView, WebViewBuilder};
@@ -57,11 +57,25 @@ pub struct WidgetWin {
     pub frosted: bool,
     pub click_through: bool,
     pub layer: String,
+    /// "desktop" or "window". A tool window keeps its native frame and ignores the desktop-only
+    /// behaviours (virtual-desktop hiding, no-activate showing, card styling).
+    pub surface: String,
 }
 
 impl WidgetWin {
     pub fn hwnd(&self) -> w::HWND {
         self.window.hwnd()
+    }
+
+    /// Tears the window down in the order WebView2 needs: the controller goes first, the HWND
+    /// after it. Dropping the struct as-is destroys the parent window first, and the controller
+    /// then fails to close against a dead handle — the page keeps running as an orphan target.
+    pub fn destroy(self) {
+        let WidgetWin {
+            webview, window, ..
+        } = self;
+        drop(webview);
+        drop(window);
     }
 
     pub fn send(&self, body: &str) {
@@ -162,6 +176,13 @@ impl WidgetWin {
         if self.desktop_visible {
             return;
         }
+        if self.surface == "window" {
+            self.desktop_visible = true;
+            self.window.set_visible(true);
+            let _ = self.webview.set_visible(true);
+            self.window.set_focus();
+            return;
+        }
         if let Some(current) = w::current_virtual_desktop_id() {
             if self.desktop.is_empty() {
                 self.desktop = current.clone();
@@ -196,6 +217,11 @@ impl WidgetWin {
     /// Shows the card only while its virtual desktop is the active one. The logical `visible`
     /// state is left untouched, so switching desktops never looks like the user hid the card.
     pub fn sync_desktop(&mut self, current: &str) {
+        // Tool windows live on whatever desktop Windows shows them on; they are never swept by a
+        // switch the way cards are.
+        if self.surface == "window" {
+            return;
+        }
         if current.is_empty() {
             return;
         }
@@ -227,6 +253,11 @@ impl WidgetWin {
 
     /// Re-applies the borderless frame and asks Windows to recompute the non-client area.
     fn restyle(&self) {
+        // A tool window has a real frame on purpose: polishing or extending it would strip the
+        // caption and sizing edges the user needs.
+        if self.surface == "window" {
+            return;
+        }
         let hwnd = self.hwnd();
         w::polish_frame(hwnd, self.frosted);
         // The extended frame is what carries the page's per-pixel alpha to the compositor, so it
@@ -264,6 +295,9 @@ impl WidgetWin {
 
     /// Applies frosted glass / click-through / top-most to match the instance's settings.
     pub fn apply_effects(&mut self, appearance: &Value, click_through: bool, layer: &str) {
+        if self.surface == "window" {
+            return;
+        }
         let hwnd = self.hwnd();
         let frosted = appearance
             .get("style")
@@ -390,80 +424,102 @@ pub fn build(
     let card = card_rect(inst, scale);
     let outer = w::inflate(card, margin);
     let prog = w::progman();
+    let tool = inst.surface == "window";
 
     let mut builder = WindowBuilder::new()
         .with_title(manifest.display_name())
-        .with_decorations(false)
-        .with_transparent(true)
-        .with_resizable(false)
-        .with_skip_taskbar(true)
         .with_visible(false)
         .with_inner_size(PhysicalSize::new(
             outer.width().max(1),
             outer.height().max(1),
         ))
         .with_position(PhysicalPosition::new(outer.left, outer.top));
-    if inst.layer == "desktop" && prog != 0 {
-        builder = builder.with_owner_window(prog);
+    if tool {
+        // A window tool is an ordinary application window: real caption, resizable, taskbar entry,
+        // and keyboard focus. The card styling below is deliberately skipped for it. Its saved
+        // geometry is the client size from the last close, so a reopened tool comes back the size
+        // the user left it.
+        let (_, _, min_w, min_h) = manifest.window_size();
+        builder = builder
+            .with_decorations(true)
+            .with_transparent(false)
+            .with_resizable(true)
+            .with_skip_taskbar(false)
+            .with_inner_size(LogicalSize::new(
+                inst.width.max(min_w),
+                inst.height.max(min_h),
+            ))
+            .with_min_inner_size(LogicalSize::new(min_w, min_h));
+    } else {
+        builder = builder
+            .with_decorations(false)
+            .with_transparent(true)
+            .with_resizable(false)
+            .with_skip_taskbar(true);
+        if inst.layer == "desktop" && prog != 0 {
+            builder = builder.with_owner_window(prog);
+        }
     }
     let window = builder.build(event_loop).map_err(|e| e.to_string())?;
 
     let hwnd = window.hwnd();
-    // A popup with no frame of any kind. The style bits Windows would use to draw a caption, a
-    // border or a sizing edge are cleared, and `WM_NCCALCSIZE` (below) pins the client rectangle
-    // to the whole window, so there is nothing left for Windows to decorate.
-    unsafe {
-        let style = w::GetWindowLongPtrW(hwnd, w::GWL_STYLE);
-        let framed = 0x00CF_0000 | 0x0080_0000; // caption, menu, thick frame, min/max, border
-        let styled = (style & !framed) | w::WS_POPUP | w::WS_CLIPCHILDREN;
-        w::SetWindowLongPtrW(hwnd, w::GWL_STYLE, styled);
-        let ex = w::GetWindowLongPtrW(hwnd, w::GWL_EXSTYLE) | w::WS_EX_TOOLWINDOW;
-        w::SetWindowLongPtrW(hwnd, w::GWL_EXSTYLE, ex);
-        w::SetWindowPos(
+    if !tool {
+        // A popup with no frame of any kind. The style bits Windows would use to draw a caption, a
+        // border or a sizing edge are cleared, and `WM_NCCALCSIZE` (below) pins the client rectangle
+        // to the whole window, so there is nothing left for Windows to decorate.
+        unsafe {
+            let style = w::GetWindowLongPtrW(hwnd, w::GWL_STYLE);
+            let framed = 0x00CF_0000 | 0x0080_0000; // caption, menu, thick frame, min/max, border
+            let styled = (style & !framed) | w::WS_POPUP | w::WS_CLIPCHILDREN;
+            w::SetWindowLongPtrW(hwnd, w::GWL_STYLE, styled);
+            let ex = w::GetWindowLongPtrW(hwnd, w::GWL_EXSTYLE) | w::WS_EX_TOOLWINDOW;
+            w::SetWindowLongPtrW(hwnd, w::GWL_EXSTYLE, ex);
+            w::SetWindowPos(
+                hwnd,
+                0,
+                0,
+                0,
+                0,
+                0,
+                w::SWP_NOMOVE
+                    | w::SWP_NOSIZE
+                    | w::SWP_NOZORDER
+                    | w::SWP_NOACTIVATE
+                    | w::SWP_FRAMECHANGED,
+            );
+        }
+        // A card that starts life in the topmost band has to be put there explicitly: the layer diff
+        // in `apply_effects` only fires on a change, and a card built as "top" would otherwise open as
+        // an ordinary window and slide under every app.
+        if inst.layer == "top" {
+            w::set_topmost(hwnd, true);
+        }
+        w::extend_frame(hwnd);
+        // tao asks Windows for the inner size and Windows answers by padding the window for a frame it
+        // thinks it has; with the frame gone and `WM_NCCALCSIZE` pinned, the window has to be set to the
+        // size the card actually needs, or every card would carry a stray 16×9 strip on its right and
+        // bottom edges — and the saved geometry would come out wrong as well.
+        w::resize_window(
             hwnd,
-            0,
-            0,
-            0,
-            0,
-            0,
-            w::SWP_NOMOVE
-                | w::SWP_NOSIZE
-                | w::SWP_NOZORDER
-                | w::SWP_NOACTIVATE
-                | w::SWP_FRAMECHANGED,
+            outer.left,
+            outer.top,
+            outer.width().max(1),
+            outer.height().max(1),
         );
-    }
-    // A card that starts life in the topmost band has to be put there explicitly: the layer diff
-    // in `apply_effects` only fires on a change, and a card built as "top" would otherwise open as
-    // an ordinary window and slide under every app.
-    if inst.layer == "top" {
-        w::set_topmost(hwnd, true);
-    }
-    w::extend_frame(hwnd);
-    // tao asks Windows for the inner size and Windows answers by padding the window for a frame it
-    // thinks it has; with the frame gone and `WM_NCCALCSIZE` pinned, the window has to be set to the
-    // size the card actually needs, or every card would carry a stray 16×9 strip on its right and
-    // bottom edges — and the saved geometry would come out wrong as well.
-    w::resize_window(
-        hwnd,
-        outer.left,
-        outer.top,
-        outer.width().max(1),
-        outer.height().max(1),
-    );
-    // The DWM border is the last thing that made a borderless card look framed; the corner
-    // preference has to follow the frosted style, so it is applied again in `apply_effects`.
-    w::polish_frame(hwnd, false);
-    // The glass frame stays on even for a plain transparent card: that is what hands the DWM the
-    // per-pixel alpha the page paints with, so the rounded corners show the desktop instead of a
-    // black box. DWM draws that frame's caption over the card top unless non-client rendering is
-    // switched off, which is what `disable_nc_rendering` does.
-    w::extend_frame(hwnd);
-    w::disable_nc_rendering(hwnd);
-    install_proc(hwnd);
-    remember(hwnd, &inst.id, proxy.clone(), &inst.layer);
-    if inst.layer == "desktop" {
-        w::place_above_desktop(hwnd);
+        // The DWM border is the last thing that made a borderless card look framed; the corner
+        // preference has to follow the frosted style, so it is applied again in `apply_effects`.
+        w::polish_frame(hwnd, false);
+        // The glass frame stays on even for a plain transparent card: that is what hands the DWM the
+        // per-pixel alpha the page paints with, so the rounded corners show the desktop instead of a
+        // black box. DWM draws that frame's caption over the card top unless non-client rendering is
+        // switched off, which is what `disable_nc_rendering` does.
+        w::extend_frame(hwnd);
+        w::disable_nc_rendering(hwnd);
+        install_proc(hwnd);
+        remember(hwnd, &inst.id, proxy.clone(), &inst.layer);
+        if inst.layer == "desktop" {
+            w::place_above_desktop(hwnd);
+        }
     }
 
     let id = inst.id.clone();
@@ -482,7 +538,7 @@ pub fn build(
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let mut builder = WebViewBuilder::new_with_web_context(&mut context)
             .with_url(&url)
-            .with_transparent(true)
+            .with_transparent(!tool)
             .with_devtools(developer)
             .with_initialization_script(crate::runtime::shim::SCRIPT)
             .with_initialization_script(CARD_FRONT_SCRIPT)
@@ -529,7 +585,11 @@ pub fn build(
             .map_err(|e| format!("WebView2 could not be created: {e}"))?
     };
 
-    let desktop = w::current_virtual_desktop_id().unwrap_or_default();
+    let desktop = if tool {
+        String::new()
+    } else {
+        w::current_virtual_desktop_id().unwrap_or_default()
+    };
     crate::core::logging::info(&format!("{id}: virtual desktop {desktop}"));
     Ok(WidgetWin {
         window,
@@ -547,6 +607,7 @@ pub fn build(
         frosted: false,
         click_through: false,
         layer: inst.layer.clone(),
+        surface: inst.surface.clone(),
     })
 }
 

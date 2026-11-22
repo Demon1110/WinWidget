@@ -505,6 +505,7 @@ pub fn boot_json(
         "state": state,
         "locked": boot.locked,
         "layer": boot.layer,
+        "surface": boot.surface,
         "clickThrough": boot.click_through,
         "resizable": boot.resizable,
         "size": {

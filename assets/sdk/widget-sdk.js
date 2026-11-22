@@ -5,12 +5,17 @@
   const boot = window.__FW_BOOT__ || {};
   const host = window.chrome && window.chrome.webview;
   const root = document.documentElement;
+  // Which kind of surface this page is running on: a desktop card or a tool window. Pages branch on
+  // this instead of guessing from their own size.
+  const surface = boot.surface === "window" ? "window" : "desktop";
+  root.dataset.surface = surface;
 
   const state = {
     settings: boot.settings || {},
     appearance: boot.appearance || {},
     locked: !!boot.locked,
     layer: boot.layer || "desktop",
+    surface: surface,
     clickThrough: !!boot.clickThrough,
     edit: !!(boot.state && boot.state.edit),
     label: (boot.state && boot.state.label) || "",
@@ -1117,6 +1122,8 @@
     permissions: Object.freeze([...(boot.permissions || [])]),
     get locked() { return state.locked; },
     get layer() { return state.layer; },
+    /** "desktop" (card) or "window" (tool window). Same value as `html[data-surface]`. */
+    surface: surface,
     /** Current theme id, e.g. "instrument", "type", "paper". */
     get theme() { return state.appearance.theme || ""; },
     /** Is the card on screen right now? Kept in step by the host's show/hide events. */

@@ -29,6 +29,8 @@ pub struct Boot {
     pub widget_version: String,
     pub locked: bool,
     pub layer: String,
+    /// "desktop" or "window": a page lays itself out for the surface it is running on.
+    pub surface: String,
     pub click_through: bool,
     pub resizable: bool,
     pub width: f64,
@@ -237,6 +239,7 @@ impl App {
             .data
             .instances
             .iter()
+            .filter(|i| i.surface != "window")
             .map(|i| i.id.clone())
             .collect::<Vec<_>>()
         {
@@ -334,6 +337,7 @@ impl App {
             widget_version: manifest.version.clone(),
             locked: inst.locked,
             layer: inst.layer.clone(),
+            surface: inst.surface.clone(),
             click_through: inst.click_through,
             resizable: manifest.size.resizable,
             width: inst.width,
@@ -791,8 +795,10 @@ impl App {
                 self.proxy.clone(),
             ) {
                 Ok(mut win) => {
-                    let payload = self.appearance_payload(&inst);
-                    win.apply_effects(&payload, inst.click_through, &inst.layer);
+                    if inst.surface != "window" {
+                        let payload = self.appearance_payload(&inst);
+                        win.apply_effects(&payload, inst.click_through, &inst.layer);
+                    }
                     if !self.store.data.hide_all {
                         win.show();
                     }
@@ -1489,6 +1495,7 @@ impl App {
             w.hide();
             w.webview.focus().ok();
             w.window.set_visible(false);
+            w.destroy();
         }
         self.store.data.instances.retain(|i| i.id != id);
         self.storage.delete_instance(id);
@@ -1498,6 +1505,105 @@ impl App {
         self.save();
         self.sync_serve();
         self.rebuild_sampling();
+    }
+
+    /// Opens a widget on the `window` surface. The instance record is created once and kept after
+    /// the window closes, so settings, storage and geometry survive; the window itself is rebuilt
+    /// for every open.
+    pub fn open_tool(&mut self, widget_id: &str) -> Result<String, String> {
+        let manifest = self
+            .catalog
+            .find(widget_id)
+            .cloned()
+            .ok_or_else(|| format!("no widget called {widget_id}"))?;
+        if !manifest.has_surface("window") {
+            return Err(format!("{} is not a window tool", manifest.id));
+        }
+        let spec = manifest.window.clone().unwrap_or_default();
+        let existing = self
+            .store
+            .data
+            .instances
+            .iter()
+            .find(|i| i.surface == "window" && i.widget.eq_ignore_ascii_case(&manifest.id))
+            .map(|i| i.id.clone());
+        if let Some(id) = existing.filter(|_| spec.single_instance) {
+            if let Some(win) = self.windows.get_mut(&id) {
+                win.show();
+            } else {
+                self.pending_windows.push(id.clone());
+            }
+            return Ok(id);
+        }
+        let scale = self.scale_factor();
+        let probe = crate::platform::win32::RECT {
+            left: 0,
+            top: 0,
+            right: 1920,
+            bottom: 1080,
+        };
+        let (_, work) = crate::platform::win32::monitor_work_area(&probe);
+        let dw = (spec.width * scale).round() as i32;
+        let dh = (spec.height * scale).round() as i32;
+        let inst = InstanceConfig {
+            widget: manifest.id.clone(),
+            surface: "window".into(),
+            layer: "normal".into(),
+            width: spec.width,
+            height: spec.height,
+            x: work.left + ((work.right - work.left) - dw).max(0) / 2,
+            y: work.top + ((work.bottom - work.top) - dh).max(0) / 2,
+            ..InstanceConfig::default()
+        };
+        let id = inst.id.clone();
+        self.store.data.instances.push(inst);
+        self.save();
+        self.pending_windows.push(id.clone());
+        self.sync_serve();
+        Ok(id)
+    }
+
+    /// Closes a tool window but keeps its instance record: the next open restores the last size and
+    /// position, and the page's storage is still there.
+    pub fn close_tool(&mut self, instance_id: &str) {
+        let tool = self
+            .instance(instance_id)
+            .map(|i| i.surface == "window")
+            .unwrap_or(false);
+        if !tool {
+            return;
+        }
+        // Card geometry is the window rectangle because a card has no frame. A tool window does
+        // have one, so the client area is what the page lays out in and what has to be saved.
+        if let Some(win) = self.windows.get(instance_id) {
+            let hwnd = win.hwnd();
+            let scale = win.scale;
+            let outer = crate::platform::win32::window_rect(hwnd);
+            let mut client = crate::platform::win32::RECT::default();
+            unsafe {
+                let _ = crate::platform::win32::GetClientRect(hwnd, &mut client);
+            }
+            let width = (client.width() as f64 / scale).round();
+            let height = (client.height() as f64 / scale).round();
+            if let Some(inst) = self.instance_mut(instance_id) {
+                inst.x = outer.left;
+                inst.y = outer.top;
+                if width > 0.0 {
+                    inst.width = width;
+                }
+                if height > 0.0 {
+                    inst.height = height;
+                }
+            }
+        }
+        self.unload_instance(instance_id, true);
+        if let Some(mut win) = self.windows.remove(instance_id) {
+            win.hide();
+            win.window.set_visible(false);
+            win.destroy();
+        }
+        self.save();
+        crate::core::logging::info(&format!("{instance_id}: tool window closed"));
     }
 
     /// Removes every card at once — the "clear all widgets" button in the control center.
@@ -1516,6 +1622,10 @@ impl App {
 
     pub fn duplicate_instance(&mut self, id: &str) -> Option<String> {
         let source = self.instance(id)?.clone();
+        // Tool windows have no card to duplicate; opening again is `open_tool`'s job.
+        if source.surface == "window" {
+            return None;
+        }
         let mut copy = source.clone();
         copy.id = crate::core::config::new_id();
         let (x, y) = self.free_slot(copy.width, copy.height);

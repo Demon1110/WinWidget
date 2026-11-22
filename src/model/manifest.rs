@@ -22,6 +22,13 @@ pub struct Manifest {
     pub category: Option<String>,
     pub preview: Option<String>,
     pub size: SizeSpec,
+    /// Which surfaces this widget may appear on: `desktop`, `window`. Omitted means desktop only.
+    pub surfaces: Vec<String>,
+    /// The surface the control center's primary button uses. Defaults to the first of `surfaces`.
+    #[serde(rename = "defaultSurface")]
+    pub default_surface: Option<String>,
+    /// Geometry for the `window` surface. Only required when `surfaces` lists window alone.
+    pub window: Option<WindowSpec>,
     pub layer: Option<String>,
     pub permissions: Vec<String>,
     pub settings: Vec<SettingSpec>,
@@ -58,6 +65,33 @@ impl Default for SizeSpec {
             max_height: 2000.0,
             resizable: true,
             grow: 0.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct WindowSpec {
+    pub width: f64,
+    pub height: f64,
+    pub min_width: f64,
+    pub min_height: f64,
+    pub max_width: f64,
+    pub max_height: f64,
+    /// Only one window per widget: a second open focuses the one that exists.
+    pub single_instance: bool,
+}
+
+impl Default for WindowSpec {
+    fn default() -> Self {
+        WindowSpec {
+            width: 760.0,
+            height: 560.0,
+            min_width: 480.0,
+            min_height: 320.0,
+            max_width: 4000.0,
+            max_height: 3000.0,
+            single_instance: true,
         }
     }
 }
@@ -139,6 +173,36 @@ impl Default for ToolSpec {
 }
 
 impl Manifest {
+    /// The surface a plain "add" action should use.
+    pub fn surface_default(&self) -> &str {
+        self.default_surface
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| self.surfaces.first().map(|s| s.as_str()))
+            .unwrap_or("desktop")
+    }
+
+    pub fn has_surface(&self, surface: &str) -> bool {
+        if self.surfaces.is_empty() {
+            return surface == "desktop";
+        }
+        self.surfaces.iter().any(|s| s == surface)
+    }
+
+    /// The only surface the widget declares, or `""` when it has a choice.
+    fn sole_surface(&self) -> &str {
+        match self.surfaces.as_slice() {
+            [one] => one.as_str(),
+            _ => "",
+        }
+    }
+
+    /// Size a window surface opens with, and its lower bound.
+    pub fn window_size(&self) -> (f64, f64, f64, f64) {
+        let spec = self.window.clone().unwrap_or_default();
+        (spec.width, spec.height, spec.min_width, spec.min_height)
+    }
+
     pub fn display_name(&self) -> String {
         crate::core::text::pick(self.name.as_ref(), &self.id)
     }
@@ -221,6 +285,40 @@ impl Manifest {
         s.width = s.width.clamp(s.min_width, s.max_width);
         s.height = s.height.clamp(s.min_height, s.max_height);
         s.grow = s.grow.clamp(0.0, 1.0);
+
+        // Surfaces: unknown names are an error rather than something to ignore — a typo here
+        // silently changes when the widget is created, which is worse than a failed install.
+        if self.surfaces.is_empty() {
+            self.surfaces.push("desktop".into());
+        }
+        let mut seen = std::collections::HashSet::new();
+        for surface in &self.surfaces {
+            if surface != "desktop" && surface != "window" {
+                return Err(format!(
+                    "\"{surface}\" is not a surface: use \"desktop\" or \"window\""
+                ));
+            }
+            if !seen.insert(surface.clone()) {
+                return Err(format!("surface \"{surface}\" is listed twice"));
+            }
+        }
+        let default = self.surface_default().to_string();
+        if !seen.contains(&default) {
+            return Err(format!(
+                "defaultSurface \"{default}\" is not in surfaces [{}]",
+                self.surfaces.join(", ")
+            ));
+        }
+        if let Some(spec) = &mut self.window {
+            spec.min_width = spec.min_width.clamp(200.0, 3000.0);
+            spec.min_height = spec.min_height.clamp(120.0, 2000.0);
+            spec.max_width = spec.max_width.max(spec.min_width);
+            spec.max_height = spec.max_height.max(spec.min_height);
+            spec.width = spec.width.clamp(spec.min_width, spec.max_width);
+            spec.height = spec.height.clamp(spec.min_height, spec.max_height);
+        } else if self.sole_surface() == "window" {
+            return Err("a window-only widget needs a \"window\" size block".into());
+        }
         let mut keys = std::collections::HashSet::new();
         for setting in &self.settings {
             if setting.key.trim().is_empty() {

@@ -227,6 +227,10 @@
       "handler": "widget_grant"
     },
     {
+      "name": "widget.open",
+      "handler": "widget_open"
+    },
+    {
       "name": "widget.openFolder",
       "handler": "widget_open_folder"
     },

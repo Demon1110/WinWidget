@@ -18,8 +18,8 @@ use winwidget::ui::control::*;
 #[test]
 fn registry_covers_every_method() {
     let r = registry();
-    // 57 methods + 1 legacy alias.
-    assert_eq!(r.len(), 58);
+    // 58 methods + 1 legacy alias.
+    assert_eq!(r.len(), 59);
     // The old and new spellings of the auto-update toggle share one handler.
     assert_eq!(r["app.updateAuto"] as usize, r["app.autoUpdate"] as usize);
     for name in [
@@ -66,6 +66,7 @@ fn registry_covers_every_method() {
         "instance.clearAll",
         "instance.pickFolder",
         "widget.add",
+        "widget.open",
         "widget.grant",
         "widget.openFolder",
         "widget.export",

@@ -770,6 +770,17 @@ pub fn card_call(
             app.push_state_to_control(None);
             Reply::Now(json!({ "width": w, "height": h }))
         }
+        "window.main.close" => {
+            let is_tool = app
+                .instance(instance)
+                .map(|i| i.surface == "window")
+                .unwrap_or(false);
+            if !is_tool {
+                return Err(BridgeError::new("only a window tool can close itself"));
+            }
+            post(&app.proxy, Ev::Command(format!("tool.close:{instance}")));
+            Reply::Now(Value::Bool(true))
+        }
         "window.hide" | "window.main.hide" => {
             let restore = jbool(p, "isFocusPrevWindow").unwrap_or(true);
             app.set_visible(instance, false, "api");

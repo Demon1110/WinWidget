@@ -457,6 +457,8 @@ declare namespace WinWidget {
     readonly permissions: readonly Permission[];
     readonly locked: boolean;
     readonly layer: Layer;
+    /** "desktop" for a card, "window" for a tool window. Also `<html data-surface="…">`. */
+    readonly surface: "desktop" | "window";
     /** Current theme id, e.g. "instrument". Also set as <html data-theme="…">. */
     readonly theme: string;
     /** Is the card on screen right now? Kept in step by the show/hide events. */

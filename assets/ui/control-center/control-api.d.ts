@@ -61,5 +61,6 @@ type ControlMethod =
   | "widget.create"
   | "widget.export"
   | "widget.grant"
+  | "widget.open"
   | "widget.openFolder"
   | "widget.uninstall";

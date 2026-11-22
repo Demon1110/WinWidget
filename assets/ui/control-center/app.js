@@ -245,7 +245,7 @@ function pageMine() {
     return `<button class="item${i.id === ui.sel ? " on" : ""}" data-action="select" data-id="${i.id}" data-key="${i.id}">
       ${tile(i)}
       <span style="min-width:0"><div class="name">${esc(nm[i.id])}${flags ? `<span class="flags">${flags}</span>` : ""}</div>
-      <div class="meta">${i.missing ? t("組件已不存在") : `${layerName(i.layer)} · ${esc(instThemeName(i))}`}</div></span>
+      <div class="meta">${i.missing ? t("組件已不存在") : i.surface === "window" ? t("窗口工具") : `${layerName(i.layer)} · ${esc(instThemeName(i))}`}</div></span>
       <span class="size">${round(i.width)}×${round(i.height)}</span>
     </button>`;
   }).join("");
@@ -274,11 +274,11 @@ function editor(i, name) {
   return `<div class="ed-head" data-key="ed-head">
       ${tile(i, true)}
       <div class="ed-title"><h2>${esc(name)}</h2>
-        <div class="meta">${layerName(i.layer)} · ${esc(instThemeName(i))}</div></div>
+        <div class="meta">${i.surface === "window" ? t("窗口工具") : `${layerName(i.layer)} · ${esc(instThemeName(i))}`}</div></div>
       <div class="ed-actions">
-        <button class="btn" data-action="identify" title="${esc(t("讓它在桌面上閃兩下"))}">${t("定位")}</button>
+        ${i.surface === "window" ? "" : `<button class="btn" data-action="identify" title="${esc(t("讓它在桌面上閃兩下"))}">${t("定位")}</button>`}
         <button class="btn quiet" data-action="reload">${t("重新載入")}</button>
-        <button class="btn quiet" data-action="duplicate">${t("複製一份")}</button>
+        ${i.surface === "window" ? "" : `<button class="btn quiet" data-action="duplicate">${t("複製一份")}</button>`}
         <button class="btn quiet danger" data-action="remove">${t("移除")}</button>
       </div>
     </div>
@@ -340,12 +340,21 @@ function card(m, n) {
       <button class="link danger" data-action="uninstall" data-widget="${esc(m.id)}">${t("解除安裝")}</button></div>`;
   // with a preview picture the card leads with it; otherwise with the icon
   const thumb = m.preview ? `<div class="thumb"><img src="${esc(m.preview)}" alt="" loading="lazy" draggable="false"></div>` : "";
+  // A window-only widget has no card to put on the desktop: it is opened and closed on demand.
+  const toolOnly = m.surfaces && m.surfaces.includes("window") && !m.surfaces.includes("desktop");
+  const hasWindow = m.surfaces && m.surfaces.includes("window");
+  const left = toolOnly ? t("窗口工具") : m.count ? t("桌面上有 {n} 個", { n: m.count }) : t("還沒放上桌面");
+  const prime = toolOnly
+    ? `<button class="btn primary small" data-action="open" data-widget="${esc(m.id)}">${t("打開")}</button>`
+    : `<button class="btn${m.count ? "" : " primary"} small" data-action="add" data-widget="${esc(m.id)}">${m.count ? t("再放一個") : t("放到桌面")}</button>`;
+  const second = !toolOnly && hasWindow && m.surface !== "window"
+    ? `<button class="link" data-action="open" data-widget="${esc(m.id)}">${t("開啟窗口")}</button>`
+    : "";
   return `<article class="card${m.preview ? " has-thumb" : ""}" data-key="c-${m.id}" style="--i:${n}">${thumb}
     <div class="card-top">${m.preview ? "" : tile(m, true)}<div style="min-width:0"><h3>${esc(m.name)}</h3>
       <div class="by">${author(m)} · <span class="num">v${esc(m.version)}</span></div></div></div>
     <p>${esc(m.description || "")}</p>${perms}${tools}
-    <div class="card-foot"><span class="have">${m.count ? t("桌面上有 {n} 個", { n: m.count }) : t("還沒放上桌面")}</span>
-      <button class="btn${m.count ? "" : " primary"} small" data-action="add" data-widget="${esc(m.id)}">${m.count ? t("再放一個") : t("放到桌面")}</button></div>
+    <div class="card-foot"><span class="have">${left}</span>${second}${prime}</div>
   </article>`;
 }
 
@@ -397,10 +406,11 @@ function marketCard(w, n) {
   const img = previewFor(w);
   const thumb = img ? `<div class="thumb"><img src="${esc(img)}" alt="" loading="lazy" draggable="false"></div>` : "";
   const busy = installing === w.id;
+  const toolOnly = !!have && have.surfaces && have.surfaces.includes("window") && !have.surfaces.includes("desktop");
   const label = busy ? t("下載中…") : st === "update" ? t("更新到 v{v}", { v: esc(w.version) }) : t("安裝");
   const btn = st === "new" || st === "update"
     ? `<button class="btn primary small" data-action="mInstall" data-widget="${esc(w.id)}"${busy ? " disabled" : ""}>${label}</button>`
-    : `<button class="btn small" data-action="add" data-widget="${esc(w.id)}">${t("放到桌面")}</button>`;
+    : `<button class="btn small" data-action="${toolOnly ? "open" : "add"}" data-widget="${esc(w.id)}">${toolOnly ? t("打開") : t("放到桌面")}</button>`;
   const left = st === "new" ? `<span class="num">${esc(kb(w.bytes))}</span>` : t("已安裝 v{v}", { v: esc(have.version) });
   return `<article class="card${img ? " has-thumb" : ""}" data-key="m-${w.id}" style="--i:${n}">${thumb}
     <div class="card-top">${img ? "" : w.icon ? `<span class="tile big"><img src="${esc(w.icon)}" alt=""></span>` : ""}<div style="min-width:0"><h3>${esc(w.name)}</h3>
@@ -1047,6 +1057,13 @@ function addWidget(widgetId, grant) {
   });
 }
 
+function openWidget(widgetId, grant) {
+  const m = widgetOf(widgetId);
+  return api("widget.open", { widget: widgetId, grant: !!grant }).then(() => {
+    toast(t("已打開「{name}」", { name: m.name }));
+  });
+}
+
 function onAction(a) {
   flushEdits();
   if (!["remove", "uninstall", "clearAll"].includes(a.dataset.action)) disarm();
@@ -1088,6 +1105,13 @@ function onAction(a) {
         });
       }
       break;
+    case "open": {
+      const m = widgetOf(a.dataset.widget);
+      if (!m) break;
+      if (m.pending.length) openSheet("allow", { widget: m.id, then: "open" });
+      else openWidget(m.id);
+      break;
+    }
     case "add": {
       const m = widgetOf(a.dataset.widget);
       if (m.pending.length) openSheet("allow", { widget: m.id, then: "add" });
@@ -1238,7 +1262,7 @@ function sheetAllow(d) {
     </div>
     <div class="sheet-foot"><span class="file"></span>
       <button class="btn quiet" data-action="sheetCancel">${t("取消")}</button>
-      <button class="btn primary" data-action="sheetAllow">${d.then === "add" ? t("允許並放到桌面") : t("允許")}</button></div>`;
+      <button class="btn primary" data-action="sheetAllow">${d.then === "add" ? t("允許並放到桌面") : d.then === "open" ? t("允許並打開") : t("允許")}</button></div>`;
 }
 
 function sheetCreate() {
@@ -1280,6 +1304,7 @@ function onSheetAction(a) {
       sheet = null;
       renderSheet();
       if (d.then === "add") addWidget(d.widget, true);
+      else if (d.then === "open") openWidget(d.widget, true);
       else api("widget.grant", { widget: d.widget }).then(() => toast(t("已允許，組件已重新載入")));
       break;
     }
