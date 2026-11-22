@@ -104,7 +104,11 @@ fn lists_files_and_folders_but_skips_hidden_names() {
     assert!(names.contains(&"a.txt"));
     assert!(names.contains(&"sub"));
     assert!(!names.contains(&".hidden"));
-    assert_eq!(flat["missing"], Value::Null, "an existing folder is not missing");
+    assert_eq!(
+        flat["missing"],
+        Value::Null,
+        "an existing folder is not missing"
+    );
 
     // The folder row says it is a folder; the file row says it is not.
     let sub = rows.iter().find(|r| r["name"] == json!("sub")).unwrap();
@@ -112,7 +116,11 @@ fn lists_files_and_folders_but_skips_hidden_names() {
 
     let deep = list_value(&dir, true);
     let deep_rows = deep["files"].as_array().unwrap();
-    assert_eq!(deep_rows.len(), 2, "recursive listing still has two entries");
+    assert_eq!(
+        deep_rows.len(),
+        2,
+        "recursive listing still has two entries"
+    );
 
     let absent = list_value(&dir.join("gone"), false);
     assert_eq!(absent["missing"], json!(true));

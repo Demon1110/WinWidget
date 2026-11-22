@@ -136,11 +136,7 @@ const UDP_TABLE_OWNER_PID: u32 = 1;
 const ERROR_INSUFFICIENT_BUFFER: u32 = 122;
 
 /// Runs one `GetExtended*Table` call and returns the row count and the raw buffer.
-fn table_bytes(
-    tcp: bool,
-    af: u32,
-    class: u32,
-) -> Option<(usize, Vec<u8>)> {
+fn table_bytes(tcp: bool, af: u32, class: u32) -> Option<(usize, Vec<u8>)> {
     let mut size: u32 = 0;
     let mut data: Vec<u8>;
     unsafe {
@@ -218,7 +214,13 @@ pub fn ports(protocol: &str, listening: bool, include_remote: bool) -> Value {
     let want_udp = protocol != "tcp";
     let mut items: Vec<Value> = Vec::new();
 
-    let mut push = |proto: &str, local: String, lport: u32, remote: String, rport: u32, state: &str, pid: u32| {
+    let mut push = |proto: &str,
+                    local: String,
+                    lport: u32,
+                    remote: String,
+                    rport: u32,
+                    state: &str,
+                    pid: u32| {
         if listening && state != "listen" {
             return;
         }
@@ -269,17 +271,32 @@ pub fn ports(protocol: &str, listening: bool, include_remote: bool) -> Value {
     if want_udp {
         if let Some((count, data)) = table_bytes(false, AF_INET, UDP_TABLE_OWNER_PID) {
             for row in copies::<Udp4Row>(&data, count, 4) {
-                push("udp", v4(row.local_addr), port(row.local_port), String::new(), 0, "listen", row.pid);
+                push(
+                    "udp",
+                    v4(row.local_addr),
+                    port(row.local_port),
+                    String::new(),
+                    0,
+                    "listen",
+                    row.pid,
+                );
             }
         }
         if let Some((count, data)) = table_bytes(false, AF_INET6, UDP_TABLE_OWNER_PID) {
             for row in copies::<Udp6Row>(&data, count, 4) {
-                push("udp6", v6(&row.local_addr), port(row.local_port), String::new(), 0, "listen", row.pid);
+                push(
+                    "udp6",
+                    v6(&row.local_addr),
+                    port(row.local_port),
+                    String::new(),
+                    0,
+                    "listen",
+                    row.pid,
+                );
             }
         }
     }
 
-    drop(push);
     items.sort_by(|a, b| {
         let ap = a.get("localPort").and_then(Value::as_u64).unwrap_or(0);
         let bp = b.get("localPort").and_then(Value::as_u64).unwrap_or(0);
@@ -331,10 +348,19 @@ struct WlanProfileInfoList {
 
 #[link(name = "wlanapi")]
 extern "system" {
-    fn WlanOpenHandle(version: u32, reserved: *mut c_void, negotiated: *mut u32, handle: *mut *mut c_void) -> u32;
+    fn WlanOpenHandle(
+        version: u32,
+        reserved: *mut c_void,
+        negotiated: *mut u32,
+        handle: *mut *mut c_void,
+    ) -> u32;
     fn WlanCloseHandle(handle: *mut c_void, reserved: *mut c_void) -> u32;
     fn WlanFreeMemory(ptr: *mut c_void);
-    fn WlanEnumInterfaces(handle: *mut c_void, reserved: *mut c_void, list: *mut *mut WlanInterfaceInfoList) -> u32;
+    fn WlanEnumInterfaces(
+        handle: *mut c_void,
+        reserved: *mut c_void,
+        list: *mut *mut WlanInterfaceInfoList,
+    ) -> u32;
     fn WlanGetProfileList(
         handle: *mut c_void,
         guid: *const Guid,
@@ -366,7 +392,9 @@ pub fn wifi_profiles(want_keys: bool) -> Value {
     let mut negotiated: u32 = 0;
     let mut items: Vec<Value> = Vec::new();
     unsafe {
-        if WlanOpenHandle(2, std::ptr::null_mut(), &mut negotiated, &mut handle) != 0 || handle.is_null() {
+        if WlanOpenHandle(2, std::ptr::null_mut(), &mut negotiated, &mut handle) != 0
+            || handle.is_null()
+        {
             return json!({ "items": items, "supported": false });
         }
         let mut list: *mut WlanInterfaceInfoList = std::ptr::null_mut();
@@ -374,7 +402,8 @@ pub fn wifi_profiles(want_keys: bool) -> Value {
             let count = (*list).count as usize;
             let base = list as usize + 8; // count + index
             for i in 0..count {
-                let info = &*((base + i * std::mem::size_of::<WlanInterfaceInfo>()) as *const WlanInterfaceInfo);
+                let info = &*((base + i * std::mem::size_of::<WlanInterfaceInfo>())
+                    as *const WlanInterfaceInfo);
                 let mut profiles: *mut WlanProfileInfoList = std::ptr::null_mut();
                 if WlanGetProfileList(handle, &info.guid, std::ptr::null_mut(), &mut profiles) != 0
                     || profiles.is_null()
@@ -384,15 +413,22 @@ pub fn wifi_profiles(want_keys: bool) -> Value {
                 let pcount = (*profiles).count as usize;
                 let pbase = profiles as usize + 8;
                 for j in 0..pcount {
-                    let pinfo =
-                        &*((pbase + j * std::mem::size_of::<WlanProfileInfo>()) as *const WlanProfileInfo);
+                    let pinfo = &*((pbase + j * std::mem::size_of::<WlanProfileInfo>())
+                        as *const WlanProfileInfo);
                     let ssid = wide_field(&pinfo.name);
-                    if items.iter().any(|v| v.get("ssid").and_then(Value::as_str) == Some(ssid.as_str())) {
+                    if items
+                        .iter()
+                        .any(|v| v.get("ssid").and_then(Value::as_str) == Some(ssid.as_str()))
+                    {
                         continue;
                     }
                     let name = pinfo.name;
                     let mut xml: *mut u16 = std::ptr::null_mut();
-                    let mut flags: u32 = if want_keys { WLAN_PROFILE_GET_PLAINTEXT_KEY } else { 0 };
+                    let mut flags: u32 = if want_keys {
+                        WLAN_PROFILE_GET_PLAINTEXT_KEY
+                    } else {
+                        0
+                    };
                     let mut granted: u32 = 0;
                     let ok = WlanGetProfile(
                         handle,
@@ -414,7 +450,11 @@ pub fn wifi_profiles(want_keys: bool) -> Value {
                     let text = String::from_utf16_lossy(std::slice::from_raw_parts(xml, len));
                     let auth = xml_tag(&text, "authentication");
                     let cipher = xml_tag(&text, "encryption");
-                    let key = if want_keys { xml_tag(&text, "keyMaterial") } else { String::new() };
+                    let key = if want_keys {
+                        xml_tag(&text, "keyMaterial")
+                    } else {
+                        String::new()
+                    };
                     let mut row = serde_json::Map::new();
                     row.insert("ssid".into(), json!(ssid));
                     row.insert("auth".into(), json!(auth));
@@ -477,7 +517,15 @@ pub fn screensaver(action: &str) -> Result<Value, String> {
         "start" => {
             let mut result: usize = 0;
             unsafe {
-                SendMessageTimeoutW(HWND_BROADCAST, WM_SYSCOMMAND, SC_SCREENSAVE, 0, SMTO_ABORTIFHUNG, 1000, &mut result);
+                SendMessageTimeoutW(
+                    HWND_BROADCAST,
+                    WM_SYSCOMMAND,
+                    SC_SCREENSAVE,
+                    0,
+                    SMTO_ABORTIFHUNG,
+                    1000,
+                    &mut result,
+                );
             }
             Ok(json!({ "ok": true }))
         }
@@ -491,4 +539,3 @@ pub fn screensaver(action: &str) -> Result<Value, String> {
         other => Err(format!("unknown screensaver action '{other}'")),
     }
 }
-

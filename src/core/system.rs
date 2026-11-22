@@ -153,7 +153,9 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
             let sort = jstr(p, "sort").unwrap_or_else(|| "cpu".into());
             let limit = jnum(p, "limit").unwrap_or(20.0).clamp(1.0, 100.0) as usize;
             let expose_path = ctx.allowed("shell.launch");
-            ctx.spawn_value(move || crate::platform::sysprobe::processes(&sort, limit, expose_path));
+            ctx.spawn_value(move || {
+                crate::platform::sysprobe::processes(&sort, limit, expose_path)
+            });
             Ok(Reply::Later)
         }
         "system.ports" => {
@@ -168,7 +170,7 @@ fn handle(ctx: &mut Ctx, method: &str, p: &Value) -> BridgeResult<Reply> {
         // looks, so that switch stays in Windows' settings app, where the user owns it.
         "system.displays" => {
             ctx.require("system.read")?;
-            ctx.spawn_value(|| crate::platform::displays::displays());
+            ctx.spawn_value(crate::platform::displays::displays);
             Ok(Reply::Later)
         }
         // Plaintext profiles need `system.write` on top of `system.read`; the answer says

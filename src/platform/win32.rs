@@ -813,7 +813,9 @@ static WANT_MOUSE_RAW: AtomicBool = AtomicBool::new(false);
 /// 钩子回调里只入队，别的什么都不做：低级钩子的回调一旦超过系统的 `LowLevelHooksTimeout`
 /// 就会被静默摘掉，这里连 JSON 都不拼。
 static KEY_Q: Mutex<Vec<(u32, u32, bool, i64)>> = Mutex::new(Vec::new());
-static MOUSE_Q: Mutex<Vec<(i32, i32, &'static str, &'static str, i32, i64)>> = Mutex::new(Vec::new());
+/// 一次鼠标事件：坐标、类型、按键、滚轮增量、时间戳。
+type MouseEvent = (i32, i32, &'static str, &'static str, i32, i64);
+static MOUSE_Q: Mutex<Vec<MouseEvent>> = Mutex::new(Vec::new());
 
 fn push_key(vk: u32, scan: u32, down: bool) {
     if let Ok(mut q) = KEY_Q.lock() {

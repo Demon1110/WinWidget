@@ -65,7 +65,12 @@ struct ModeInfo {
 
 impl Default for ModeInfo {
     fn default() -> Self {
-        Self { info_type: 0, id: 0, adapter: Luid::default(), data: [0; 48] }
+        Self {
+            info_type: 0,
+            id: 0,
+            adapter: Luid::default(),
+            data: [0; 48],
+        }
     }
 }
 
@@ -149,7 +154,12 @@ extern "system" fn monitor_cb(monitor: isize, _dc: isize, _clip: *mut w::RECT, d
 fn gdi_monitors() -> Vec<GdiMonitor> {
     let mut list: Vec<GdiMonitor> = Vec::new();
     unsafe {
-        let _ = w::EnumDisplayMonitors(0, std::ptr::null(), monitor_cb, &mut list as *mut _ as isize);
+        let _ = w::EnumDisplayMonitors(
+            0,
+            std::ptr::null(),
+            monitor_cb,
+            &mut list as *mut _ as isize,
+        );
     }
     list
 }
@@ -167,7 +177,10 @@ pub fn displays() -> Value {
 
     let mut path_count: u32 = 0;
     let mut mode_count: u32 = 0;
-    if unsafe { GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &mut path_count, &mut mode_count) } != 0 {
+    if unsafe {
+        GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &mut path_count, &mut mode_count)
+    } != 0
+    {
         return fallback(&monitors);
     }
     let mut paths: Vec<PathInfo> = vec![PathInfo::default(); path_count.max(1) as usize];
@@ -202,12 +215,14 @@ pub fn displays() -> Value {
         let gdi = wide(&source.name);
         let monitor = monitors.iter().find(|m| m.name.eq_ignore_ascii_case(&gdi));
 
-        let mut colour = AdvancedColor::default();
-        colour.header = DeviceInfoHeader {
-            kind: GET_ADVANCED_COLOR_INFO,
-            size: std::mem::size_of::<AdvancedColor>() as u32,
-            adapter: path.target.adapter,
-            id: path.target.id,
+        let mut colour = AdvancedColor {
+            header: DeviceInfoHeader {
+                kind: GET_ADVANCED_COLOR_INFO,
+                size: std::mem::size_of::<AdvancedColor>() as u32,
+                adapter: path.target.adapter,
+                id: path.target.id,
+            },
+            ..AdvancedColor::default()
         };
         let colour_ok = unsafe { DisplayConfigGetDeviceInfo(&mut colour.header) } == 0;
 
@@ -223,8 +238,8 @@ pub fn displays() -> Value {
             "height": monitor.map(|m| m.height).unwrap_or(0),
             "refresh": refresh,
             "primary": monitor.map(|m| m.primary).unwrap_or(false),
-            "hdrSupported": colour_ok.then(|| colour.value & 0x1 != 0),
-            "hdrEnabled": colour_ok.then(|| colour.value & 0x2 != 0),
+            "hdrSupported": colour_ok.then_some(colour.value & 0x1 != 0),
+            "hdrEnabled": colour_ok.then_some(colour.value & 0x2 != 0),
             "bitsPerColor": if colour_ok { Some(colour.bits) } else { None },
         }));
     }
